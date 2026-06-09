@@ -44,13 +44,13 @@ class Command(BaseCommand):
             job_backend = Job.objects.create(
                 title=f"{DEMO_PREFIX}Senior Backend Engineer (Python)",
                 description=(
-                    "Build APIs and screening pipelines with Django, PostgreSQL, and Redis. "
+                    "Build APIs and screening pipelines with Django, MySQL, and Redis. "
                     "Prior experience with REST and async tasks (Celery) preferred."
                 ),
                 status="active",
                 posted_date=today - timedelta(days=7),
                 closing_date=today + timedelta(days=30),
-                required_skills=["Python", "Django", "PostgreSQL", "Redis", "REST APIs"],
+                required_skills=["Python", "Django", "MySQL", "Redis", "REST APIs"],
                 required_experience=4.0,
                 required_education=["Bachelor", "Computer Science"],
             )
@@ -73,14 +73,14 @@ class Command(BaseCommand):
                 {
                     "job": job_backend,
                     "candidate_name": "Ayesha Rahman",
-                    "raw_text": "6 years backend with Django and FastAPI. Led PostgreSQL migrations.",
+                    "raw_text": "6 years backend with Django and FastAPI. Led MySQL migrations.",
                     "final_score": 86.0,
                     "experience_score": 90.0,
                     "education_score": 80.0,
                     "skills_score": 88.0,
-                    "matched_skills": ["Python", "Django", "PostgreSQL", "REST APIs"],
+                    "matched_skills": ["Python", "Django", "MySQL", "REST APIs"],
                     "missing_skills": ["Redis"],
-                    "skills": ["Python", "Django", "PostgreSQL", "Docker"],
+                    "skills": ["Python", "Django", "MySQL", "Docker"],
                     "education": [{"degree": "B.Sc.", "field": "Computer Science"}],
                     "experience_years": 6.0,
                     "screening_status": "completed",
@@ -95,12 +95,12 @@ class Command(BaseCommand):
                     "education_score": 70.0,
                     "skills_score": 60.0,
                     "matched_skills": ["Python", "REST APIs"],
-                    "missing_skills": ["Django", "PostgreSQL", "Redis"],
+                    "missing_skills": ["Django", "MySQL", "Redis"],
                     "skills": ["Python", "Flask", "MySQL"],
                     "education": [{"degree": "B.Sc.", "field": "IT"}],
                     "experience_years": 3.0,
                     "screening_status": "completed",
-                    "reasoning": "Mid fit; limited Django/Postgres depth.",
+                    "reasoning": "Mid fit; limited Django/MySQL depth.",
                 },
                 {
                     "job": job_backend,
@@ -111,7 +111,7 @@ class Command(BaseCommand):
                     "education_score": 65.0,
                     "skills_score": 35.0,
                     "matched_skills": [],
-                    "missing_skills": ["Python", "Django", "PostgreSQL", "Redis", "REST APIs"],
+                    "missing_skills": ["Python", "Django", "MySQL", "Redis", "REST APIs"],
                     "skills": ["Java", "Spring"],
                     "education": [{"degree": "B.Sc.", "field": "CSE"}],
                     "experience_years": 0.5,

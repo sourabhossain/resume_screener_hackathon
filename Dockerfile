@@ -6,6 +6,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # curl: healthchecks in docker-compose; Chromium deps come from playwright --with-deps
+# (MySQL access uses pure-Python PyMySQL, so no native client/build deps are needed)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
