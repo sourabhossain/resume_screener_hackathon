@@ -29,6 +29,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves collected static files directly from the app process so gunicorn
+    # works with DEBUG=False without needing nginx in front for static.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -68,6 +71,12 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST'),
         'PORT': os.environ.get('DB_PORT'),
+        # Reuse a DB connection across requests instead of opening a fresh
+        # TCP+auth handshake every time. Under load this removes thousands of
+        # connection setups/sec. Keep it below the DB server's per-client idle
+        # timeout (MySQL wait_timeout). Override with DB_CONN_MAX_AGE if needed.
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+        'CONN_HEALTH_CHECKS': True,
         'OPTIONS': {
             'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
@@ -100,6 +109,13 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# WhiteNoise: compress collected static files. Plain (non-manifest) storage so
+# a missing/unreferenced asset never hard-fails a request under DEBUG=False.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 # Media files (User uploads)
 MEDIA_URL = '/media/'
@@ -229,6 +245,13 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': os.environ.get('CACHE_URL', f'{_REDIS_CACHE_BASE}/1'),
+        'OPTIONS': {
+            # Bound the Redis connection pool so a request/concurrency spike
+            # (every request hits Redis for rate-limit + LLM cache) can't open
+            # an unbounded number of sockets to Redis.
+            'pool_class': 'redis.connection.BlockingConnectionPool',
+            'max_connections': int(os.environ.get('REDIS_MAX_CONNECTIONS', '50')),
+        },
     }
 }
 

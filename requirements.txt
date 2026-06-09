@@ -1,4 +1,7 @@
 Django>=5.0
+# Production WSGI server (replaces the dev `runserver`) + static file serving.
+gunicorn>=21.2
+whitenoise>=6.6
 playwright>=1.40.0
 httpx>=0.26.0
 PyMySQL>=1.1

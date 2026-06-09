@@ -385,19 +385,26 @@ def careers_list(request):
     Supports live (HTMX) search: typing in the search box fires a debounced
     request that swaps the results grid and the typeahead suggestions.
     """
-    jobs = Job.objects.filter(status='active').order_by('-created_at')
+    from django.core.paginator import Paginator
+
+    jobs_qs = Job.objects.filter(status='active').order_by('-created_at')
 
     search_query = request.GET.get('q', '').strip()
     if search_query:
-        jobs = jobs.filter(
+        jobs_qs = jobs_qs.filter(
             Q(title__icontains=search_query) | Q(description__icontains=search_query)
         )
 
     # Typeahead suggestions (only while searching); same match as the grid.
-    suggestions = list(jobs[:6]) if search_query else []
+    suggestions = list(jobs_qs[:6]) if search_query else []
+
+    # Paginate so a public, unauthenticated page never loads every active job
+    # (and its full description) into memory on each request.
+    page_obj = Paginator(jobs_qs, 12).get_page(request.GET.get('page', 1))
 
     context = {
-        'jobs': jobs,
+        'jobs': page_obj,
+        'page_obj': page_obj,
         'search_query': search_query,
         'suggestions': suggestions,
     }

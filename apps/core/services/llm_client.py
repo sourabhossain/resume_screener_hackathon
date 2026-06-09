@@ -26,9 +26,17 @@ class LLMClient:
     _instance = None
     _llm = None
     _llm_json = None
-    
+
     CACHE_TIMEOUT = 3600
-    
+
+    # Per-call ceiling so a hung OpenAI request can't pin a screening worker
+    # forever (the Celery soft_time_limit is 120s for the whole 3-4 call
+    # pipeline, so each call must finish well inside that).
+    REQUEST_TIMEOUT = 30  # seconds
+    # We already retry transient errors ourselves via tenacity below; disable
+    # the SDK's own retries so we don't get retries-on-retries (timeout blowup).
+    MAX_RETRIES = 0
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -46,13 +54,17 @@ class LLMClient:
             self._llm = ChatOpenAI(
                 model=model,
                 temperature=0.0,
-                api_key=api_key
+                api_key=api_key,
+                timeout=self.REQUEST_TIMEOUT,
+                max_retries=self.MAX_RETRIES,
             )
-            
+
             self._llm_json = ChatOpenAI(
                 model=model,
                 temperature=0.0,
                 api_key=api_key,
+                timeout=self.REQUEST_TIMEOUT,
+                max_retries=self.MAX_RETRIES,
                 model_kwargs={"response_format": {"type": "json_object"}}
             )
             
