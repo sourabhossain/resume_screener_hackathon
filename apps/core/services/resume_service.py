@@ -98,6 +98,10 @@ class ResumeService:
             result = cls.run_screening(resume)
             cls.apply_screening_result(resume, result)
 
+            # apply_screening_result saves a separately-fetched instance, so this
+            # caller's `resume` is stale; refresh before logging/returning its fields.
+            resume.refresh_from_db()
+
             logger.info(f"Completed processing resume {resume.id}: Score={resume.final_score}")
 
             return {

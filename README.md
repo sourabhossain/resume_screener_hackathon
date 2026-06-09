@@ -1,105 +1,34 @@
 # ResumeAI
 
-A Django app for uploading jobs and resumes and screening candidates with AI. Run it with Docker.
+Upload jobs and resumes, and screen candidates with AI. Runs with Docker.
 
-## Tech stack
+## Requirements
 
-- **Backend:** Django 5
-- **Database:** MySQL 8 (accessed with the pure-Python **PyMySQL** driver — no native client to compile)
-- **Async tasks:** Celery + Redis
-- **AI:** LangGraph / LangChain + OpenAI
-- **DB admin UI:** phpMyAdmin
+- Docker & Docker Compose
+- An OpenAI API key
 
-## Services
-
-| Service     | URL / Port              | Notes                          |
-| ----------- | ----------------------- | ------------------------------ |
-| web (Django)| http://localhost:8000   | The app                        |
-| phpMyAdmin  | http://localhost:5050   | Browse / manage the database   |
-| db (MySQL)  | localhost:3307 → 3306   | MySQL 8                        |
-| redis       | localhost:6380 → 6379   | Celery broker / result backend |
-| celery      | —                       | Background worker              |
-
-## Setup (step by step)
-
-### Prerequisites
-
-- **Docker** and **Docker Compose**
-- An **OpenAI API key**
-
-### Step 1 — Clone the repository
+## Setup
 
 ```bash
-git@github.com:sourabhossain/resume_screener_hackathon.git
+# 1. Clone
+git clone git@github.com:sourabhossain/resume_screener_hackathon.git
 cd resume_screener_hackathon
-```
 
-### Step 2 — Create your environment file
-
-```bash
+# 2. Create your .env (then set OPENAI_API_KEY in it)
 cp .env.example .env
-```
 
-### Step 3 — Edit `.env`
-
-Set at least:
-
-- `DB_PASSWORD` — password for the app's MySQL user
-- `DB_ROOT_PASSWORD` — MySQL root password
-- `SECRET_KEY`
-- `OPENAI_API_KEY`
-
-You can keep the other variables as in `.env.example` for Docker.
-
-### Step 4 — Start the stack
-
-```bash
+# 3. Start everything
 docker-compose up -d --build
-```
 
-This starts MySQL, Redis, the web app, the Celery worker, and phpMyAdmin.
-
-### Step 5 — Apply database migrations
-
-```bash
+# 4. Set up the database and an admin login
 docker-compose exec web python manage.py migrate
-```
-
-### Step 6 — Create an admin user
-
-```bash
 docker-compose exec web python manage.py createsuperuser
+
+# 5. (Optional) Load demo jobs and resumes
+docker-compose exec web python manage.py seed_demo
 ```
 
-Follow the prompts (username, email, password).
+## Use
 
-### Step 7 — Collect static files
-
-```bash
-docker-compose exec web python manage.py collectstatic --noinput
-```
-
-### Step 8 — Open the app
-
-Go to **http://localhost:8000** in your browser and log in with the superuser you created.
-
----
-
-## Database UI (phpMyAdmin)
-
-Open **http://localhost:5050**. It is pre-pointed at the `db` host, so just log in with your MySQL credentials from `.env`:
-
-- App user: `DB_USER` / `DB_PASSWORD`
-- Or root: `root` / `DB_ROOT_PASSWORD`
-
----
-
-### Optional
-
-- **Demo data:** `docker-compose exec web python manage.py seed_demo`
-- **Link verification** (crawling sites like GitHub / LinkedIn): install Chromium in both containers:
-
-  ```bash
-  docker-compose exec web playwright install chromium
-  docker-compose exec celery playwright install chromium
-  ```
+- App: http://localhost:8000 — log in with the admin user you created
+- Database UI (phpMyAdmin): http://localhost:5050 — log in with `DB_USER` / `DB_PASSWORD` from `.env`
