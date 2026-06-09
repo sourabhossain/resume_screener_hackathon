@@ -311,7 +311,7 @@
                     </button>
                     
                     <!-- Logo -->
-                    <a href="{% url 'core:dashboard' %}" class="flex items-center space-x-3 group">
+                    <a href="{% if user.is_authenticated %}{% url 'core:dashboard' %}{% else %}{% url 'core:careers' %}{% endif %}" class="flex items-center space-x-3 group">
                         <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center shadow-md shadow-indigo-500/25 transition-transform duration-200 group-hover:scale-[1.02]">
                             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -375,12 +375,14 @@
                     
                     <!-- Post Job Button -->
                     {% block nav_action %}
+                    {% if user.is_authenticated %}
                     <a href="{% url 'core:job_create' %}" class="btn-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white sm:px-5">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         <span class="hidden sm:inline">Post Job</span>
                     </a>
+                    {% endif %}
                     {% endblock %}
                 </div>
             </div>
@@ -410,7 +412,7 @@
             <!-- Mobile Menu Header -->
             <div class="border-b border-zinc-200 p-6 dark:border-zinc-800">
                 <div class="flex items-center justify-between">
-                    <a href="{% url 'core:dashboard' %}" class="flex items-center space-x-3">
+                    <a href="{% if user.is_authenticated %}{% url 'core:dashboard' %}{% else %}{% url 'core:careers' %}{% endif %}" class="flex items-center space-x-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-lg gradient-bg shadow-md">
                             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -430,7 +432,7 @@
             
             <!-- Mobile Search -->
             <div class="p-4">
-                <form method="get" action="{% url 'core:job_list' %}" @submit="mobileMenuOpen = false">
+                <form method="get" action="{% if user.is_authenticated %}{% url 'core:job_list' %}{% else %}{% url 'core:careers' %}{% endif %}" @submit="mobileMenuOpen = false">
                     <div class="relative">
                         <input type="text" name="q" placeholder="Search jobs..."
                                class="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500">

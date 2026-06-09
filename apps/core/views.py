@@ -369,3 +369,67 @@ def resume_rescreen(request, pk):
     screen_resume_task.delay(resume.id)
     messages.success(request, 'AI screening queued! Results will appear shortly.')
     return redirect('core:resume_detail', pk=pk)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Public candidate (careers) pages — NO login required.
+# Candidates browse open jobs and submit their resume; they never see results.
+# ──────────────────────────────────────────────────────────────────────────
+
+def careers_list(request):
+    """Public list of open (active) jobs candidates can apply to.
+
+    Supports live (HTMX) search: typing in the search box fires a debounced
+    request that swaps the results grid and the typeahead suggestions.
+    """
+    jobs = Job.objects.filter(status='active').order_by('-created_at')
+
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        jobs = jobs.filter(
+            Q(title__icontains=search_query) | Q(description__icontains=search_query)
+        )
+
+    # Typeahead suggestions (only while searching); same match as the grid.
+    suggestions = list(jobs[:6]) if search_query else []
+
+    context = {
+        'jobs': jobs,
+        'search_query': search_query,
+        'suggestions': suggestions,
+    }
+
+    # HTMX live-search request → return just the results + OOB suggestions.
+    if request.headers.get('HX-Request'):
+        return render(request, 'careers/_search_response.html', context)
+
+    return render(request, 'careers/job_list.html', context)
+
+
+@ratelimit(key='ip', rate='10/h', method='POST', block=True)
+def careers_apply(request, slug):
+    """Public job detail + resume submission form. Only active jobs accept applications."""
+    job = get_object_or_404(Job, slug=slug, status='active')
+
+    if request.method == 'POST':
+        form = ResumeForm(request.POST, request.FILES)
+        if form.is_valid():
+            resume = form.save(commit=False)
+            resume.job = job
+            resume.screening_status = 'processing'
+            resume.save()
+
+            from apps.core.tasks import screen_resume_task
+            screen_resume_task.delay(resume.id)
+
+            return redirect('core:careers_thanks', slug=job.slug)
+    else:
+        form = ResumeForm()
+
+    return render(request, 'careers/apply.html', {'job': job, 'form': form})
+
+
+def careers_thanks(request, slug):
+    """Confirmation shown after a candidate submits an application."""
+    job = get_object_or_404(Job, slug=slug)
+    return render(request, 'careers/thanks.html', {'job': job})

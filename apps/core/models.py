@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.utils import timezone
+from django.utils.text import slugify
 
 
 class SoftDeleteManager(models.Manager):
@@ -64,6 +65,8 @@ class Job(SoftDeleteModel):
     ]
 
     title = models.CharField(max_length=255)
+    # Public, URL-safe identifier for the careers pages (avoids exposing the numeric id).
+    slug = models.SlugField(max_length=255, unique=True, blank=True, null=True)
     description = models.TextField(blank=True)
     file_name = models.CharField(max_length=255, blank=True)
     file = models.FileField(upload_to='jobs/', blank=True, null=True)
@@ -93,7 +96,23 @@ class Job(SoftDeleteModel):
     
     def __str__(self):
         return self.title
-    
+
+    def _generate_unique_slug(self):
+        base = slugify(self.title) or 'job'
+        slug = base
+        n = 2
+        # all_objects so a soft-deleted job's slug isn't silently reused
+        while Job.all_objects.filter(slug=slug).exclude(pk=self.pk).exists():
+            slug = f"{base}-{n}"
+            n += 1
+        return slug
+
+    def save(self, *args, **kwargs):
+        # Generate the slug once at creation and keep it stable so public URLs don't break.
+        if not self.slug:
+            self.slug = self._generate_unique_slug()
+        super().save(*args, **kwargs)
+
     @property
     def active_resumes(self):
         return self.resumes.filter(is_deleted=False)

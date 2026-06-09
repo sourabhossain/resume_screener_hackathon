@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Open Positions · ResumeAI{% endblock %}
+
+{# Candidates aren't logged in — hide the recruiter "Post Job" action #}
+{% block nav_action %}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl">
+    <div class="mb-8 text-center">
+        <h1 class="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">Open positions</h1>
+        <p class="mt-2 text-zinc-500 dark:text-zinc-400">Find a role that fits you and submit your resume.</p>
+    </div>
+
+    {# ── Live search with typeahead suggestions ── #}
+    <div class="mx-auto mb-8 max-w-xl">
+        <div class="relative" x-data="{ open: false, q: '{{ search_query|escapejs }}' }" @click.outside="open = false">
+            <svg class="pointer-events-none absolute left-3.5 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Search positions..."
+                   autocomplete="off"
+                   x-model="q"
+                   @focus="open = true"
+                   @keydown.escape="open = false; $el.blur()"
+                   hx-get="{% url 'core:careers' %}"
+                   hx-trigger="input changed delay:250ms, search"
+                   hx-target="#careers-results"
+                   hx-swap="innerHTML"
+                   hx-indicator="#search-spinner"
+                   hx-replace-url="true"
+                   class="form-input pl-11 pr-11">
+
+            {# Loading spinner (HTMX toggles .htmx-request → visible) #}
+            <svg id="search-spinner" class="htmx-indicator absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+
+            {# Suggestions dropdown — visibility driven by Alpine, content by HTMX (OOB) #}
+            <div x-show="open && q.trim().length > 0" x-cloak
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 -translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="absolute left-0 right-0 top-full z-30 mt-2">
+                {% include 'careers/_suggestions.html' %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Results grid (swapped by HTMX live search) ── #}
+    <div id="careers-results">
+        {% include 'careers/_results.html' %}
+    </div>
+</div>
+{% endblock %}

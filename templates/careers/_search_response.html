@@ -1,0 +1,7 @@
+{% comment %}
+Returned for HTMX live-search requests. The results block swaps into
+#careers-results (hx-target); the suggestions block is hoisted out and
+swapped into #careers-suggestions via hx-swap-oob.
+{% endcomment %}
+{% include 'careers/_results.html' %}
+{% include 'careers/_suggestions.html' with oob=True %}

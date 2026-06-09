@@ -10,7 +10,12 @@ urlpatterns = [
     # Dashboard
     path('', views.dashboard, name='dashboard'),
     path('health/', views.health_check, name='health_check'),
-    
+
+    # Public candidate (careers) pages — no login required
+    path('careers/', views.careers_list, name='careers'),
+    path('careers/<slug:slug>/', views.careers_apply, name='careers_apply'),
+    path('careers/<slug:slug>/thank-you/', views.careers_thanks, name='careers_thanks'),
+
     # Job URLs
     path('jobs/', views.job_list, name='job_list'),
     path('jobs/create/', views.job_create, name='job_create'),

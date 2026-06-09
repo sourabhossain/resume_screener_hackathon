@@ -1,0 +1,29 @@
+{% comment %}
+Typeahead suggestions list. Carries the stable id so the live-search HTMX
+response can swap it out-of-band (oob=True). Visibility is controlled by the
+Alpine wrapper in job_list.html, not here.
+{% endcomment %}
+<div id="careers-suggestions"{% if oob %} hx-swap-oob="true"{% endif %}>
+    {% if suggestions %}
+    <ul class="overflow-hidden rounded-xl border border-zinc-200/90 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        {% for job in suggestions %}
+        <li>
+            <a href="{% url 'core:careers_apply' job.slug %}"
+               class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition hover:bg-primary-50 dark:hover:bg-primary-950/30">
+                <span class="flex items-center gap-2.5 truncate">
+                    <svg class="h-4 w-4 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    <span class="truncate font-medium text-zinc-800 dark:text-zinc-100">{{ job.title }}</span>
+                </span>
+                {% if job.location %}
+                <span class="shrink-0 text-xs text-zinc-400">{{ job.location }}</span>
+                {% endif %}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% elif search_query %}
+    <div class="rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-500 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+        No matching positions
+    </div>
+    {% endif %}
+</div>
