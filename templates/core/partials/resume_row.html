@@ -145,3 +145,13 @@
         </div>
     </td>
 </tr>
+{% comment %}
+Only emitted when this row is served as a standalone polling fragment
+(is_fragment); piggybacks out-of-band updates of the pipeline snapshot
+cards and the pending-screening badge so they refresh as rows finish —
+no full reload needed.
+{% endcomment %}
+{% if is_fragment %}
+{% include 'core/partials/pipeline_stats_cards.html' with oob=True %}
+{% include 'core/partials/pipeline_badge.html' with oob=True %}
+{% endif %}

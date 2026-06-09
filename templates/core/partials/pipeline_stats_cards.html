@@ -1,0 +1,24 @@
+{% comment %}
+Pipeline snapshot cards (Total / Interview / Talent pool / Reject).
+Rendered inline on job_detail, and re-sent as an HTMX out-of-band swap
+(oob=True) from the polling row fragment so the counts update without a
+reload. The wrapper id must stay stable for the OOB swap to find it.
+{% endcomment %}
+<div id="pipeline-stat-cards"{% if oob %} hx-swap-oob="true"{% endif %} class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+    <div class="rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Total</p>
+        <p class="mt-1 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ pipeline_stats.total }}</p>
+    </div>
+    <div class="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/25">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-700/80 dark:text-emerald-400/90">Interview</p>
+        <p class="mt-1 text-2xl font-bold tabular-nums text-emerald-800 dark:text-emerald-300">{{ pipeline_stats.interview }}</p>
+    </div>
+    <div class="rounded-2xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-900/40 dark:bg-sky-950/25">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-400/90">Talent pool</p>
+        <p class="mt-1 text-2xl font-bold tabular-nums text-sky-800 dark:text-sky-300">{{ pipeline_stats.talent_pool }}</p>
+    </div>
+    <div class="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/25">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-rose-700/80 dark:text-rose-400/90">Reject</p>
+        <p class="mt-1 text-2xl font-bold tabular-nums text-rose-800 dark:text-rose-300">{{ pipeline_stats.reject }}</p>
+    </div>
+</div>

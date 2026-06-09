@@ -109,33 +109,9 @@
 
 {# ── Pipeline snapshot stats ── #}
 <div id="job-candidates">
-    <div class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-        <div class="rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Total</p>
-            <p class="mt-1 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ pipeline_stats.total }}</p>
-        </div>
-        <div class="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/25">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-700/80 dark:text-emerald-400/90">Interview</p>
-            <p class="mt-1 text-2xl font-bold tabular-nums text-emerald-800 dark:text-emerald-300">{{ pipeline_stats.interview }}</p>
-        </div>
-        <div class="rounded-2xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-sky-900/40 dark:bg-sky-950/25">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-400/90">Talent pool</p>
-            <p class="mt-1 text-2xl font-bold tabular-nums text-sky-800 dark:text-sky-300">{{ pipeline_stats.talent_pool }}</p>
-        </div>
-        <div class="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/25">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-rose-700/80 dark:text-rose-400/90">Reject</p>
-            <p class="mt-1 text-2xl font-bold tabular-nums text-rose-800 dark:text-rose-300">{{ pipeline_stats.reject }}</p>
-        </div>
-    </div>
+    {% include 'core/partials/pipeline_stats_cards.html' %}
 
-    {% if pipeline_stats.undecided %}
-    <div class="mb-5 flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-400">
-            <span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-            {{ pipeline_stats.undecided }} pending screening
-        </span>
-    </div>
-    {% endif %}
+    {% include 'core/partials/pipeline_badge.html' %}
 
     {# ── Applicant pipeline table ── #}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">

@@ -29,24 +29,17 @@ def _ordered_active_resumes_queryset(resume_qs):
 
 
 def _pipeline_stats(resume_qs):
-    stats = {
-        'total': resume_qs.count(),
-        'interview': 0,
-        'talent_pool': 0,
-        'reject': 0,
-        'undecided': 0,
-    }
-    for row in resume_qs.values('recommendation').annotate(c=Count('id')):
-        key = (row['recommendation'] or '').strip()
-        n = row['c']
-        if key == 'interview':
-            stats['interview'] = n
-        elif key == 'talent_pool':
-            stats['talent_pool'] = n
-        elif key == 'reject':
-            stats['reject'] = n
-        else:
-            stats['undecided'] += n
+    # order_by() clears any inherited ordering so it doesn't leak into the
+    # implicit GROUP BY; conditional Counts give exact per-decision totals.
+    stats = resume_qs.order_by().aggregate(
+        total=Count('id'),
+        interview=Count('id', filter=Q(recommendation='interview')),
+        talent_pool=Count('id', filter=Q(recommendation='talent_pool')),
+        reject=Count('id', filter=Q(recommendation='reject')),
+    )
+    stats['undecided'] = (
+        stats['total'] - stats['interview'] - stats['talent_pool'] - stats['reject']
+    )
     return stats
 
 
@@ -277,7 +270,14 @@ def resume_status_fragment(request, pk):
 @login_required
 def resume_row_fragment(request, pk):
     resume = get_object_or_404(Resume.objects.select_related('job'), pk=pk)
-    return render(request, 'core/partials/resume_row.html', {'resume': resume})
+    # Recompute pipeline stats so the polling response can OOB-refresh the
+    # "pending screening" badge as rows finish (otherwise it goes stale).
+    pipeline_stats = _pipeline_stats(_ordered_active_resumes_queryset(resume.job.resumes))
+    return render(
+        request,
+        'core/partials/resume_row.html',
+        {'resume': resume, 'pipeline_stats': pipeline_stats, 'is_fragment': True},
+    )
 
 
 @login_required

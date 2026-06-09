@@ -1,0 +1,14 @@
+{% comment %}
+Pending-screening badge for the job pipeline.
+Rendered inline on the job_detail page, and re-sent as an HTMX out-of-band
+swap (oob=True) from the polling row fragment so it updates without a reload.
+The wrapper id must stay stable for the OOB swap to find it.
+{% endcomment %}
+<div id="pipeline-pending-badge"{% if oob %} hx-swap-oob="true"{% endif %} class="{% if pipeline_stats.undecided %}mb-5 {% endif %}flex flex-wrap items-center gap-2">
+    {% if pipeline_stats.undecided %}
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-400">
+        <span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+        {{ pipeline_stats.undecided }} pending screening
+    </span>
+    {% endif %}
+</div>
