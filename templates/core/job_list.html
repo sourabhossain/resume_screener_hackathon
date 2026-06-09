@@ -131,7 +131,7 @@
                     </div>
                     <span class="text-sm font-semibold">{{ job.resume_count }} Candidate{{ job.resume_count|pluralize }}</span>
                 </div>
-                <a href="{% url 'core:job_detail' job.pk %}" class="flex items-center gap-1 text-sm font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400">
+                <a href="{% url 'core:job_detail' job.slug %}" class="flex items-center gap-1 text-sm font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400">
                     View
                     <svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>

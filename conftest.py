@@ -23,22 +23,28 @@ def client():
 
 
 @pytest.fixture
-def authenticated_client(client, django_user_model):
-    """Authenticated Django test client fixture."""
-    user = django_user_model.objects.create_user(
+def user(db, django_user_model):
+    """The recruiter used by both the authenticated client and the owned sample data."""
+    return django_user_model.objects.create_user(
         username='testuser',
         email='test@example.com',
         password='testpass123'
     )
+
+
+@pytest.fixture
+def authenticated_client(client, user):
+    """Authenticated Django test client fixture (logged in as `user`)."""
     client.login(username='testuser', password='testpass123')
     return client
 
 
 @pytest.fixture
-def sample_job(db):
-    """Create a sample job for testing."""
+def sample_job(db, user):
+    """Create a sample job owned by `user` for testing."""
     from apps.core.models import Job
     return Job.objects.create(
+        owner=user,
         title='Senior Python Developer',
         description='Looking for experienced Python developer',
         status='active'

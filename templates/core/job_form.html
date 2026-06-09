@@ -121,7 +121,7 @@
             
 
             <div class="mt-10 flex flex-col-reverse gap-3 border-t border-zinc-100 pt-8 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:justify-end">
-                <a href="{% if job %}{% url 'core:job_detail' job.pk %}{% else %}{% url 'core:job_list' %}{% endif %}" 
+                <a href="{% if job %}{% url 'core:job_detail' job.slug %}{% else %}{% url 'core:job_list' %}{% endif %}" 
                    class="flex w-full justify-center rounded-lg border border-zinc-200 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:w-auto">
                     Cancel
                 </a>

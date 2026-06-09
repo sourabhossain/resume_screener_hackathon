@@ -55,6 +55,7 @@ def health_check(request):
 
 @login_required
 def dashboard(request):
+    # Single-company internal tool: every authenticated recruiter sees all data.
     job_stats = Job.objects.aggregate(
         total=Count('id'),
         active=Count('id', filter=Q(status='active'))
@@ -140,17 +141,19 @@ def job_create(request):
     if request.method == 'POST':
         form = JobForm(request.POST, request.FILES)
         if form.is_valid():
-            job = form.save()
+            job = form.save(commit=False)
+            job.owner = request.user
+            job.save()
             messages.success(request, 'Job created successfully!')
-            return redirect('core:job_detail', pk=job.pk)
+            return redirect('core:job_detail', slug=job.slug)
     else:
         form = JobForm()
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Post New Job'})
 
 
 @login_required
-def job_detail(request, pk):
-    job = get_object_or_404(Job, pk=pk)
+def job_detail(request, slug):
+    job = get_object_or_404(Job, slug=slug)
     resumes = _ordered_active_resumes_queryset(job.resumes)
     return render(
         request,
@@ -164,22 +167,22 @@ def job_detail(request, pk):
 
 
 @login_required
-def job_edit(request, pk):
-    job = get_object_or_404(Job, pk=pk)
+def job_edit(request, slug):
+    job = get_object_or_404(Job, slug=slug)
     if request.method == 'POST':
         form = JobForm(request.POST, request.FILES, instance=job)
         if form.is_valid():
             form.save()
             messages.success(request, 'Job updated successfully!')
-            return redirect('core:job_detail', pk=pk)
+            return redirect('core:job_detail', slug=job.slug)
     else:
         form = JobForm(instance=job)
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Edit Job', 'job': job})
 
 
 @login_required
-def job_delete(request, pk):
-    job = get_object_or_404(Job, pk=pk)
+def job_delete(request, slug):
+    job = get_object_or_404(Job, slug=slug)
     if request.method == 'POST':
         job.soft_delete()
         messages.success(request, f'Job "{job.title}" deleted successfully!')
@@ -188,13 +191,13 @@ def job_delete(request, pk):
 
 
 @login_required
-def resume_create(request, job_pk):
-    job = get_object_or_404(Job, pk=job_pk)
+def resume_create(request, job_slug):
+    job = get_object_or_404(Job, slug=job_slug)
 
     if job.status != 'active':
         status_label = 'Draft' if job.status == 'draft' else 'Closed'
         messages.error(request, f'Cannot add resume. This job is currently {status_label}.')
-        return redirect('core:job_detail', pk=job_pk)
+        return redirect('core:job_detail', slug=job_slug)
 
     if request.method == 'POST':
         form = ResumeForm(request.POST, request.FILES)
@@ -211,41 +214,41 @@ def resume_create(request, job_pk):
                 request,
                 'Resume added. AI screening is running in the background—the pipeline row will refresh automatically.',
             )
-            return redirect('core:job_detail', pk=job_pk)
+            return redirect('core:job_detail', slug=job_slug)
     else:
         form = ResumeForm()
     return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
 
 
 @login_required
-def resume_detail(request, pk):
-    resume = get_object_or_404(Resume.objects.select_related('job'), pk=pk)
+def resume_detail(request, uuid):
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
     return render(request, 'core/resume_detail.html', {'resume': resume})
 
 
 @login_required
-def resume_edit(request, pk):
-    resume = get_object_or_404(Resume.objects.select_related('job'), pk=pk)
+def resume_edit(request, uuid):
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
     if request.method == 'POST':
         form = ResumeEditForm(request.POST, request.FILES, instance=resume)
         if form.is_valid():
             form.save()
             messages.success(request, 'Resume updated successfully!')
-            return redirect('core:resume_detail', pk=pk)
+            return redirect('core:resume_detail', uuid=uuid)
     else:
         form = ResumeEditForm(instance=resume)
     return render(request, 'core/resume_edit_form.html', {'form': form, 'job': resume.job, 'title': 'Edit Resume', 'resume': resume})
 
 
 @login_required
-def resume_delete(request, pk):
-    resume = get_object_or_404(Resume, pk=pk)
-    job_pk = resume.job.pk
+def resume_delete(request, uuid):
+    resume = get_object_or_404(Resume, uuid=uuid)
+    job_slug = resume.job.slug
     if request.method == 'POST':
         resume.soft_delete()
         messages.success(request, f'Resume for "{resume.candidate_name}" deleted successfully!')
-        return redirect('core:job_detail', pk=job_pk)
-    return render(request, 'core/confirm_delete.html', {'object': resume, 'type': 'resume', 'job_pk': job_pk})
+        return redirect('core:job_detail', slug=job_slug)
+    return render(request, 'core/confirm_delete.html', {'object': resume, 'type': 'resume', 'job_slug': job_slug})
 
 
 @login_required
@@ -262,14 +265,14 @@ def serve_protected_media(request, path):
 
 
 @login_required
-def resume_status_fragment(request, pk):
-    resume = get_object_or_404(Resume.objects.select_related('job'), pk=pk)
+def resume_status_fragment(request, uuid):
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
     return render(request, 'core/partials/resume_status.html', {'resume': resume})
 
 
 @login_required
-def resume_row_fragment(request, pk):
-    resume = get_object_or_404(Resume.objects.select_related('job'), pk=pk)
+def resume_row_fragment(request, uuid):
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
     # Recompute pipeline stats so the polling response can OOB-refresh the
     # "pending screening" badge as rows finish (otherwise it goes stale).
     pipeline_stats = _pipeline_stats(_ordered_active_resumes_queryset(resume.job.resumes))
@@ -281,13 +284,13 @@ def resume_row_fragment(request, pk):
 
 
 @login_required
-def resume_bulk_create(request, job_pk):
-    job = get_object_or_404(Job, pk=job_pk)
+def resume_bulk_create(request, job_slug):
+    job = get_object_or_404(Job, slug=job_slug)
 
     if job.status != 'active':
         status_label = 'Draft' if job.status == 'draft' else 'Closed'
         messages.error(request, f'Cannot add resumes. This job is currently {status_label}.')
-        return redirect('core:job_detail', pk=job_pk)
+        return redirect('core:job_detail', slug=job_slug)
 
     if request.method == 'POST':
         files = request.FILES.getlist('files')
@@ -345,30 +348,30 @@ def resume_bulk_create(request, job_pk):
         for msg in skipped:
             messages.warning(request, msg)
 
-        return redirect('core:job_detail', pk=job_pk)
+        return redirect('core:job_detail', slug=job_slug)
 
     return render(request, 'core/resume_bulk_form.html', {'job': job})
 
 
 @login_required
-def resume_rescreen(request, pk):
-    resume = get_object_or_404(Resume, pk=pk)
+def resume_rescreen(request, uuid):
+    resume = get_object_or_404(Resume, uuid=uuid)
 
     if request.method != 'POST':
-        return redirect('core:resume_detail', pk=pk)
+        return redirect('core:resume_detail', uuid=uuid)
 
     from apps.core.tasks import screen_resume_task
     # Atomic update prevents duplicate tasks from concurrent clicks
     updated = Resume.objects.filter(
-        pk=pk, screening_status__in=['pending', 'completed', 'failed']
+        uuid=uuid, screening_status__in=['pending', 'completed', 'failed']
     ).update(screening_status='processing')
     if not updated:
         messages.info(request, 'Screening is already in progress. Please wait for it to complete.')
-        return redirect('core:resume_detail', pk=pk)
+        return redirect('core:resume_detail', uuid=uuid)
 
     screen_resume_task.delay(resume.id)
     messages.success(request, 'AI screening queued! Results will appear shortly.')
-    return redirect('core:resume_detail', pk=pk)
+    return redirect('core:resume_detail', uuid=uuid)
 
 
 # ──────────────────────────────────────────────────────────────────────────

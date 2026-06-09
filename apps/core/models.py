@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.db.models import F
@@ -64,6 +66,16 @@ class Job(SoftDeleteModel):
         ('hybrid', 'Hybrid'),
     ]
 
+    # The recruiter who owns this job. All access is scoped to the owner so one
+    # recruiter/company cannot read or modify another's jobs or candidate PII.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='jobs',
+        null=True,
+        blank=True,
+        db_index=True,
+    )
     title = models.CharField(max_length=255)
     # Public, URL-safe identifier for the careers pages (avoids exposing the numeric id).
     slug = models.SlugField(max_length=255, unique=True, blank=True, null=True)
@@ -133,9 +145,11 @@ class Resume(SoftDeleteModel):
         ('reject', 'Reject'),
     ]
     
+    # Opaque public identifier used in recruiter URLs instead of the numeric pk.
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, null=True)
     job = models.ForeignKey(
-        Job, 
-        on_delete=models.CASCADE, 
+        Job,
+        on_delete=models.CASCADE,
         related_name='resumes',
         db_column='job_id'
     )

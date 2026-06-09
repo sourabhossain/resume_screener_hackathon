@@ -16,20 +16,20 @@ urlpatterns = [
     path('careers/<slug:slug>/', views.careers_apply, name='careers_apply'),
     path('careers/<slug:slug>/thank-you/', views.careers_thanks, name='careers_thanks'),
 
-    # Job URLs
+    # Job URLs — public-facing identifier is the slug, not the numeric id
     path('jobs/', views.job_list, name='job_list'),
     path('jobs/create/', views.job_create, name='job_create'),
-    path('jobs/<int:pk>/', views.job_detail, name='job_detail'),
-    path('jobs/<int:pk>/edit/', views.job_edit, name='job_edit'),
-    path('jobs/<int:pk>/delete/', views.job_delete, name='job_delete'),
-    
-    # Resume URLs
-    path('jobs/<int:job_pk>/resumes/add/', views.resume_create, name='resume_create'),
-    path('jobs/<int:job_pk>/resumes/bulk/', views.resume_bulk_create, name='resume_bulk_create'),
-    path('resumes/<int:pk>/', views.resume_detail, name='resume_detail'),
-    path('resumes/<int:pk>/edit/', views.resume_edit, name='resume_edit'),
-    path('resumes/<int:pk>/delete/', views.resume_delete, name='resume_delete'),
-    path('resumes/<int:pk>/rescreen/', views.resume_rescreen, name='resume_rescreen'),
-    path('resumes/<int:pk>/status/', views.resume_status_fragment, name='resume_status_fragment'),
-    path('resumes/<int:pk>/row/', views.resume_row_fragment, name='resume_row_fragment'),
+    path('jobs/<slug:slug>/', views.job_detail, name='job_detail'),
+    path('jobs/<slug:slug>/edit/', views.job_edit, name='job_edit'),
+    path('jobs/<slug:slug>/delete/', views.job_delete, name='job_delete'),
+
+    # Resume URLs — opaque uuid instead of the numeric id
+    path('jobs/<slug:job_slug>/resumes/add/', views.resume_create, name='resume_create'),
+    path('jobs/<slug:job_slug>/resumes/bulk/', views.resume_bulk_create, name='resume_bulk_create'),
+    path('resumes/<uuid:uuid>/', views.resume_detail, name='resume_detail'),
+    path('resumes/<uuid:uuid>/edit/', views.resume_edit, name='resume_edit'),
+    path('resumes/<uuid:uuid>/delete/', views.resume_delete, name='resume_delete'),
+    path('resumes/<uuid:uuid>/rescreen/', views.resume_rescreen, name='resume_rescreen'),
+    path('resumes/<uuid:uuid>/status/', views.resume_status_fragment, name='resume_status_fragment'),
+    path('resumes/<uuid:uuid>/row/', views.resume_row_fragment, name='resume_row_fragment'),
 ]

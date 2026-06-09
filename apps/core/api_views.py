@@ -38,6 +38,10 @@ class JobViewSet(viewsets.ModelViewSet):
             return JobListSerializer
         return JobDetailSerializer
     
+    def perform_create(self, serializer):
+        # Record the creator (informational); single-company tool shares all data.
+        serializer.save(owner=self.request.user)
+
     def get_queryset(self):
         queryset = Job.objects.annotate(
             resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
@@ -55,7 +59,7 @@ class JobViewSet(viewsets.ModelViewSet):
         if status_filter in ['active', 'draft', 'closed']:
             queryset = queryset.filter(status=status_filter)
         return queryset.order_by('-created_at')
-    
+
     def perform_destroy(self, instance):
         instance.soft_delete()
 

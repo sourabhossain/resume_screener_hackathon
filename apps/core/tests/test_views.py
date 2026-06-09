@@ -127,7 +127,7 @@ class TestJobViews:
     def test_job_list_default_active(self, authenticated_client, sample_job):
         """Test job list defaults to active status."""
         # Create a draft job
-        Job.objects.create(title='Draft Job', status='draft')
+        Job.objects.create(title='Draft Job', status='draft', owner=sample_job.owner)
         
         response = authenticated_client.get(reverse('core:job_list'))
         
@@ -138,7 +138,7 @@ class TestJobViews:
 
     def test_job_list_all_filter(self, authenticated_client, sample_job):
         """Test explicit 'all' filter returns all jobs."""
-        Job.objects.create(title='Draft Job', status='draft')
+        Job.objects.create(title='Draft Job', status='draft', owner=sample_job.owner)
         
         response = authenticated_client.get(reverse('core:job_list'), {'status': 'all'})
         
@@ -175,7 +175,7 @@ class TestJobViews:
     def test_job_detail(self, authenticated_client, sample_job):
         """Test job detail view."""
         response = authenticated_client.get(
-            reverse('core:job_detail', kwargs={'pk': sample_job.pk})
+            reverse('core:job_detail', kwargs={'slug': sample_job.slug})
         )
         assert response.status_code == 200
         assert response.context['job'] == sample_job
@@ -194,7 +194,7 @@ class TestJobViews:
             final_score=70,
         )
         response = authenticated_client.get(
-            reverse('core:job_detail', kwargs={'pk': sample_job.pk})
+            reverse('core:job_detail', kwargs={'slug': sample_job.slug})
         )
         names = [r.candidate_name for r in response.context['resumes']]
         assert names[0] == 'Interview tier candidate'
@@ -208,7 +208,7 @@ class TestJobViews:
             'status': sample_job.status
         }
         response = authenticated_client.post(
-            reverse('core:job_edit', kwargs={'pk': sample_job.pk}),
+            reverse('core:job_edit', kwargs={'slug': sample_job.slug}),
             data
         )
         sample_job.refresh_from_db()
@@ -217,7 +217,7 @@ class TestJobViews:
     def test_job_delete(self, authenticated_client, sample_job):
         """Test soft deleting a job."""
         response = authenticated_client.post(
-            reverse('core:job_delete', kwargs={'pk': sample_job.pk})
+            reverse('core:job_delete', kwargs={'slug': sample_job.slug})
         )
         assert response.status_code == 302
         assert Job.objects.filter(pk=sample_job.pk).count() == 0
@@ -233,7 +233,7 @@ class TestResumeViews:
         sample_job.save()
         
         response = authenticated_client.get(
-            reverse('core:resume_create', kwargs={'job_pk': sample_job.pk})
+            reverse('core:resume_create', kwargs={'job_slug': sample_job.slug})
         )
         # Should redirect with error message
         assert response.status_code == 302
@@ -241,7 +241,7 @@ class TestResumeViews:
     def test_resume_detail(self, authenticated_client, sample_resume):
         """Test resume detail view."""
         response = authenticated_client.get(
-            reverse('core:resume_detail', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_detail', kwargs={'uuid': sample_resume.uuid})
         )
         assert response.status_code == 200
         assert response.context['resume'] == sample_resume
@@ -249,7 +249,7 @@ class TestResumeViews:
     def test_resume_delete(self, authenticated_client, sample_resume):
         """Test soft deleting a resume."""
         response = authenticated_client.post(
-            reverse('core:resume_delete', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_delete', kwargs={'uuid': sample_resume.uuid})
         )
         assert response.status_code == 302
         assert Resume.objects.filter(pk=sample_resume.pk).count() == 0
@@ -257,7 +257,7 @@ class TestResumeViews:
     def test_resume_create_get_form(self, authenticated_client, sample_job):
         """Test resume upload form renders for active job."""
         response = authenticated_client.get(
-            reverse('core:resume_create', kwargs={'job_pk': sample_job.pk})
+            reverse('core:resume_create', kwargs={'job_slug': sample_job.slug})
         )
         assert response.status_code == 200
         assert 'form' in response.context
@@ -274,7 +274,7 @@ class TestResumeViews:
             fake_file.name = 'test_resume.pdf'
 
             response = authenticated_client.post(
-                reverse('core:resume_create', kwargs={'job_pk': sample_job.pk}),
+                reverse('core:resume_create', kwargs={'job_slug': sample_job.slug}),
                 {
                     'candidate_name': 'Jane Smith',
                     'file': fake_file,
@@ -291,7 +291,7 @@ class TestResumeViews:
 
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
             response = authenticated_client.post(
-                reverse('core:resume_rescreen', kwargs={'pk': sample_resume.pk})
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid})
             )
 
         assert response.status_code == 302
@@ -306,7 +306,7 @@ class TestResumeViews:
 
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
             response = authenticated_client.post(
-                reverse('core:resume_rescreen', kwargs={'pk': sample_resume.pk})
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid})
             )
 
         assert response.status_code == 302
@@ -324,7 +324,7 @@ class TestResumeViews:
             'final_score': 87,
         }
         response = authenticated_client.post(
-            reverse('core:resume_edit', kwargs={'pk': sample_resume.pk}),
+            reverse('core:resume_edit', kwargs={'uuid': sample_resume.uuid}),
             data,
         )
         assert response.status_code == 302
@@ -338,7 +338,7 @@ class TestResumeViews:
 
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
             response = authenticated_client.get(
-                reverse('core:resume_rescreen', kwargs={'pk': sample_resume.pk})
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid})
             )
 
         assert response.status_code == 302
@@ -347,14 +347,14 @@ class TestResumeViews:
     def test_resume_status_fragment_returns_200(self, authenticated_client, sample_resume):
         """Test the HTMX status fragment endpoint renders successfully."""
         response = authenticated_client.get(
-            reverse('core:resume_status_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_status_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert response.status_code == 200
 
     def test_resume_row_fragment_returns_200(self, authenticated_client, sample_resume):
         """Test the HTMX table-row fragment endpoint renders successfully."""
         response = authenticated_client.get(
-            reverse('core:resume_row_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert response.status_code == 200
 
@@ -363,7 +363,7 @@ class TestResumeViews:
         sample_resume.screening_status = 'processing'
         sample_resume.save()
         response = authenticated_client.get(
-            reverse('core:resume_status_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_status_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' in response.content
 
@@ -372,7 +372,7 @@ class TestResumeViews:
         sample_resume.screening_status = 'completed'
         sample_resume.save()
         response = authenticated_client.get(
-            reverse('core:resume_status_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_status_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' not in response.content
 
@@ -381,7 +381,7 @@ class TestResumeViews:
         sample_resume.screening_status = 'processing'
         sample_resume.save()
         response = authenticated_client.get(
-            reverse('core:resume_row_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' in response.content
 
@@ -391,7 +391,7 @@ class TestResumeViews:
         sample_resume.verification_status = 'processing'
         sample_resume.save()
         response = authenticated_client.get(
-            reverse('core:resume_row_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' in response.content
 
@@ -401,7 +401,7 @@ class TestResumeViews:
         sample_resume.verification_status = 'completed'
         sample_resume.save()
         response = authenticated_client.get(
-            reverse('core:resume_row_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' not in response.content
 
@@ -411,6 +411,6 @@ class TestResumeViews:
         sample_resume.verification_status = 'skipped'
         sample_resume.save()
         response = authenticated_client.get(
-            reverse('core:resume_row_fragment', kwargs={'pk': sample_resume.pk})
+            reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' not in response.content

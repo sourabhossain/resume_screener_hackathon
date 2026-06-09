@@ -160,7 +160,7 @@
         </div>
         <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
             {% for job in recent_jobs %}
-            <a href="{% url 'core:job_detail' job.pk %}" class="group block px-6 py-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+            <a href="{% url 'core:job_detail' job.slug %}" class="group block px-6 py-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
                 <div class="flex items-start justify-between">
                     <div class="min-w-0 flex-1">
                         <h3 class="truncate font-medium text-zinc-900 transition-colors group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400">{{ job.title }}</h3>
@@ -208,7 +208,7 @@
         </div>
         <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
             {% for resume in recent_resumes %}
-            <a href="{% url 'core:resume_detail' resume.pk %}" class="group block px-5 py-3.5 transition-colors hover:bg-zinc-50 sm:px-6 sm:py-4 dark:hover:bg-zinc-800/60">
+            <a href="{% url 'core:resume_detail' resume.uuid %}" class="group block px-5 py-3.5 transition-colors hover:bg-zinc-50 sm:px-6 sm:py-4 dark:hover:bg-zinc-800/60">
                 {% with display_name=resume.candidate_name|title %}
                 <div class="flex items-center justify-between gap-3 sm:gap-4">
                     <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">

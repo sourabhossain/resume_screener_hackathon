@@ -1,7 +1,7 @@
 <div id="screening-status"
      class="space-y-8"
      {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' %}
-     hx-get="{% url 'core:resume_status_fragment' resume.pk %}"
+     hx-get="{% url 'core:resume_status_fragment' resume.uuid %}"
      hx-trigger="every 3s"
      hx-target="this"
      hx-swap="outerHTML"
