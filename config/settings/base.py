@@ -220,6 +220,19 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
 
+# Cache — shared Redis (separate DB index from the Celery broker) so that
+# rate limiting and the LLM response cache are consistent across all web/worker
+# processes. A per-process LocMemCache would let attackers bypass rate limits
+# by spreading requests across workers. (tests override this with LocMemCache)
+_REDIS_CACHE_BASE = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0').rsplit('/', 1)[0]
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.environ.get('CACHE_URL', f'{_REDIS_CACHE_BASE}/1'),
+    }
+}
+
+
 # OpenAI Configuration
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_MODEL = 'gpt-5-nano-2025-08-07'

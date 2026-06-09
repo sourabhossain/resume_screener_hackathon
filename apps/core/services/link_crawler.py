@@ -6,6 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urljoin
 
 import httpx
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 # Timeout for all requests
 REQUEST_TIMEOUT = 15  # seconds
 MAX_CONTENT_LENGTH = 50_000  # chars
+MAX_REDIRECTS = 5
 
 
 @dataclass
@@ -82,22 +84,41 @@ class LinkCrawler:
 
     @classmethod
     async def _crawl_with_httpx(cls, url: str) -> CrawlResult:
+        # SSRF hardening: do NOT let httpx auto-follow redirects. A validated
+        # public URL can 3xx-redirect to an internal/metadata address; following
+        # blindly would bypass the guard. Instead follow manually and re-run the
+        # SSRF check (which re-resolves DNS) on every hop before each request.
         async with httpx.AsyncClient(
             headers=cls.HEADERS,
             timeout=REQUEST_TIMEOUT,
-            follow_redirects=True,
+            follow_redirects=False,
             verify=True,
         ) as client:
-            response = await client.get(url)
-            content = response.text[:MAX_CONTENT_LENGTH]
-            title = cls._extract_title(content)
-            return CrawlResult(
-                url=url,
-                success=response.status_code < 400,
-                content=content,
-                title=title,
-                status_code=response.status_code
-            )
+            current = url
+            for _ in range(MAX_REDIRECTS + 1):
+                safe, reason = is_safe_public_http_url(current)
+                if not safe:
+                    logger.info('Blocked crawl hop (SSRF guard): %s — %s', current, reason)
+                    return CrawlResult(url=url, success=False, error=f'blocked: {reason}')
+
+                response = await client.get(current)
+
+                if response.is_redirect and response.headers.get('location'):
+                    nxt = response.next_request
+                    current = str(nxt.url) if nxt is not None else urljoin(current, response.headers['location'])
+                    continue
+
+                content = response.text[:MAX_CONTENT_LENGTH]
+                title = cls._extract_title(content)
+                return CrawlResult(
+                    url=url,
+                    success=response.status_code < 400,
+                    content=content,
+                    title=title,
+                    status_code=response.status_code
+                )
+
+            return CrawlResult(url=url, success=False, error='too many redirects')
 
     @classmethod
     async def _crawl_with_playwright(cls, url: str) -> CrawlResult:

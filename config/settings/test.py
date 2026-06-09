@@ -14,6 +14,13 @@ DATABASES = {
     }
 }
 
+# Local in-memory cache for tests (no Redis dependency).
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
 # Disable rate limiting for tests to avoid interference, or keep it if we want to test it.
 # For now, let's keep it but tests might need to handle it.
 # Actually, better to test with it enabled but be aware of limits.

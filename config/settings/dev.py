@@ -1,15 +1,22 @@
 """
 Development settings for Resume Screening System.
 """
+import os
+
 from .base import *
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-*l61k*h7!rg_es$$!moufn-t-u1t6a8g#=qm*-&o76wa=w1(nj'
+# Load the secret from the environment; fall back to an obviously-insecure value
+# for local dev only. Never commit a real key here. For production use prod.py.
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-LOCAL-DEV-ONLY-do-not-use-in-production',
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG defaults on for local dev but can be forced off via env.
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['*']
+# Restrict hosts when provided (e.g. on a shared/remote dev box); '*' only as the local default.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
 # Django 4+ validates POST origins; without this, admin/login can return 403 on localhost/Docker.
 CSRF_TRUSTED_ORIGINS = [

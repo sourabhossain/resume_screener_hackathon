@@ -7,9 +7,16 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
 from django.shortcuts import render
+from django_ratelimit.decorators import ratelimit
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from apps.core.views import serve_protected_media
+
+# Throttle login attempts to blunt credential stuffing / brute force.
+# Two layers: per-IP and per-username; block=True returns 403 when exceeded.
+_login_view = auth_views.LoginView.as_view(template_name='auth/login.html')
+_login_view = ratelimit(key='post:username', rate='5/m', method='POST', block=True)(_login_view)
+_login_view = ratelimit(key='ip', rate='10/m', method='POST', block=True)(_login_view)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,7 +31,7 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # Authentication URLs
-    path('login/', auth_views.LoginView.as_view(template_name='auth/login.html'), name='login'),
+    path('login/', _login_view, name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
 
     # Protected media — requires login; prevents unauthenticated access to PII files
