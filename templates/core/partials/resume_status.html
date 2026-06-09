@@ -1,0 +1,301 @@
+<div id="screening-status"
+     class="space-y-8"
+     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' %}
+     hx-get="{% url 'core:resume_status_fragment' resume.pk %}"
+     hx-trigger="every 3s"
+     hx-target="this"
+     hx-swap="outerHTML"
+     {% endif %}>
+
+    {# ── Score cards ── #}
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-4 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark text-center sm:p-6">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Final Score</p>
+            {% if resume.final_score %}
+            <span class="inline-block px-5 py-2 text-2xl font-black rounded-full
+                {% if resume.final_score >= 80 %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                {% elif resume.final_score >= 60 %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
+                {% else %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400{% endif %}">
+                {{ resume.final_score|floatformat:0 }}%
+            </span>
+            {% else %}
+            <p class="text-2xl text-gray-400">—</p>
+            {% endif %}
+        </div>
+        <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-4 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark text-center sm:p-6">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Tier</p>
+            {% if resume.tier %}
+            <span class="inline-block px-4 py-2 text-sm font-bold rounded-full
+                {% if resume.tier == 'top' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                {% elif resume.tier == 'mid' %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
+                {% else %}bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400{% endif %}">
+                {{ resume.get_tier_display }}
+            </span>
+            {% else %}
+            <p class="text-gray-400">Not assigned</p>
+            {% endif %}
+        </div>
+        <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-4 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark text-center sm:p-6">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Decision</p>
+            {% if resume.recommendation %}
+            <span class="inline-block px-4 py-2 text-sm font-bold rounded-full
+                {% if resume.recommendation == 'interview' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                {% elif resume.recommendation == 'talent_pool' %}bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400
+                {% else %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400{% endif %}">
+                {{ resume.get_recommendation_display }}
+            </span>
+            {% else %}
+            <p class="text-gray-400">Pending</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Score breakdown ── #}
+    <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+            <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Score Breakdown
+        </h2>
+        {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
+        <div class="space-y-6">
+            {% for _ in "12345" %}
+            <div>
+                <div class="flex justify-between mb-2">
+                    <div class="h-4 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+                    <div class="h-4 w-10 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+                </div>
+                <div class="w-full rounded-full h-2 bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                    <div class="h-full w-1/3 animate-pulse rounded-full bg-zinc-300 dark:bg-zinc-600"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="space-y-6">
+            <div>
+                <div class="flex justify-between text-sm mb-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Experience</span>
+                    <span class="font-bold text-gray-900 dark:text-white">{{ resume.experience_score|floatformat:0|default:"—" }}%</span>
+                </div>
+                <div class="w-full rounded-full h-2 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full w-0 rounded-full bg-primary-600 transition-all duration-500"
+                         data-score="{{ resume.experience_score|default:0 }}"
+                         x-init="$el.style.width = Math.min(100, Math.max(0, parseFloat($el.dataset.score) || 0)) + '%'"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between text-sm mb-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Education</span>
+                    <span class="font-bold text-gray-900 dark:text-white">{{ resume.education_score|floatformat:0|default:"—" }}%</span>
+                </div>
+                <div class="w-full rounded-full h-2 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full w-0 rounded-full bg-primary-400 transition-all duration-500"
+                         data-score="{{ resume.education_score|default:0 }}"
+                         x-init="$el.style.width = Math.min(100, Math.max(0, parseFloat($el.dataset.score) || 0)) + '%'"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between text-sm mb-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Skills</span>
+                    <span class="font-bold text-gray-900 dark:text-white">{{ resume.skills_score|floatformat:0|default:"—" }}%</span>
+                </div>
+                <div class="w-full rounded-full h-2 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full w-0 rounded-full bg-emerald-600 transition-all duration-500"
+                         data-score="{{ resume.skills_score|default:0 }}"
+                         x-init="$el.style.width = Math.min(100, Math.max(0, parseFloat($el.dataset.score) || 0)) + '%'"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between text-sm mb-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Certifications</span>
+                    <span class="font-bold text-gray-900 dark:text-white">{% if resume.certification_score is not None %}{{ resume.certification_score|floatformat:0 }}%{% else %}—{% endif %}</span>
+                </div>
+                <div class="w-full rounded-full h-2 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full w-0 rounded-full bg-amber-500 transition-all duration-500"
+                         data-score="{{ resume.certification_score|default:0 }}"
+                         x-init="$el.style.width = Math.min(100, Math.max(0, parseFloat($el.dataset.score) || 0)) + '%'"></div>
+                </div>
+            </div>
+            {% if resume.achievement_score is not None %}
+            <div>
+                <div class="flex justify-between text-sm mb-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Achievements</span>
+                    <span class="font-bold text-gray-900 dark:text-white">{{ resume.achievement_score|floatformat:0 }}%</span>
+                </div>
+                <div class="w-full rounded-full h-2 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full w-0 rounded-full bg-rose-500 transition-all duration-500"
+                         data-score="{{ resume.achievement_score|default:0 }}"
+                         x-init="$el.style.width = Math.min(100, Math.max(0, parseFloat($el.dataset.score) || 0)) + '%'"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Achievements ── #}
+    {% if resume.achievements %}
+    <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+            </svg>
+            Highlighted achievements
+        </h2>
+        <ul class="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-300">
+            {% for item in resume.achievements %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {# ── AI Reasoning ── #}
+    {% if resume.reasoning %}
+    <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="h-5 w-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+            AI Analysis
+        </h2>
+        <p class="text-gray-600 dark:text-gray-300 leading-relaxed">{{ resume.reasoning }}</p>
+    </div>
+    {% endif %}
+
+    {# ── Screening status banner ── #}
+    {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
+    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-6 border border-blue-200 dark:border-blue-800 flex items-center gap-4" role="alert">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 shrink-0"></div>
+        <div>
+            <p class="font-semibold text-blue-800 dark:text-blue-300">AI Screening in Progress</p>
+            <p class="text-sm text-blue-600 dark:text-blue-400">This page updates automatically — no need to refresh.</p>
+        </div>
+    </div>
+    {% elif resume.screening_status == 'failed' %}
+    <div class="bg-red-50 dark:bg-red-900/20 rounded-2xl p-6 border border-red-200 dark:border-red-800" role="alert">
+        <p class="font-semibold text-red-800 dark:text-red-300">AI Screening Failed</p>
+        <p class="text-sm text-red-600 dark:text-red-400">Please try again or contact support.</p>
+    </div>
+    {% endif %}
+
+    {# ── Link Verification ── #}
+    {% if resume.verification_status == 'pending' or resume.verification_status == 'processing' %}
+    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 shrink-0"></div>
+        <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Verifying links...</p>
+    </div>
+    {% elif resume.verification_status == 'skipped' %}
+    <div class="bg-zinc-50 dark:bg-zinc-800 rounded-2xl p-5 border border-zinc-200 dark:border-zinc-700 flex items-center gap-3">
+        <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <p class="text-sm text-gray-500 dark:text-gray-400">No verifiable links found in CV</p>
+    </div>
+    {% elif resume.verification_status == 'completed' %}
+    <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-5 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8" x-data="{ showDetails: false }">
+        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white">
+            <svg class="h-5 w-5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+            Link Verification
+            </h2>
+            {% if resume.verification_score is not None %}
+            <span class="w-fit shrink-0 px-3 py-1 text-sm font-bold rounded-full sm:ml-auto
+                {% if resume.verification_score >= 80 %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                {% elif resume.verification_score >= 50 %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
+                {% else %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400{% endif %}">
+                {{ resume.verification_score }}%
+            </span>
+            {% endif %}
+        </div>
+
+        {% with vr=resume.verification_results %}
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">
+            {{ vr.links_found }} link{{ vr.links_found|pluralize }} found &mdash; {{ vr.links_verified }} verified
+        </p>
+
+        {% if vr.verified_claims %}
+        <div class="mb-5">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Verified Claims</h3>
+            <ul class="space-y-2">
+                {% for claim in vr.verified_claims %}
+                <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <svg class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {{ claim }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if vr.discrepancies %}
+        <div class="mb-5">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Discrepancies</h3>
+            <ul class="space-y-2">
+                {% for item in vr.discrepancies %}
+                <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <svg class="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
+                    </svg>
+                    {{ item }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if vr.details %}
+        <button @click="showDetails = !showDetails" class="flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline mt-2">
+            <svg class="w-4 h-4 transition-transform" :class="showDetails ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+            <span x-text="showDetails ? 'Hide details' : 'Show link details'"></span>
+        </button>
+        <div x-show="showDetails" x-transition class="mt-4 space-y-3">
+            {% for detail in vr.details %}
+            <div class="p-4 rounded-xl border border-zinc-100 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <a href="{{ detail.url }}" target="_blank" rel="noopener noreferrer" class="min-w-0 flex-1 break-all text-sm text-primary-600 dark:text-primary-400 hover:underline sm:max-w-md sm:truncate sm:break-normal">{{ detail.url }}</a>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold
+                        {% if detail.status == 'verified' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                        {% elif detail.status == 'unreachable' %}bg-gray-100 dark:bg-zinc-700 text-gray-500
+                        {% else %}bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400{% endif %}">
+                        {{ detail.status }}
+                    </span>
+                </div>
+                {% if detail.title %}
+                <p class="text-gray-500 dark:text-gray-400 mt-1 truncate">{{ detail.title }}</p>
+                {% endif %}
+                {% if detail.verified_claims %}
+                <p class="text-gray-600 dark:text-gray-300 mt-1">Claims: {{ detail.verified_claims|join:", " }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+    </div>
+    {% elif resume.verification_status == 'failed' %}
+    <div class="bg-red-50 dark:bg-red-900/20 rounded-2xl p-5 border border-red-200 dark:border-red-800 flex items-center gap-3">
+        <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <p class="text-sm text-red-700 dark:text-red-400">Verification failed. Results may be unavailable.</p>
+    </div>
+    {% endif %}
+
+    {# ── Raw extracted text ── #}
+    {% if resume.raw_text %}
+    <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Extracted Resume Text</h2>
+        <div class="max-w-none text-gray-600 dark:text-gray-300 text-sm whitespace-pre-wrap bg-zinc-50 dark:bg-zinc-800 p-6 rounded-xl border border-zinc-100 dark:border-zinc-700 max-h-96 overflow-y-auto">{{ resume.raw_text }}</div>
+    </div>
+    {% endif %}
+
+</div>

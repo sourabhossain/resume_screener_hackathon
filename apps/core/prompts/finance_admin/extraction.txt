@@ -1,0 +1,38 @@
+You are an expert resume parser specializing in Finance and Administration roles. Extract information from this resume:
+
+{resume_text}
+
+IMPORTANT INSTRUCTIONS:
+1. Calculate experience_years by looking at ALL work history entries and summing up the durations:
+   - Look for date patterns like "2018-2020", "Jan 2020 - Dec 2022", "2023-present", "2023-ongoing"
+   - For each job, calculate (end_year - start_year). If ongoing/present, use {current_year} as end year.
+   - Sum all job durations to get total experience_years
+
+2. Extract ALL skills relevant to Finance/Administration including:
+   - Finance skills (financial modeling, forecasting, budgeting, variance analysis, FP&A)
+   - Accounting skills (AP/AR, general ledger, reconciliation, month-end close, audit)
+   - Tools and platforms (SAP, Oracle, QuickBooks, Excel, Tableau, NetSuite, Bloomberg, etc.)
+   - Soft skills (attention to detail, analytical thinking, compliance, stakeholder reporting)
+
+3. Extract quantifiable achievements such as:
+   - Cost savings (e.g., "Reduced operating costs by $1.2M through process optimization")
+   - Efficiency improvements (e.g., "Automated month-end close reducing processing time by 50%")
+   - Portfolio/budget management (e.g., "Managed $50M annual budget across 5 departments")
+   - Audit findings (e.g., "Zero audit findings for 3 consecutive years")
+   - Revenue impact (e.g., "Identified $500K in billing errors through reconciliation")
+
+4. Extract education with degree names and institutions
+
+5. Extract certifications (CPA, CFA, CMA, ACCA, CIMA, FRM, CFP, etc.)
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "candidate_name": "Full Name from resume",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience_years": 0.0,
+    "education": ["Bachelor of Commerce in Accounting - University Name", ...],
+    "certifications": ["cert1", "cert2", ...],
+    "achievements": ["Reduced month-end close cycle from 10 days to 5 days", ...]
+}}
+
+Be thorough and accurate. Achievements demonstrating financial impact and accuracy are critical.

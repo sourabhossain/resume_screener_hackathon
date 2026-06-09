@@ -1,0 +1,26 @@
+You are an expert job classification system. Analyze the following job description and classify it into exactly one of these 8 job types:
+
+- tech: Software engineering, data science, IT infrastructure, DevOps, cybersecurity, machine learning
+- sales_marketing: Sales, marketing, business development, growth hacking, advertising, brand management
+- hr_recruitment: Human resources, talent acquisition, people operations, training and development, HRBP
+- finance_admin: Finance, accounting, banking, auditing, administration, payroll, bookkeeping
+- design_creative: UX/UI design, graphic design, content creation, copywriting, video production, creative direction
+- operations_support: Operations, logistics, supply chain, customer support, call center, facilities
+- project_management: Project management, program management, scrum master, agile coach, delivery management
+- product_management: Product management, product owner, product strategy, roadmap planning
+
+JOB DESCRIPTION:
+{job_description}
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "job_type": "one_of_the_8_types_above",
+    "confidence": 0.95,
+    "reasoning": "Brief explanation of why this job type was chosen"
+}}
+
+Rules:
+- Pick the SINGLE best-matching job type
+- If the role spans multiple types, choose the primary focus
+- Default to "tech" only if the role is clearly technical
+- "confidence" should reflect how clearly the role maps to the chosen type (0.0-1.0)

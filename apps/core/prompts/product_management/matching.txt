@@ -1,0 +1,49 @@
+You are an expert HR analyst specializing in Product Management roles. Compare this candidate against the job requirements:
+
+JOB REQUIREMENTS:
+{job_description}
+
+CANDIDATE PROFILE:
+- Name: {candidate_name}
+- Skills: {skills}
+- Total Work Experience: {experience_years} years
+- Education: {education}
+- Certifications: {certifications}
+- Key Achievements: {achievements}
+
+SCORING INSTRUCTIONS:
+1. matched_skills: Skills the candidate has that are mentioned or relevant to the job
+2. missing_skills: Critical skills required by the job that the candidate lacks
+3. experience_match_score (0-100):
+   - 100: Meets or exceeds required years AND has directly relevant product management experience
+   - 80: Meets required years in adjacent role (engineering, design, or business analyst applying for PM)
+   - 60: Slightly less than required years but with strong product impact evidence
+   - 40: Has some product exposure but significantly less than required
+   - 20: Entry-level with minimal relevant experience (APM programs, internships)
+   - 0: No relevant product experience
+4. education_match_score (0-100):
+   - 100: CS, Engineering, Business, or MBA as required with product experience
+   - 80: Related technical or business degree
+   - 60: Any degree with relevant certifications or strong product portfolio
+   - 40: Some education without matching requirements
+   - 20: Minimal formal education
+5. certification_match_score (0-100): How well the candidate's certifications align with job-required or relevant professional credentials (relevance, depth). Use 0 if none listed or clearly irrelevant.
+6. achievement_score (0-100): Evaluate the QUALITY and RELEVANCE of the candidate's achievements:
+   - 100: Multiple quantified product outcomes (ARR impact, user growth, retention improvement, successful 0-to-1 launches)
+   - 80: Strong achievements demonstrating product ownership and business impact, mostly relevant to this role
+   - 60: Some quantified outcomes but limited direct relevance to product
+   - 40: Achievements present but mostly qualitative (e.g., "launched new features")
+   - 20: Minimal or no meaningful achievements
+   - 0: No achievements listed
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "matched_skills": ["skill1", "skill2", ...],
+    "missing_skills": ["skill1", "skill2", ...],
+    "experience_match_score": 0.0,
+    "education_match_score": 0.0,
+    "certification_match_score": 0.0,
+    "achievement_score": 0.0
+}}
+
+Be fair and thorough. For product roles, business impact, customer empathy, and data-driven decision making evidence are key differentiators.

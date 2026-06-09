@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - ResumeAI{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl px-1 sm:px-0">
+
+    <nav class="mb-8 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="{% url 'core:job_list' %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 hover:ring-primary-200/80 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700 dark:hover:bg-primary-950/40 dark:hover:text-primary-300 dark:hover:ring-primary-800">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+            Jobs
+        </a>
+        <svg class="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+        <span class="truncate px-1 font-semibold text-zinc-900 dark:text-white">{{ title }}</span>
+    </nav>
+    
+
+    <div class="overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+
+        <div class="border-b border-zinc-100 bg-zinc-50/80 px-5 py-6 dark:border-zinc-800 dark:bg-zinc-900/50 sm:px-8">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-lg gradient-bg shadow-md ring-2 ring-white/35 dark:ring-zinc-950/40">
+                    <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">{{ title }}</h1>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-500">{% if job %}Update{% else %}Create{% endif %} a job posting</p>
+                </div>
+            </div>
+        </div>
+        
+        <form method="post" class="space-y-0 p-5 sm:p-8" x-data="{ submitting: false }" @submit="submitting = true">
+            {% csrf_token %}
+            
+            <div class="space-y-8">
+
+                <div>
+                    <label for="id_title" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                        Job Title <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.title }}
+                    {% if form.title.errors %}
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {{ form.title.errors.0 }}
+                    </p>
+                    {% endif %}
+                </div>
+                
+
+                <div>
+                    <label for="id_description" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                        Job Description
+                    </label>
+                    {{ form.description }}
+                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">Include requirements, responsibilities, and qualifications.</p>
+                </div>
+                
+
+                <div>
+                    <label for="id_status" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                        Status
+                    </label>
+                    {{ form.status }}
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label for="id_employment_type" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Employment Type <span class="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+                        </label>
+                        {{ form.employment_type }}
+                    </div>
+                    <div>
+                        <label for="id_location_type" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Location Type <span class="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+                        </label>
+                        {{ form.location_type }}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="id_location" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                        Location <span class="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+                    </label>
+                    {{ form.location }}
+                    {% if form.location.errors %}
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.location.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label for="id_posted_date" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Posted Date <span class="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+                        </label>
+                        {{ form.posted_date }}
+                        {% if form.posted_date.errors %}
+                        <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.posted_date.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="id_closing_date" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Application Deadline <span class="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+                        </label>
+                        {{ form.closing_date }}
+                        {% if form.closing_date.errors %}
+                        <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.closing_date.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="mt-10 flex flex-col-reverse gap-3 border-t border-zinc-100 pt-8 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:justify-end">
+                <a href="{% if job %}{% url 'core:job_detail' job.pk %}{% else %}{% url 'core:job_list' %}{% endif %}" 
+                   class="flex w-full justify-center rounded-lg border border-zinc-200 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:w-auto">
+                    Cancel
+                </a>
+                <button type="submit"
+                        :disabled="submitting"
+                        :class="{ 'opacity-50 cursor-not-allowed': submitting }"
+                        class="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-8 py-3 text-sm font-semibold text-white transition-opacity sm:w-auto">
+                    <svg x-show="submitting" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <template x-if="!submitting">
+                        <span class="flex items-center gap-2">
+                            {% if job %}
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            Update Job
+                            {% else %}
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Create Job
+                            {% endif %}
+                        </span>
+                    </template>
+                    <span x-show="submitting">Saving...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

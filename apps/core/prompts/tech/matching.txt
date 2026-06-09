@@ -1,0 +1,41 @@
+You are an expert HR analyst. Compare this candidate against the job requirements:
+
+JOB REQUIREMENTS:
+{job_description}
+
+CANDIDATE PROFILE:
+- Name: {candidate_name}
+- Skills: {skills}
+- Total Work Experience: {experience_years} years
+- Education: {education}
+- Certifications: {certifications}
+
+SCORING INSTRUCTIONS:
+1. matched_skills: Skills the candidate has that are mentioned or relevant to the job
+2. missing_skills: Critical skills required by the job that the candidate lacks
+3. experience_match_score (0-100):
+   - 100: Meets or exceeds required years AND has relevant domain experience
+   - 80: Meets required years but different domain (transferable experience)
+   - 60: Slightly less than required years but with relevant experience
+   - 40: Has some work experience but significantly less than required
+   - 20: Entry-level with minimal experience
+   - 0: No work experience at all
+4. education_match_score (0-100):
+   - 100: Exact degree match or higher qualification
+   - 80: Related field degree
+   - 60: Different field but relevant qualifications
+   - 40: Some education but not matching requirements
+   - 20: Minimal formal education
+5. certification_match_score (0-100): How well the candidate's certifications align with job-required or relevant technical/professional credentials (relevance, rigor). Use 0 if none listed or irrelevant.
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "matched_skills": ["skill1", "skill2", ...],
+    "missing_skills": ["skill1", "skill2", ...],
+    "experience_match_score": 0.0,
+    "education_match_score": 0.0,
+    "certification_match_score": 0.0,
+    "achievement_score": 0.0
+}}
+
+Be fair in evaluation. Consider that experience in different domains still has value.

@@ -1,0 +1,36 @@
+You are an expert resume parser. Extract information from this resume:
+
+{resume_text}
+
+IMPORTANT INSTRUCTIONS:
+1. Calculate experience_years by looking at ALL work history entries and summing up the durations:
+   - Look for date patterns like "2018-2020", "Jan 2020 - Dec 2022", "2023-present", "2023-ongoing"
+   - For each job, calculate (end_year - start_year). If ongoing/present, use {current_year} as end year.
+   - Sum all job durations to get total experience_years
+   - Example: "2018-2020" = 2 years, "2023-2024" = 1 year, "2024-ongoing" = 1 year → Total = 4 years
+
+2. Extract ALL skills including:
+   - Technical skills (programming languages, frameworks, tools)
+   - Soft skills (communication, leadership, problem-solving)
+   - Domain expertise (marketing, sales, teaching, etc.)
+
+3. Extract education with degree names and institutions
+
+4. Extract ALL certifications and professional credentials including:
+   - Cloud certifications (AWS, Azure, GCP, etc.)
+   - Professional certifications (PMP, CISSP, CPA, etc.)
+   - Vendor certifications (Salesforce, Microsoft, Oracle, etc.)
+   - Training certifications and bootcamp completions
+   - Any other professional credentials mentioned
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "candidate_name": "Full Name from resume",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience_years": 0.0,
+    "education": ["Bachelor of Science in Computer Science - University Name", ...],
+    "certifications": ["cert1", "cert2", ...],
+    "achievements": []
+}}
+
+Be thorough and accurate. The experience_years calculation is critical.

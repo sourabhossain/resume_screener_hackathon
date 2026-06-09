@@ -1,0 +1,29 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+src/media/
+media/
+db.sqlite3
+src/staticfiles/
+staticfiles/
+*.log
+.vscode/
+.idea/
+venv/
+.venv/
+env/
+
+# Logs
+logs/
+!logs/.gitkeep
+
+# Docker
+postgres_data/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

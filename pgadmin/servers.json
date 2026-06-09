@@ -1,0 +1,13 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Resume Screening DB",
+            "Group": "Servers",
+            "Host": "db",
+            "Port": 5433,
+            "MaintenanceDB": "postgres",
+            "Username": "resume_user",
+            "SSLMode": "prefer"
+        }
+    }
+}

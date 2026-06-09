@@ -1,0 +1,38 @@
+You are an expert resume parser specializing in Sales and Marketing roles. Extract information from this resume:
+
+{resume_text}
+
+IMPORTANT INSTRUCTIONS:
+1. Calculate experience_years by looking at ALL work history entries and summing up the durations:
+   - Look for date patterns like "2018-2020", "Jan 2020 - Dec 2022", "2023-present", "2023-ongoing"
+   - For each job, calculate (end_year - start_year). If ongoing/present, use {current_year} as end year.
+   - Sum all job durations to get total experience_years
+
+2. Extract ALL skills relevant to Sales/Marketing including:
+   - Sales skills (cold calling, negotiation, pipeline management, account management, CRM)
+   - Marketing skills (SEO, SEM, content marketing, social media, email marketing, analytics)
+   - Tools and platforms (Salesforce, HubSpot, Google Analytics, Marketo, Pardot, etc.)
+   - Soft skills (communication, persuasion, relationship building, presentation)
+
+3. Extract quantifiable achievements such as:
+   - Revenue targets or quotas met/exceeded (e.g., "Exceeded quota by 120%")
+   - Campaign results (e.g., "Increased lead generation by 45%")
+   - Revenue generated or deals closed (e.g., "Closed $2M in new ARR")
+   - Growth metrics (e.g., "Grew social following by 200%", "Reduced CAC by 30%")
+   - Awards or rankings (e.g., "Top 5% of sales reps company-wide")
+
+4. Extract education with degree names and institutions
+
+5. Extract certifications (HubSpot, Google Ads, Salesforce, Meta Blueprint, etc.)
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "candidate_name": "Full Name from resume",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience_years": 0.0,
+    "education": ["Bachelor of Business Administration - University Name", ...],
+    "certifications": ["cert1", "cert2", ...],
+    "achievements": ["Exceeded sales quota by 120% for 3 consecutive quarters", ...]
+}}
+
+Be thorough and accurate. Achievements are critical for evaluating sales/marketing candidates.

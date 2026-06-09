@@ -1,0 +1,38 @@
+You are an expert resume parser specializing in Human Resources and Recruitment roles. Extract information from this resume:
+
+{resume_text}
+
+IMPORTANT INSTRUCTIONS:
+1. Calculate experience_years by looking at ALL work history entries and summing up the durations:
+   - Look for date patterns like "2018-2020", "Jan 2020 - Dec 2022", "2023-present", "2023-ongoing"
+   - For each job, calculate (end_year - start_year). If ongoing/present, use {current_year} as end year.
+   - Sum all job durations to get total experience_years
+
+2. Extract ALL skills relevant to HR/Recruitment including:
+   - Recruitment skills (sourcing, screening, interviewing, ATS systems, Boolean search)
+   - HR skills (performance management, employee relations, compensation, L&D, HRBP)
+   - Tools and platforms (Workday, SAP SuccessFactors, Greenhouse, Lever, BambooHR, etc.)
+   - Soft skills (communication, empathy, conflict resolution, stakeholder management)
+
+3. Extract quantifiable achievements such as:
+   - Hiring metrics (e.g., "Reduced time-to-fill by 40%", "Filled 120 roles in 6 months")
+   - Retention improvements (e.g., "Improved retention rate from 70% to 85%")
+   - Process improvements (e.g., "Implemented new onboarding reducing ramp time by 30%")
+   - Program impact (e.g., "Launched L&D program reaching 500+ employees")
+   - Cost savings (e.g., "Reduced cost-per-hire by $800 through direct sourcing")
+
+4. Extract education with degree names and institutions
+
+5. Extract certifications (SHRM-CP, SHRM-SCP, PHR, SPHR, CIPD, LinkedIn Recruiter, etc.)
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "candidate_name": "Full Name from resume",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience_years": 0.0,
+    "education": ["Bachelor of Human Resources Management - University Name", ...],
+    "certifications": ["cert1", "cert2", ...],
+    "achievements": ["Reduced time-to-fill by 40% by implementing structured interview process", ...]
+}}
+
+Be thorough and accurate. Achievements demonstrating impact on hiring and retention are critical.

@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+
+{% block title %}Jobs - ResumeAI{% endblock %}
+
+{% block content %}
+
+<div class="mb-10">
+    <h1 class="mb-2 text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">Jobs</h1>
+    <p class="text-zinc-600 dark:text-zinc-400">Postings and applicant volume</p>
+</div>
+
+<!-- Search and Filters -->
+<div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+    <!-- Search Bar -->
+    <form method="get" action="{% url 'core:job_list' %}" class="relative w-full max-w-md min-w-0 flex-1">
+        <input type="text" 
+               name="q" 
+               value="{{ search_query }}"
+               placeholder="Search jobs... (Press Enter)" 
+               class="w-full rounded-lg border border-zinc-200 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+        <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+        {% if status_filter %}
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        {% endif %}
+    </form>
+    
+    <!-- Status Filter Tabs -->
+    <div class="w-full overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:w-auto sm:overflow-visible">
+        <div class="inline-flex min-w-max rounded-lg border border-zinc-200 bg-zinc-100/80 p-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:min-w-0">
+        <a href="{% url 'core:job_list' %}?status=all{% if search_query %}&q={{ search_query }}{% endif %}" 
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'all' %}bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+            All
+        </a>
+        <a href="{% url 'core:job_list' %}?status=active{% if search_query %}&q={{ search_query }}{% endif %}" 
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'active' %}bg-white text-emerald-700 shadow-sm dark:bg-zinc-800 dark:text-emerald-400{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+            Active
+        </a>
+        <a href="{% url 'core:job_list' %}?status=draft{% if search_query %}&q={{ search_query }}{% endif %}" 
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'draft' %}bg-white text-amber-800 shadow-sm dark:bg-zinc-800 dark:text-amber-300{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+            Draft
+        </a>
+        <a href="{% url 'core:job_list' %}?status=closed{% if search_query %}&q={{ search_query }}{% endif %}" 
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'closed' %}bg-white text-zinc-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-300{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+            Closed
+        </a>
+        </div>
+    </div>
+</div>
+
+<!-- Results Summary -->
+{% if search_query or status_filter %}
+<div class="mb-6 flex flex-wrap items-center gap-2 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+    <span>Showing {{ jobs|length }} result{{ jobs|length|pluralize }}</span>
+    {% if search_query %}
+    <span class="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded-lg font-medium">
+        "{{ search_query }}"
+    </span>
+    {% endif %}
+    {% if status_filter %}
+    <span class="px-2 py-1 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium capitalize">
+        {{ status_filter }}
+    </span>
+    {% endif %}
+    <a href="{% url 'core:job_list' %}" class="text-primary-600 dark:text-primary-400 hover:underline font-medium">Clear filters</a>
+</div>
+{% endif %}
+
+<div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+    {% for job in jobs %}
+    <div class="group relative overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-6 shadow-soft transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="relative">
+
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex-1 min-w-0 pr-4">
+                    <h3 class="line-clamp-2 text-lg font-semibold text-zinc-900 transition-colors group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400">
+                        {{ job.title }}
+                    </h3>
+                </div>
+                <span class="px-3 py-1.5 text-xs font-bold rounded-full shrink-0
+                    {% if job.status == 'active' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                    {% elif job.status == 'draft' %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
+                    {% else %}bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400{% endif %}">
+                    {{ job.get_status_display }}
+                </span>
+            </div>
+            
+
+            <div class="space-y-3 text-sm text-gray-500 dark:text-gray-400 mb-6">
+                {% if job.posted_date %}
+                <p class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    Posted {{ job.posted_date|date:"M d, Y" }}
+                </p>
+                {% endif %}
+                {% if job.closing_date %}
+                <p class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Closes {{ job.closing_date|date:"M d, Y" }}
+                </p>
+                {% endif %}
+                {% if job.employment_type or job.location_type or job.location %}
+                <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {% if job.employment_type %}
+                    <span class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{{ job.get_employment_type_display }}</span>
+                    {% endif %}
+                    {% if job.location_type %}
+                    <span class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{{ job.get_location_type_display }}</span>
+                    {% endif %}
+                    {% if job.location %}
+                    <span class="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{{ job.location }}</span>
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+            
+
+            <div class="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <div class="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                    <div class="flex -space-x-2">
+                        {% for letter in job.preview_initials %}
+                        <div class="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary-600 text-xs font-semibold uppercase text-white dark:border-zinc-900">
+                            {{ letter }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <span class="text-sm font-semibold">{{ job.resume_count }} Candidate{{ job.resume_count|pluralize }}</span>
+                </div>
+                <a href="{% url 'core:job_detail' job.pk %}" class="flex items-center gap-1 text-sm font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400">
+                    View
+                    <svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-span-full">
+        <div class="rounded-2xl border border-zinc-200/90 bg-white p-14 text-center shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+            <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <svg class="h-8 w-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+            </div>
+            {% if search_query or status_filter != 'active' %}
+            <h3 class="mb-3 text-xl font-semibold text-zinc-900 dark:text-white">No jobs match your search</h3>
+            <p class="mx-auto mb-8 max-w-md text-zinc-500 dark:text-zinc-500">Try adjusting your search terms or filters</p>
+            <a href="{% url 'core:job_list' %}" class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                Clear Filters
+            </a>
+            {% else %}
+            <h3 class="mb-3 text-xl font-semibold text-zinc-900 dark:text-white">No jobs posted yet</h3>
+            <p class="mx-auto mb-8 max-w-md text-zinc-500 dark:text-zinc-500">Create a job to start collecting and screening resumes.</p>
+            <a href="{% url 'core:job_create' %}" class="btn-primary inline-flex items-center gap-2 rounded-lg px-8 py-3 text-sm font-semibold text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Post Your First Job
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<div class="mt-10 flex flex-wrap items-center justify-center gap-2">
+    <!-- Previous -->
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       class="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-600 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        Prev
+    </a>
+    {% endif %}
+
+    <!-- Page Numbers -->
+    <div class="flex max-w-full flex-wrap items-center justify-center gap-1 overflow-x-auto pb-1">
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <span aria-current="page" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white">{{ num }}</span>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <a href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+               class="rounded-xl border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-600 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                {{ num }}
+            </a>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- Next -->
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       class="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-600 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+        Next
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+    </a>
+    {% endif %}
+</div>
+
+<!-- Page Info -->
+<p class="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    ({{ page_obj.paginator.count }} total)
+</p>
+{% endif %}
+{% endblock %}

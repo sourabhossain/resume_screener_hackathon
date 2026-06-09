@@ -1,0 +1,147 @@
+<tr id="resume-row-{{ resume.pk }}"
+    class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+    {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' or resume.verification_status == 'pending' %}
+    hx-get="{% url 'core:resume_row_fragment' resume.pk %}"
+    hx-trigger="every 3s"
+    hx-target="this"
+    hx-swap="outerHTML"
+    {% endif %}>
+
+    <td class="px-5 py-4 sm:px-6 sm:py-5">
+        {% with display_name=resume.candidate_name|title %}
+        <a href="{% url 'core:resume_detail' resume.pk %}" class="group flex items-center gap-3 sm:gap-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white shadow-sm sm:h-11 sm:w-11 sm:text-base">
+                {{ display_name|slice:":1"|upper }}
+            </div>
+            <div class="min-w-0">
+                <p class="font-semibold text-zinc-900 transition group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400">{{ display_name }}</p>
+                <p class="text-xs text-zinc-500 dark:text-zinc-400">Added {{ resume.created_at|date:"M j, Y" }}</p>
+            </div>
+        </a>
+        {% endwith %}
+    </td>
+
+    <td class="px-5 py-4 sm:px-6 sm:py-5">
+        {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
+        <div class="h-6 w-14 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
+        {% elif resume.tier %}
+        <span class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold sm:px-3 sm:py-1.5
+            {% if resume.tier == 'top' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-400
+            {% elif resume.tier == 'mid' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400
+            {% else %}bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400{% endif %}">
+            {{ resume.get_tier_display }}
+        </span>
+        {% else %}
+        <span class="text-zinc-400">—</span>
+        {% endif %}
+    </td>
+
+    <td class="px-5 py-4 align-middle sm:px-6 sm:py-5">
+        {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
+        <div class="h-6 w-20 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
+        {% elif resume.recommendation %}
+        <span class="inline-flex items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold leading-tight sm:px-3 sm:py-1.5
+            {% if resume.recommendation == 'interview' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-400
+            {% elif resume.recommendation == 'talent_pool' %}bg-sky-100 text-sky-800 dark:bg-sky-900/35 dark:text-sky-400
+            {% else %}bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-400{% endif %}">
+            {{ resume.get_recommendation_display }}
+        </span>
+        {% else %}
+        <span class="text-zinc-400">—</span>
+        {% endif %}
+    </td>
+
+    <td class="px-5 py-4 sm:px-6 sm:py-5">
+        {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
+        <div class="grid grid-cols-2 gap-x-3 gap-y-2">
+            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+        </div>
+        {% else %}
+        <div class="grid max-w-[16rem] grid-cols-1 gap-x-4 gap-y-2 text-xs sm:max-w-none sm:grid-cols-2">
+            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
+                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
+                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Experience</span>
+                </span>
+                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.experience_score is not None %}{{ resume.experience_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            </span>
+            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
+                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                    <span class="h-1.5 w-1.5 rounded-full bg-primary-400"></span>
+                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Education</span>
+                </span>
+                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.education_score is not None %}{{ resume.education_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            </span>
+            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
+                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Skills</span>
+                </span>
+                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.skills_score is not None %}{{ resume.skills_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            </span>
+            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
+                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                    <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Certifications</span>
+                </span>
+                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.certification_score is not None %}{{ resume.certification_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            </span>
+        </div>
+        {% endif %}
+    </td>
+
+    <td class="px-5 py-4 text-center align-middle sm:px-6 sm:py-5">
+        {% if resume.verification_status == 'pending' or resume.verification_status == 'processing' %}
+        <svg class="mx-auto h-5 w-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Verification pending">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        {% elif resume.verification_status == 'skipped' or resume.verification_status == 'failed' %}
+        <span class="text-lg text-zinc-400">—</span>
+        {% elif resume.verification_score is not None %}
+            {% if resume.verification_score >= 70 %}
+            <svg class="mx-auto h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24" title="Verified: {{ resume.verification_score }}%">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+            </svg>
+            {% elif resume.verification_score >= 40 %}
+            <svg class="mx-auto h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24" title="Partial: {{ resume.verification_score }}%">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+            </svg>
+            {% else %}
+            <svg class="mx-auto h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 24 24" title="Low score: {{ resume.verification_score }}%">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+            </svg>
+            {% endif %}
+        {% else %}
+        <span class="text-lg text-zinc-400">—</span>
+        {% endif %}
+    </td>
+
+    <td class="px-5 py-4 text-center align-middle sm:px-6 sm:py-5">
+        {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
+        <div class="mx-auto h-8 w-14 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
+        {% elif resume.final_score is not None %}
+        <span class="inline-block whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold sm:px-4 sm:py-2 sm:text-base
+            {% if resume.final_score >= 80 %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-400
+            {% elif resume.final_score >= 60 %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400
+            {% else %}bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+            {{ resume.final_score|floatformat:0 }}%
+        </span>
+        {% else %}
+        <span class="text-zinc-400">—</span>
+        {% endif %}
+    </td>
+
+    <td class="px-5 py-4 text-right sm:px-6 sm:py-5">
+        <div class="flex justify-end gap-1 sm:gap-2">
+            <a href="{% url 'core:resume_edit' resume.pk %}" class="rounded-lg p-2 text-zinc-400 transition hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-950/40 dark:hover:text-primary-400" title="Edit">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            </a>
+            <a href="{% url 'core:resume_delete' resume.pk %}" class="rounded-lg p-2 text-zinc-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400" title="Delete">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </a>
+        </div>
+    </td>
+</tr>

@@ -1,0 +1,38 @@
+You are an expert resume parser specializing in Product Management roles. Extract information from this resume:
+
+{resume_text}
+
+IMPORTANT INSTRUCTIONS:
+1. Calculate experience_years by looking at ALL work history entries and summing up the durations:
+   - Look for date patterns like "2018-2020", "Jan 2020 - Dec 2022", "2023-present", "2023-ongoing"
+   - For each job, calculate (end_year - start_year). If ongoing/present, use {current_year} as end year.
+   - Sum all job durations to get total experience_years
+
+2. Extract ALL skills relevant to Product Management including:
+   - Product skills (roadmapping, prioritization, PRD writing, user research, A/B testing)
+   - Strategic skills (market analysis, competitive intelligence, go-to-market, OKRs)
+   - Tools (Jira, Productboard, Amplitude, Mixpanel, Figma, Confluence, Looker, etc.)
+   - Soft skills (cross-functional leadership, storytelling, data-driven decision making)
+
+3. Extract quantifiable achievements such as:
+   - Business impact (e.g., "Launched feature generating $2M ARR in first year")
+   - Growth metrics (e.g., "Grew DAU from 100K to 500K in 12 months")
+   - Efficiency improvements (e.g., "Reduced customer churn by 20% through improved onboarding")
+   - Product milestones (e.g., "Shipped 0-to-1 product reaching 50K users in 6 months")
+   - Experimentation results (e.g., "A/B tested 40+ experiments, improving conversion by 15%")
+
+4. Extract education with degree names and institutions
+
+5. Extract certifications (CSPO, SAFe PO/PM, Pragmatic Institute, Google PM, etc.)
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "candidate_name": "Full Name from resume",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience_years": 0.0,
+    "education": ["Bachelor of Science in Computer Science - University Name", ...],
+    "certifications": ["cert1", "cert2", ...],
+    "achievements": ["Launched payments feature generating $1.5M ARR in Q1", ...]
+}}
+
+Be thorough and accurate. Achievements demonstrating product impact and business outcomes are critical.

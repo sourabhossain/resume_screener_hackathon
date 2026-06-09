@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Resume AI Screener{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        document.addEventListener('htmx:afterSettle', function (evt) {
+            if (typeof Alpine !== 'undefined') {
+                Alpine.initTree(evt.detail.elt);
+            }
+        });
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('messageToast', () => ({
+                visible: true,
+                _timer: null,
+                init() {
+                    const raw = this.$el.getAttribute('data-dismiss-ms');
+                    const parsed = parseInt(raw || '5200', 10);
+                    const ms = Number.isFinite(parsed) ? Math.max(2500, parsed) : 5200;
+                    this._timer = window.setTimeout(() => {
+                        this.visible = false;
+                    }, ms);
+                },
+                dismiss() {
+                    if (this._timer) {
+                        window.clearTimeout(this._timer);
+                        this._timer = null;
+                    }
+                    this.visible = false;
+                },
+            }));
+        });
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <script>
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            200: '#c7d2fe',
+                            300: '#a5b4fc',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                        },
+                        dark: {
+                            50: '#fafafa',
+                            100: '#f4f4f5',
+                            200: '#e4e4e7',
+                            300: '#d4d4d8',
+                            400: '#a1a1aa',
+                            500: '#71717a',
+                            600: '#52525b',
+                            700: '#3f3f46',
+                            800: '#27272a',
+                            900: '#18181b',
+                            950: '#09090b',
+                        },
+                    },
+                    boxShadow: {
+                        soft: '0 1px 2px rgba(0,0,0,.04), 0 4px 24px -4px rgba(15,23,42,.08)',
+                        'soft-dark': '0 1px 2px rgba(0,0,0,.2), 0 8px 32px -8px rgba(0,0,0,.45)',
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+        }
+
+        ::selection {
+            background-color: rgba(99, 102, 241, 0.22);
+            color: inherit;
+        }
+
+        .dark ::selection {
+            background-color: rgba(165, 180, 252, 0.28);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(145deg, #4f46e5 0%, #6366f1 55%, #7c3aed 100%);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(16px) saturate(1.2);
+            -webkit-backdrop-filter: blur(16px) saturate(1.2);
+        }
+        .dark .glass {
+            background: rgba(9, 9, 11, 0.78);
+        }
+        .card-hover {
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px -16px rgba(15, 23, 42, 0.18);
+        }
+        .dark .card-hover:hover {
+            box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.55);
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px -4px rgba(79, 70, 229, 0.45);
+            transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 8px 24px -6px rgba(79, 70, 229, 0.5);
+        }
+        .btn-primary:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6366f1, 0 4px 16px -4px rgba(79, 70, 229, 0.5);
+        }
+        .dark .btn-primary:focus-visible {
+            box-shadow: 0 0 0 2px #09090b, 0 0 0 4px #818cf8, 0 8px 24px -6px rgba(79, 70, 229, 0.45);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e4e4e7;
+            border-radius: 0.625rem;
+            font-size: 0.9375rem;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+            background-color: #fafafa;
+        }
+        .dark .form-input {
+            background-color: #18181b;
+            border-color: #3f3f46;
+            color: #fafafa;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            background-color: #fff;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+        }
+        .dark .form-input:focus {
+            background-color: #09090b;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28);
+        }
+        .form-input::placeholder {
+            color: #9ca3af;
+        }
+        select.form-input {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-color: #fafafa;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25rem;
+            padding-right: 2.5rem;
+        }
+        .dark select.form-input {
+            background-color: #18181b;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25rem;
+        }
+        .form-input-file {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px dashed #d4d4d8;
+            border-radius: 0.625rem;
+            background: #fafafa;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .dark .form-input-file {
+            background: #18181b;
+            border-color: #52525b;
+        }
+        .form-input-file:hover {
+            border-color: #a5b4fc;
+            background: #eef2ff;
+        }
+        .dark .form-input-file:hover {
+            background: #27272a;
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-pulse-soft {
+            animation: pulseSoft 2s ease-in-out infinite;
+        }
+        @keyframes pulseSoft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .nav-link {
+            position: relative;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .nav-link:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+        }
+        .nav-link:hover {
+            background: rgba(99, 102, 241, 0.08);
+            color: #4338ca;
+        }
+        .dark .nav-link:hover {
+            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.12);
+        }
+        /* Mobile menu animations */
+        .mobile-menu-enter {
+            transform: translateX(-100%);
+        }
+        .mobile-menu-enter-active {
+            transform: translateX(0);
+            transition: transform 0.3s ease-out;
+        }
+        .mobile-menu-exit {
+            transform: translateX(0);
+        }
+        .mobile-menu-exit-active {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in;
+        }
+        /* Hamburger animation */
+        .hamburger-line {
+            transition: all 0.3s ease;
+        }
+        .hamburger-open .hamburger-line:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        .hamburger-open .hamburger-line:nth-child(2) {
+            opacity: 0;
+        }
+        .hamburger-open .hamburger-line:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="relative flex min-h-screen flex-col bg-zinc-50 text-zinc-900 antialiased transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-100" x-data="{ mobileMenuOpen: false }">
+
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div class="absolute -top-40 left-1/2 h-[min(42rem,90vh)] w-[min(140%,52rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-primary-500/[0.12] to-transparent blur-3xl dark:from-primary-500/[0.16] dark:to-transparent"></div>
+        <div class="absolute right-[-10%] top-[12%] h-72 w-72 rounded-full bg-violet-600/[0.06] blur-3xl dark:bg-violet-500/[0.12] md:right-0"></div>
+        <div class="absolute bottom-0 left-[-20%] h-56 w-56 rounded-full bg-indigo-600/[0.05] blur-3xl dark:bg-indigo-500/[0.08] md:left-[-5%]"></div>
+    </div>
+
+    <nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex min-h-[4.25rem] items-center justify-between py-3">
+                <div class="flex items-center space-x-6 lg:space-x-10">
+                    <!-- Mobile Menu Button -->
+                    <button @click="mobileMenuOpen = !mobileMenuOpen"
+                            aria-label="Toggle navigation menu"
+                            :aria-expanded="mobileMenuOpen"
+                            class="rounded-lg p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 md:hidden"
+                            :class="{ 'hamburger-open': mobileMenuOpen }">
+                        <div class="flex h-5 w-6 flex-col justify-between">
+                            <span class="hamburger-line h-0.5 w-full rounded-full bg-zinc-600 dark:bg-zinc-400"></span>
+                            <span class="hamburger-line h-0.5 w-full rounded-full bg-zinc-600 dark:bg-zinc-400"></span>
+                            <span class="hamburger-line h-0.5 w-full rounded-full bg-zinc-600 dark:bg-zinc-400"></span>
+                        </div>
+                    </button>
+                    
+                    <!-- Logo -->
+                    <a href="{% url 'core:dashboard' %}" class="flex items-center space-x-3 group">
+                        <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center shadow-md shadow-indigo-500/25 transition-transform duration-200 group-hover:scale-[1.02]">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <span class="hidden text-xl font-semibold tracking-tight sm:block">
+                            <span class="gradient-text">Resume</span><span class="text-zinc-900 dark:text-white">AI</span>
+                        </span>
+                    </a>
+                    
+                    {% if user.is_authenticated %}
+                    <div class="hidden md:flex items-center space-x-1">
+                        <a href="{% url 'core:dashboard' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                                </svg>
+                                Dashboard
+                            </span>
+                        </a>
+                        <a href="{% url 'core:job_list' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
+                                Jobs
+                            </span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Right Side Actions -->
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- Dark Mode Toggle -->
+                    <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+                            :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+                            class="rounded-lg border border-zinc-200/80 bg-white p-2.5 transition-all hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/55 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                            title="Toggle Dark Mode">
+                        <svg x-show="darkMode" class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <svg x-show="!darkMode" class="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </button>
+                    
+                    <!-- Logout Button -->
+                    {% if user.is_authenticated %}
+                    <form action="{% url 'logout' %}" method="post" class="inline">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="rounded-lg border border-zinc-200/80 bg-white p-2.5 text-zinc-600 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/45 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-red-900 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                title="Logout">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    <!-- Post Job Button -->
+                    {% block nav_action %}
+                    <a href="{% url 'core:job_create' %}" class="btn-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white sm:px-5">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Post Job</span>
+                    </a>
+                    {% endblock %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Menu Drawer -->
+        <div x-show="mobileMenuOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click="mobileMenuOpen = false"
+             class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden">
+        </div>
+        
+        <div x-show="mobileMenuOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="-translate-x-full"
+             x-transition:enter-end="translate-x-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="translate-x-0"
+             x-transition:leave-end="-translate-x-full"
+             class="fixed bottom-0 left-0 top-0 z-50 w-80 max-w-[85vw] overflow-y-auto border-r border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:hidden">
+            
+            <!-- Mobile Menu Header -->
+            <div class="border-b border-zinc-200 p-6 dark:border-zinc-800">
+                <div class="flex items-center justify-between">
+                    <a href="{% url 'core:dashboard' %}" class="flex items-center space-x-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg gradient-bg shadow-md">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <span class="text-lg font-semibold tracking-tight">
+                            <span class="gradient-text">Resume</span><span class="text-zinc-900 dark:text-white">AI</span>
+                        </span>
+                    </a>
+                    <button type="button" @click="mobileMenuOpen = false" class="rounded-lg p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                        <svg class="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Mobile Search -->
+            <div class="p-4">
+                <form method="get" action="{% url 'core:job_list' %}" @submit="mobileMenuOpen = false">
+                    <div class="relative">
+                        <input type="text" name="q" placeholder="Search jobs..."
+                               class="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500">
+                        <svg class="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Mobile Nav Links -->
+            {% if user.is_authenticated %}
+            <div class="px-4 py-2">
+                <a href="{% url 'core:dashboard' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-950/50">
+                        <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Dashboard</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Overview</p>
+                    </div>
+                </a>
+                
+                <a href="{% url 'core:job_list' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                        <svg class="h-5 w-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Jobs</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Job postings</p>
+                    </div>
+                </a>
+                
+                <a href="{% url 'core:job_create' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40">
+                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Post New Job</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">New listing</p>
+                    </div>
+                </a>
+            </div>
+            {% endif %}
+            
+            <!-- Mobile Menu Footer -->
+            <div class="absolute bottom-0 left-0 right-0 border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-zinc-500 dark:text-zinc-400">Theme</span>
+                    <button type="button" @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+                            class="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 transition-all dark:border-zinc-700 dark:bg-zinc-800">
+                        <span x-show="!darkMode" class="flex items-center gap-2 text-sm text-zinc-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            </svg>
+                            Dark
+                        </span>
+                        <span x-show="darkMode" class="flex items-center gap-2 text-sm text-zinc-300">
+                            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                            Light
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    {% if messages %}
+    <div
+        class="pointer-events-none fixed inset-x-0 top-[4.5rem] z-[100] flex flex-col items-center gap-2 px-4 sm:inset-x-auto sm:left-auto sm:right-6 sm:top-24 sm:items-end"
+        aria-live="polite"
+    >
+        {% for message in messages %}
+        <div
+            class="pointer-events-auto relative flex w-full max-w-lg shrink-0 items-start gap-3 rounded-2xl border p-4 pr-12 shadow-lg shadow-zinc-900/10 backdrop-blur-md dark:shadow-black/40 sm:w-[min(100%,28rem)]
+                {% if message.tags == 'success' %} border-emerald-200/90 bg-emerald-50/95 text-emerald-900 dark:border-emerald-800/70 dark:bg-emerald-950/50 dark:text-emerald-100
+                {% elif message.tags == 'error' %} border-red-200/90 bg-red-50/95 text-red-900 dark:border-red-800/70 dark:bg-red-950/45 dark:text-red-100
+                {% elif message.tags == 'warning' %} border-amber-200/90 bg-amber-50/95 text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/45 dark:text-amber-100
+                {% else %} border-sky-200/90 bg-sky-50/95 text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/45 dark:text-sky-100{% endif %}"
+            role="alert"
+            {% if message.tags == 'error' %}data-dismiss-ms="9000"
+            {% elif message.tags == 'warning' %}data-dismiss-ms="7000"
+            {% else %}data-dismiss-ms="5200"{% endif %}
+            x-data="messageToast()"
+            x-show="visible"
+            x-transition:enter="transform transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 translate-y-3 sm:translate-y-2"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 translate-y-1"
+        >
+            {% if message.tags == 'success' %}
+            <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% elif message.tags == 'error' %}
+            <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% elif message.tags == 'warning' %}
+            <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
+            </svg>
+            {% else %}
+            <svg class="mt-0.5 h-5 w-5 shrink-0 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% endif %}
+            <span class="min-w-0 flex-1 text-sm font-medium leading-snug">{{ message }}</span>
+            <button
+                type="button"
+                @click="dismiss()"
+                class="absolute right-2 top-2 rounded-lg p-1.5 text-current opacity-60 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+                aria-label="Dismiss notification"
+            >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <main class="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer class="mt-auto border-t border-zinc-200/90 bg-white/70 py-10 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/75">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col items-center justify-between gap-4 md:flex-row">
+                <div class="flex items-center gap-2">
+                    <div class="flex h-8 w-8 items-center justify-center rounded-md gradient-bg">
+                        <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <span class="font-semibold text-zinc-800 dark:text-zinc-200">ResumeAI</span>
+                </div>
+                <p class="text-sm text-zinc-500 dark:text-zinc-500">© {% now "Y" %} ResumeAI</p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,39 @@
+You are an expert resume parser specializing in Operations and Support roles. Extract information from this resume:
+
+{resume_text}
+
+IMPORTANT INSTRUCTIONS:
+1. Calculate experience_years by looking at ALL work history entries and summing up the durations:
+   - Look for date patterns like "2018-2020", "Jan 2020 - Dec 2022", "2023-present", "2023-ongoing"
+   - For each job, calculate (end_year - start_year). If ongoing/present, use {current_year} as end year.
+   - Sum all job durations to get total experience_years
+
+2. Extract ALL skills relevant to Operations/Support roles including:
+   - Operations skills (process improvement, SOP development, capacity planning, vendor management)
+   - Logistics skills (supply chain, inventory management, warehousing, procurement, ERP)
+   - Customer support skills (ticket management, escalation handling, CSAT, SLA adherence)
+   - Tools and platforms (Zendesk, Freshdesk, SAP, NetSuite, Jira, ServiceNow, etc.)
+   - Soft skills (problem-solving, attention to detail, cross-functional collaboration)
+
+3. Extract quantifiable achievements such as:
+   - Efficiency improvements (e.g., "Reduced order processing time by 40%")
+   - Cost savings (e.g., "Saved $800K annually through vendor renegotiation")
+   - Quality metrics (e.g., "Achieved 98% SLA adherence across 10K+ monthly tickets")
+   - Scale of operations managed (e.g., "Oversaw logistics for 50K shipments/month")
+   - Customer satisfaction (e.g., "Improved CSAT from 3.2 to 4.7/5.0")
+
+4. Extract education with degree names and institutions
+
+5. Extract certifications (Six Sigma, APICS, ITIL, Lean, PMP, etc.)
+
+Return ONLY valid JSON with this exact structure:
+{{
+    "candidate_name": "Full Name from resume",
+    "skills": ["skill1", "skill2", "skill3", ...],
+    "experience_years": 0.0,
+    "education": ["Bachelor of Science in Supply Chain Management - University Name", ...],
+    "certifications": ["cert1", "cert2", ...],
+    "achievements": ["Reduced warehouse processing time by 35% through lean methodology", ...]
+}}
+
+Be thorough and accurate. Achievements demonstrating operational efficiency and scale are critical.

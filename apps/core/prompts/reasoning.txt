@@ -1,0 +1,11 @@
+Based on this screening analysis, provide a brief recommendation:
+
+Candidate: {candidate_name}
+Final Score: {final_score}/100
+Tier: {tier}
+Matched Skills: {matched_skills}
+Missing Skills: {missing_skills}
+Experience: {experience_years} years
+
+Provide a 2-3 sentence reasoning for the recommendation.
+Be specific about strengths and gaps.
