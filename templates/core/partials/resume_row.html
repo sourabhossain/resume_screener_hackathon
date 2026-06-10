@@ -7,6 +7,19 @@
     hx-swap="outerHTML"
     {% endif %}>
 
+    <td class="px-5 py-4 text-center align-middle sm:px-6 sm:py-5">
+        {% if rank %}
+        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full
+            {% if rank == 1 %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 font-bold
+            {% elif rank == 2 %}bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 font-semibold
+            {% elif rank == 3 %}bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 font-semibold
+            {% else %}bg-zinc-50 text-zinc-400 dark:bg-zinc-800/60 dark:text-zinc-500 font-medium{% endif %}
+            text-xs tabular-nums">{{ rank }}</span>
+        {% else %}
+        <span class="text-zinc-300 dark:text-zinc-600">—</span>
+        {% endif %}
+    </td>
+
     <td class="px-5 py-4 sm:px-6 sm:py-5">
         {% with display_name=resume.candidate_name|title %}
         <a href="{% url 'core:resume_detail' resume.uuid %}" class="group flex items-center gap-3 sm:gap-4">

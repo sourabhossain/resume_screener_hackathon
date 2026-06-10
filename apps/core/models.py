@@ -147,6 +147,8 @@ class Resume(SoftDeleteModel):
     
     # Opaque public identifier used in recruiter URLs instead of the numeric pk.
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, null=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
     job = models.ForeignKey(
         Job,
         on_delete=models.CASCADE,
