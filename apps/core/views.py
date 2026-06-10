@@ -470,7 +470,8 @@ def careers_apply(request, slug):
     job = get_object_or_404(Job, slug=slug, status='active')
 
     if request.method == 'POST':
-        form = ResumeForm(request.POST, request.FILES)
+        # require_contact: applicants must give an email so recruiters can reply.
+        form = ResumeForm(request.POST, request.FILES, require_contact=True)
         if form.is_valid():
             resume = form.save(commit=False)
             resume.job = job
@@ -482,7 +483,7 @@ def careers_apply(request, slug):
 
             return redirect('core:careers_thanks', slug=job.slug)
     else:
-        form = ResumeForm()
+        form = ResumeForm(require_contact=True)
 
     return render(request, 'careers/apply.html', {'job': job, 'form': form})
 
