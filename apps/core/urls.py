@@ -24,6 +24,8 @@ urlpatterns = [
     path('jobs/<slug:slug>/delete/', views.job_delete, name='job_delete'),
 
     # Resume URLs — opaque uuid instead of the numeric id
+    path('jobs/<slug:job_slug>/resumes/search/', views.pipeline_search, name='pipeline_search'),
+    path('jobs/<slug:job_slug>/resumes/suggestions/', views.pipeline_suggestions, name='pipeline_suggestions'),
     path('jobs/<slug:job_slug>/resumes/add/', views.resume_create, name='resume_create'),
     path('jobs/<slug:job_slug>/resumes/bulk/', views.resume_bulk_create, name='resume_bulk_create'),
     path('resumes/<uuid:uuid>/', views.resume_detail, name='resume_detail'),

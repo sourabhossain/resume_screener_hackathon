@@ -115,11 +115,12 @@
 
     {# ── Applicant pipeline table ── #}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-        <div class="flex flex-col gap-4 border-b border-zinc-100 px-5 py-5 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div>
-                <h2 class="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">Applicant pipeline</h2>
-                <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{{ resumes.count }} in queue · sorted by decision, then score</p>
-            </div>
+        <div class="flex flex-col gap-4 border-b border-zinc-100 px-5 py-5 dark:border-zinc-800 sm:px-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">Applicant pipeline</h2>
+                    <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{{ resumes.count }} in queue · sorted by decision, then score</p>
+                </div>
             {% if job.status == 'active' %}
             <div class="flex items-center gap-2">
                 <a href="{% url 'core:resume_bulk_create' job.slug %}"
@@ -145,24 +146,60 @@
                 </span>
             </div>
             {% endif %}
+            </div>
+
+            {# ── Pipeline search (HTMX live) ── #}
+            <div class="relative" x-data="{ hasValue: '{{ search_q|escapejs }}' !== '' }">
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"></path>
+                        </svg>
+                        <input id="pipeline-search-input"
+                               type="text" name="q"
+                               value="{{ search_q }}"
+                               placeholder="Search by name, email, or phone…"
+                               autocomplete="off"
+                               hx-get="{% url 'core:pipeline_search' job.slug %}"
+                               hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
+                               hx-target="#pipeline-tbody"
+                               hx-swap="innerHTML"
+                               @input="hasValue = $event.target.value.length > 0"
+                               @blur="setTimeout(() => { document.getElementById('pipeline-suggestions').innerHTML = ''; }, 200)"
+                               class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
+                    </div>
+                    <button type="button" x-show="hasValue"
+                            onclick="document.getElementById('pipeline-search-input').value=''; htmx.trigger('#pipeline-search-input','input'); $dispatch('input'); document.getElementById('pipeline-suggestions').innerHTML=''; $el.closest('[x-data]').__x.$data.hasValue=false;"
+                            class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-zinc-500 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                {# Suggestions: separate HTMX listener — never touches tbody #}
+                <div hx-get="{% url 'core:pipeline_suggestions' job.slug %}"
+                     hx-trigger="input changed delay:200ms from:#pipeline-search-input, focusin delay:100ms from:#pipeline-search-input"
+                     hx-target="#pipeline-suggestions"
+                     hx-swap="innerHTML"
+                     hx-include="#pipeline-search-input"></div>
+                <div id="pipeline-suggestions" class="absolute left-0 right-10 top-full z-20 mt-1"></div>
+            </div>
         </div>
 
         {% if resumes %}
         <div class="overflow-x-auto">
-            <table class="w-full min-w-[52rem] text-left">
+            <table class="w-full min-w-[68rem] text-left">
                 <thead class="border-b border-zinc-100 bg-zinc-50/95 dark:border-zinc-800 dark:bg-zinc-900/95">
                     <tr>
-                        <th class="w-10 px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">#</th>
-                        <th class="w-56 px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:w-64 sm:px-6">Candidate</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">Tier</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">Decision</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">Scores</th>
-                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">Verified</th>
-                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">Final</th>
-                        <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 sm:px-6">Actions</th>
+                        <th class="w-12 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">#</th>
+                        <th class="w-64 px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Candidate</th>
+                        <th class="w-24 px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Tier</th>
+                        <th class="w-32 px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Decision</th>
+                        <th class="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Scores</th>
+                        <th class="w-24 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Verified</th>
+                        <th class="w-24 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Final</th>
+                        <th class="w-24 px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody id="pipeline-tbody" class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for resume in resumes %}
                 {% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter %}
                 {% endfor %}

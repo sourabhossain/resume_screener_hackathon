@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Dict, Any
 
 from django.db import transaction
@@ -41,6 +42,31 @@ class ResumeService:
             raise
         except Exception as e:
             raise DocumentExtractionError(str(e), file_path=resume.file.path)
+
+    @staticmethod
+    def _fill_contact_info(resume, text: str) -> None:
+        """Fill email/phone from CV text only if the recruiter left them blank."""
+        update_fields = []
+
+        if not resume.email:
+            match = re.search(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', text)
+            if match:
+                resume.email = match.group(0)
+                update_fields.append('email')
+
+        if not resume.phone:
+            # BD numbers (+8801x or 01x) or generic international format
+            match = re.search(
+                r'(?:\+?880[\s\-]?|0)1[3-9]\d{8}|'
+                r'\+?\d[\d\s\(\)\-]{9,16}\d',
+                text
+            )
+            if match:
+                resume.phone = match.group(0).strip()
+                update_fields.append('phone')
+
+        if update_fields:
+            resume.save(update_fields=update_fields)
 
     @staticmethod
     def run_screening(resume) -> ScreeningResult:
@@ -94,7 +120,8 @@ class ResumeService:
             resume.screening_status = 'processing'
             resume.save(update_fields=['screening_status'])
 
-            cls.extract_text(resume)
+            raw_text = cls.extract_text(resume)
+            cls._fill_contact_info(resume, raw_text)
             result = cls.run_screening(resume)
             cls.apply_screening_result(resume, result)
 

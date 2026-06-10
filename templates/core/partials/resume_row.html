@@ -7,7 +7,7 @@
     hx-swap="outerHTML"
     {% endif %}>
 
-    <td class="px-5 py-4 text-center align-middle sm:px-6 sm:py-5">
+    <td class="px-4 py-4 text-center align-middle">
         {% if rank %}
         <span class="inline-flex h-7 w-7 items-center justify-center rounded-full
             {% if rank == 1 %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 font-bold
@@ -20,7 +20,7 @@
         {% endif %}
     </td>
 
-    <td class="px-5 py-4 sm:px-6 sm:py-5">
+    <td class="px-4 py-4">
         {% with display_name=resume.candidate_name|title %}
         <a href="{% url 'core:resume_detail' resume.uuid %}" class="group flex items-center gap-3 sm:gap-4">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white shadow-sm sm:h-11 sm:w-11 sm:text-base">
@@ -28,13 +28,30 @@
             </div>
             <div class="min-w-0">
                 <p class="font-semibold text-zinc-900 transition group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400">{{ display_name }}</p>
+                {% if resume.email or resume.phone %}
+                <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                    {% if resume.email %}
+                    <span class="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        <svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        {{ resume.email }}
+                    </span>
+                    {% endif %}
+                    {% if resume.phone %}
+                    <span class="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        <svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                        {{ resume.phone }}
+                    </span>
+                    {% endif %}
+                </div>
+                {% else %}
                 <p class="text-xs text-zinc-500 dark:text-zinc-400">Added {{ resume.created_at|date:"M j, Y" }}</p>
+                {% endif %}
             </div>
         </a>
         {% endwith %}
     </td>
 
-    <td class="px-5 py-4 sm:px-6 sm:py-5">
+    <td class="px-4 py-4">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
         <div class="h-6 w-14 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
         {% elif resume.tier %}
@@ -49,7 +66,7 @@
         {% endif %}
     </td>
 
-    <td class="px-5 py-4 align-middle sm:px-6 sm:py-5">
+    <td class="px-4 py-4 align-middle">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
         <div class="h-6 w-20 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
         {% elif resume.recommendation %}
@@ -64,49 +81,41 @@
         {% endif %}
     </td>
 
-    <td class="px-5 py-4 sm:px-6 sm:py-5">
+    <td class="px-4 py-4">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
-        <div class="grid grid-cols-2 gap-x-3 gap-y-2">
-            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
-            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
-            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
-            <div class="h-3 w-14 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div class="h-3 w-16 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+            <div class="h-3 w-16 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+            <div class="h-3 w-16 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
+            <div class="h-3 w-16 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700"></div>
         </div>
         {% else %}
-        <div class="grid max-w-[16rem] grid-cols-1 gap-x-4 gap-y-2 text-xs sm:max-w-none sm:grid-cols-2">
-            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
-                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
-                    <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
-                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Experience</span>
-                </span>
-                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.experience_score is not None %}{{ resume.experience_score|floatformat:0 }}{% else %}—{% endif %}</span>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+            <span class="flex items-center gap-1.5 whitespace-nowrap">
+                <span class="h-2 w-2 shrink-0 rounded-full bg-blue-400"></span>
+                <span class="text-zinc-500 dark:text-zinc-400">Experience</span>
+                <span class="tabular-nums font-bold text-zinc-800 dark:text-zinc-100">{% if resume.experience_score is not None %}{{ resume.experience_score|floatformat:0 }}{% else %}<span class="font-normal text-zinc-400">—</span>{% endif %}</span>
             </span>
-            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
-                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
-                    <span class="h-1.5 w-1.5 rounded-full bg-primary-400"></span>
-                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Education</span>
-                </span>
-                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.education_score is not None %}{{ resume.education_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            <span class="flex items-center gap-1.5 whitespace-nowrap">
+                <span class="h-2 w-2 shrink-0 rounded-full bg-violet-400"></span>
+                <span class="text-zinc-500 dark:text-zinc-400">Education</span>
+                <span class="tabular-nums font-bold text-zinc-800 dark:text-zinc-100">{% if resume.education_score is not None %}{{ resume.education_score|floatformat:0 }}{% else %}<span class="font-normal text-zinc-400">—</span>{% endif %}</span>
             </span>
-            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
-                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
-                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Skills</span>
-                </span>
-                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.skills_score is not None %}{{ resume.skills_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            <span class="flex items-center gap-1.5 whitespace-nowrap">
+                <span class="h-2 w-2 shrink-0 rounded-full bg-emerald-400"></span>
+                <span class="text-zinc-500 dark:text-zinc-400">Skills</span>
+                <span class="tabular-nums font-bold text-zinc-800 dark:text-zinc-100">{% if resume.skills_score is not None %}{{ resume.skills_score|floatformat:0 }}{% else %}<span class="font-normal text-zinc-400">—</span>{% endif %}</span>
             </span>
-            <span class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
-                <span class="inline-flex shrink-0 items-center gap-1 text-zinc-600 dark:text-zinc-400">
-                    <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
-                    <span class="font-medium text-zinc-700 dark:text-zinc-300">Certifications</span>
-                </span>
-                <span class="tabular-nums font-semibold text-zinc-900 dark:text-white">{% if resume.certification_score is not None %}{{ resume.certification_score|floatformat:0 }}{% else %}—{% endif %}</span>
+            <span class="flex items-center gap-1.5 whitespace-nowrap">
+                <span class="h-2 w-2 shrink-0 rounded-full bg-amber-400"></span>
+                <span class="text-zinc-500 dark:text-zinc-400">Certifications</span>
+                <span class="tabular-nums font-bold text-zinc-800 dark:text-zinc-100">{% if resume.certification_score is not None %}{{ resume.certification_score|floatformat:0 }}{% else %}<span class="font-normal text-zinc-400">—</span>{% endif %}</span>
             </span>
         </div>
         {% endif %}
     </td>
 
-    <td class="px-5 py-4 text-center align-middle sm:px-6 sm:py-5">
+    <td class="px-4 py-4 text-center align-middle">
         {% if resume.verification_status == 'pending' or resume.verification_status == 'processing' %}
         <svg class="mx-auto h-5 w-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Verification pending">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -132,7 +141,7 @@
         {% endif %}
     </td>
 
-    <td class="px-5 py-4 text-center align-middle sm:px-6 sm:py-5">
+    <td class="px-4 py-4 text-center align-middle">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
         <div class="mx-auto h-8 w-14 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
         {% elif resume.final_score is not None %}
@@ -147,7 +156,7 @@
         {% endif %}
     </td>
 
-    <td class="px-5 py-4 text-right sm:px-6 sm:py-5">
+    <td class="px-4 py-4 text-right">
         <div class="flex justify-end gap-1 sm:gap-2">
             <a href="{% url 'core:resume_edit' resume.uuid %}" class="rounded-lg p-2 text-zinc-400 transition hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-950/40 dark:hover:text-primary-400" title="Edit">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>

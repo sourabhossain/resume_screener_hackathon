@@ -1,0 +1,11 @@
+{% if resumes %}
+{% for resume in resumes %}
+{% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter %}
+{% endfor %}
+{% else %}
+<tr>
+    <td colspan="8" class="px-6 py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">
+        No candidates match <strong class="text-zinc-600 dark:text-zinc-300">{{ search_q }}</strong>
+    </td>
+</tr>
+{% endif %}

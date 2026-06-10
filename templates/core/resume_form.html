@@ -48,7 +48,25 @@
                     <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.candidate_name.errors.0 }}</p>
                     {% endif %}
                 </div>
-                
+
+                <div class="grid gap-5 sm:grid-cols-2">
+                    <div>
+                        <label for="{{ form.email.id_for_label }}" class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Email Address</label>
+                        {{ form.email }}
+                        <p class="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">Auto-detected from CV if left blank</p>
+                        {% if form.email.errors %}
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.email.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.phone.id_for_label }}" class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Phone Number</label>
+                        {{ form.phone }}
+                        <p class="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">Auto-detected from CV if left blank</p>
+                        {% if form.phone.errors %}
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.phone.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
 
                 <div>
                     <label for="id_file" class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">

@@ -155,6 +155,15 @@ def job_create(request):
 def job_detail(request, slug):
     job = get_object_or_404(Job, slug=slug)
     resumes = _ordered_active_resumes_queryset(job.resumes)
+
+    search_q = request.GET.get('q', '').strip()
+    if search_q:
+        resumes = resumes.filter(
+            Q(candidate_name__icontains=search_q) |
+            Q(email__icontains=search_q) |
+            Q(phone__icontains=search_q)
+        )
+
     return render(
         request,
         'core/job_detail.html',
@@ -162,6 +171,7 @@ def job_detail(request, slug):
             'job': job,
             'resumes': resumes,
             'pipeline_stats': _pipeline_stats(resumes),
+            'search_q': search_q,
         },
     )
 
@@ -188,6 +198,43 @@ def job_delete(request, slug):
         messages.success(request, f'Job "{job.title}" deleted successfully!')
         return redirect('core:job_list')
     return render(request, 'core/confirm_delete.html', {'object': job, 'type': 'job'})
+
+
+@login_required
+def pipeline_search(request, job_slug):
+    job = get_object_or_404(Job, slug=job_slug)
+    search_q = request.GET.get('q', '').strip()
+    resumes = _ordered_active_resumes_queryset(job.resumes)
+    if search_q:
+        resumes = resumes.filter(
+            Q(candidate_name__icontains=search_q) |
+            Q(email__icontains=search_q) |
+            Q(phone__icontains=search_q)
+        )
+    return render(request, 'core/partials/pipeline_search_results.html', {
+        'resumes': resumes,
+        'search_q': search_q,
+        'job': job,
+    })
+
+
+@login_required
+def pipeline_suggestions(request, job_slug):
+    job = get_object_or_404(Job, slug=job_slug)
+    search_q = request.GET.get('q', '').strip()
+    suggestions = []
+    if search_q:
+        suggestions = list(
+            _ordered_active_resumes_queryset(job.resumes).filter(
+                Q(candidate_name__icontains=search_q) |
+                Q(email__icontains=search_q) |
+                Q(phone__icontains=search_q)
+            ).values('uuid', 'candidate_name', 'email', 'phone')[:6]
+        )
+    return render(request, 'core/partials/pipeline_suggestions.html', {
+        'suggestions': suggestions,
+        'search_q': search_q,
+    })
 
 
 @login_required

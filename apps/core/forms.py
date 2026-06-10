@@ -124,14 +124,22 @@ class JobForm(forms.ModelForm):
 
 class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for creating and editing resumes - only name and file required, AI handles the rest."""
-    
+
     class Meta:
         model = Resume
-        fields = ['candidate_name', 'file']
+        fields = ['candidate_name', 'email', 'phone', 'file']
         widgets = {
             'candidate_name': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'Enter candidate full name'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'candidate@example.com'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': '+880 1XXX-XXXXXX'
             }),
             'file': forms.FileInput(attrs={
                 'class': 'form-input-file',
@@ -140,8 +148,15 @@ class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
         }
         labels = {
             'candidate_name': 'Candidate Name',
+            'email': 'Email Address',
+            'phone': 'Phone Number',
             'file': 'Resume File',
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].required = False
+        self.fields['phone'].required = False
     
     def clean_file(self):
         """Validate uploaded file using mixin."""
@@ -154,16 +169,24 @@ class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
 
 class ResumeEditForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for editing resumes - includes AI-generated fields that can be manually adjusted."""
-    
+
     class Meta:
         model = Resume
-        fields = ['candidate_name', 'file',
+        fields = ['candidate_name', 'email', 'phone', 'file',
                   'experience_score', 'education_score', 'skills_score',
                   'certification_score', 'achievement_score', 'final_score']
         widgets = {
             'candidate_name': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'Enter candidate full name'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'candidate@example.com'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': '+880 1XXX-XXXXXX'
             }),
             'file': forms.FileInput(attrs={
                 'class': 'form-input-file',
@@ -202,6 +225,8 @@ class ResumeEditForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
         }
         labels = {
             'candidate_name': 'Candidate Name',
+            'email': 'Email Address',
+            'phone': 'Phone Number',
             'file': 'Resume File',
             'experience_score': 'Experience Score',
             'education_score': 'Education Score',

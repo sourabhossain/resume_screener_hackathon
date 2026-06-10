@@ -23,6 +23,9 @@ drf-spectacular>=0.27
 # Security
 django-ratelimit>=4.1
 
+# Markdown rendering
+markdown>=3.5
+
 # AI/NLP
 langgraph>=0.2
 langchain>=0.3
