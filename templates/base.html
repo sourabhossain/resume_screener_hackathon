@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Resume AI Screener{% endblock %}</title>
+    <title>{% block title %}Career{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
@@ -318,7 +318,7 @@
                             </svg>
                         </div>
                         <span class="hidden text-xl font-semibold tracking-tight sm:block">
-                            <span class="gradient-text">Resume</span><span class="text-zinc-900 dark:text-white">AI</span>
+                            <span class="gradient-text">Career</span>
                         </span>
                     </a>
                     
@@ -419,7 +419,7 @@
                             </svg>
                         </div>
                         <span class="text-lg font-semibold tracking-tight">
-                            <span class="gradient-text">Resume</span><span class="text-zinc-900 dark:text-white">AI</span>
+                            <span class="gradient-text">Career</span>
                         </span>
                     </a>
                     <button type="button" @click="mobileMenuOpen = false" class="rounded-lg p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
@@ -583,9 +583,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                     </div>
-                    <span class="font-semibold text-zinc-800 dark:text-zinc-200">ResumeAI</span>
+                    <span class="font-semibold text-zinc-800 dark:text-zinc-200">Career</span>
                 </div>
-                <p class="text-sm text-zinc-500 dark:text-zinc-500">© {% now "Y" %} ResumeAI</p>
+                <p class="text-sm text-zinc-500 dark:text-zinc-500">© {% now "Y" %} Career</p>
             </div>
         </div>
     </footer>

@@ -69,6 +69,8 @@ class ResumeScreeningState(TypedDict):
     job_type: str
 
     candidate_name: str
+    candidate_email: str
+    candidate_phone: str
     skills: List[str]
     experience_years: float
     education: List[str]
@@ -142,6 +144,8 @@ def extract_node(state: ResumeScreeningState) -> ResumeScreeningState:
         response = llm_client.invoke_json(prompt, "You are an expert resume parser." + _INJECTION_GUARD)
 
         state['candidate_name'] = response.get('candidate_name', 'Unknown')
+        state['candidate_email'] = str(response.get('candidate_email', '') or '').strip()
+        state['candidate_phone'] = str(response.get('candidate_phone', '') or '').strip()
         state['skills'] = response.get('skills', [])
         state['experience_years'] = float(response.get('experience_years', 0))
         state['education'] = response.get('education', [])
@@ -346,6 +350,8 @@ def screen_resume(
         'resume_id': resume_id,
         'job_type': resolved_job_type,
         'candidate_name': '',
+        'candidate_email': '',
+        'candidate_phone': '',
         'skills': [],
         'experience_years': 0.0,
         'education': [],

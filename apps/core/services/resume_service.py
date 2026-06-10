@@ -43,26 +43,67 @@ class ResumeService:
         except Exception as e:
             raise DocumentExtractionError(str(e), file_path=resume.file.path)
 
-    @staticmethod
-    def _fill_contact_info(resume, text: str) -> None:
+    # Matches BD numbers (+8801x / 01x) and generic international numbers
+    _PHONE_RE = re.compile(
+        r'(?:\+?880[\s \-]?|0)1[3-9][\d]{8}'      # BD: +880-1XXXXXXXXX or 01XXXXXXXXX
+        r'|\+\d[\d\s\(\)\-]{9,16}\d'                     # International: +X...
+    )
+    _EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
+
+    @classmethod
+    def _extract_email(cls, text: str):
+        """Return (email_str, position) or ('', -1). Handles PDF spacing artifacts."""
+        m = cls._EMAIL_RE.search(text)
+        if m:
+            return m.group(0), m.start()
+        # PDF artifact: letters with spurious spaces — clean window around each @
+        for at_m in re.finditer(r'@', text):
+            pos = at_m.start()
+            window = text[max(0, pos - 60): pos + 60]
+            cleaned = re.sub(r'(?<=[A-Za-z0-9._%+\-]) (?=[A-Za-z0-9._%+\-])', '', window)
+            m2 = cls._EMAIL_RE.search(cleaned)
+            if m2:
+                return m2.group(0), pos
+        return '', -1
+
+    @classmethod
+    def _extract_phone(cls, text: str, email_pos: int = -1) -> str:
+        """Return the candidate's own phone.
+        When multiple phones exist (e.g. a reference contact), prefers the phone
+        nearest to the candidate's email address in the extracted text.
+        """
+        matches = [(m.start(), re.sub(r'[\s ]', '', m.group(0))) for m in cls._PHONE_RE.finditer(text)]
+        if not matches:
+            return ''
+        if len(matches) == 1:
+            return matches[0][1]
+        # Prefer the phone nearest to the email (same contact block)
+        if email_pos >= 0:
+            return min(matches, key=lambda x: abs(x[0] - email_pos))[1]
+        # No email: take the last match (candidate's info often comes last in
+        # multi-column PDFs where the extractor reads columns sequentially)
+        return matches[-1][1]
+
+    @classmethod
+    def _fill_contact_info(cls, resume, text: str) -> None:
         """Fill email/phone from CV text only if the recruiter left them blank."""
         update_fields = []
+        email_pos = -1
 
         if not resume.email:
-            match = re.search(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', text)
-            if match:
-                resume.email = match.group(0)
+            email, email_pos = cls._extract_email(text)
+            if email:
+                resume.email = email
                 update_fields.append('email')
+        else:
+            # Find position of existing email so phone search is anchor-correct
+            m = re.search(re.escape(resume.email), text)
+            email_pos = m.start() if m else -1
 
         if not resume.phone:
-            # BD numbers (+8801x or 01x) or generic international format
-            match = re.search(
-                r'(?:\+?880[\s\-]?|0)1[3-9]\d{8}|'
-                r'\+?\d[\d\s\(\)\-]{9,16}\d',
-                text
-            )
-            if match:
-                resume.phone = match.group(0).strip()
+            phone = cls._extract_phone(text, email_pos)
+            if phone:
+                resume.phone = phone
                 update_fields.append('phone')
 
         if update_fields:
@@ -92,6 +133,15 @@ class ResumeService:
             resume = ResumeModel.objects.select_for_update().get(pk=resume.pk)
 
             resume.candidate_name = result.get('candidate_name', resume.candidate_name)
+            # AI-extracted contact takes precedence over regex fallback but
+            # never overwrites what the user explicitly typed in the form.
+            # We detect "user typed" by checking if the value was already in DB
+            # before screening began — captured in the pre-fetch state above.
+            # Fill contact from AI only if still blank after regex extraction.
+            if not resume.email and result.get('candidate_email'):
+                resume.email = result['candidate_email']
+            if not resume.phone and result.get('candidate_phone'):
+                resume.phone = result['candidate_phone']
             resume.skills = result.get('skills', [])
             resume.education = result.get('education', [])
             resume.certifications = result.get('certifications', [])

@@ -1,4 +1,4 @@
-# ResumeAI
+# Career
 
 Upload jobs and resumes, and screen candidates with AI. Runs with Docker.
 

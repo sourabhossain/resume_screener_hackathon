@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Evaluation Submitted{% endblock %}
+{% block nav_action %}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-lg py-16 text-center">
+    <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+        <svg class="h-10 w-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+    </div>
+    <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Evaluation Submitted!</h1>
+    <p class="mt-3 text-zinc-500 dark:text-zinc-400">
+        Thank you, <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ ev.interviewer_name }}</span>.
+        Your evaluation for <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ ev.interview.resume.candidate_name|title }}</span> has been recorded.
+    </p>
+    {% if ev.total_score is not None %}
+    <div class="mt-6 inline-block rounded-2xl border border-zinc-200 bg-white px-8 py-5 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+        <p class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your Score</p>
+        <p class="mt-1 text-4xl font-black tabular-nums text-zinc-900 dark:text-white">{{ ev.total_score }}<span class="text-xl font-normal text-zinc-400">/100</span></p>
+        <p class="mt-1 text-sm font-semibold
+            {% if ev.impression_label == 'Good' %}text-emerald-600
+            {% elif ev.impression_label == 'Satisfactory' %}text-amber-600
+            {% else %}text-rose-600{% endif %}">
+            {{ ev.impression_label }}
+        </p>
+    </div>
+    {% endif %}
+    <p class="mt-8 text-xs text-zinc-400">You may close this page.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% block title %}Evaluation — {{ ev.interview.resume.candidate_name|title }}{% endblock %}
+{% block nav_action %}{% endblock %}
+
+{% block content %}
+<style>
+.score-btn {
+    width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;
+    border: 2px solid #e4e4e7; background: white;
+    font-size: 0.9375rem; font-weight: 800; color: #a1a1aa;
+    cursor: pointer; transition: all 0.13s ease;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; user-select: none;
+}
+.dark .score-btn { border-color: #3f3f46; background: #18181b; color: #52525b; }
+.score-btn:hover { transform: scale(1.1); }
+.score-btn[data-v="1"].active { border-color: #a1a1aa; background: #a1a1aa; color: white; }
+.score-btn[data-v="2"].active { border-color: #f87171; background: #fef2f2; color: #ef4444; }
+.score-btn[data-v="3"].active { border-color: #fbbf24; background: #fffbeb; color: #d97706; }
+.score-btn[data-v="4"].active { border-color: #818cf8; background: #eef2ff; color: #6366f1; }
+.score-btn[data-v="5"].active { border-color: #34d399; background: #ecfdf5; color: #059669; }
+.score-btn[data-v="1"]:hover:not(.active) { border-color: #a1a1aa; background: #f4f4f5; color: #71717a; }
+.score-btn[data-v="2"]:hover:not(.active) { border-color: #f87171; background: #fef2f2; color: #ef4444; }
+.score-btn[data-v="3"]:hover:not(.active) { border-color: #fbbf24; background: #fffbeb; color: #d97706; }
+.score-btn[data-v="4"]:hover:not(.active) { border-color: #818cf8; background: #eef2ff; color: #6366f1; }
+.score-btn[data-v="5"]:hover:not(.active) { border-color: #34d399; background: #ecfdf5; color: #059669; }
+.criteria-row.rated { background: linear-gradient(to right, #f5f3ff08, transparent); }
+</style>
+
+<div class="mx-auto max-w-3xl space-y-4 pb-16"
+     x-data="{
+        scores: {},
+        get total() { return Object.values(this.scores).reduce((a,b)=>a+b,0); },
+        get rated() { return Object.keys(this.scores).length; },
+        get remaining() { return {{ criteria|length }} - this.rated; },
+        get pct() { return this.rated === 0 ? 0 : Math.round((this.total / 100) * 100); },
+        get impression() {
+            if (this.rated === 0) return null;
+            if (this.pct >= 80) return 'Good';
+            if (this.pct >= 60) return 'Satisfactory';
+            return 'Unsatisfactory';
+        },
+        setScore(key, val) { this.scores = {...this.scores, [key]: val}; }
+     }">
+
+    {# ── Header ── #}
+    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
+        <div class="flex items-center gap-4 p-6">
+            <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary-600 text-2xl font-bold text-white shadow-md">
+                {{ ev.interview.resume.candidate_name|slice:":1"|upper }}
+            </div>
+            <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                    <h1 class="text-xl font-bold text-zinc-900 dark:text-white">{{ ev.interview.resume.candidate_name|title }}</h1>
+                    <span class="rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">{{ ev.interview.get_phase_display }}</span>
+                </div>
+                <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                    {{ ev.interview.resume.job.title }} &middot; {{ ev.interview.scheduled_date|date:"F j, Y" }}
+                </p>
+                <p class="mt-0.5 text-xs text-zinc-400">
+                    Evaluator: <span class="font-semibold text-zinc-600 dark:text-zinc-300">{{ ev.interviewer_name }}</span>
+                    {% if ev.interviewer_position %} &middot; {{ ev.interviewer_position }}{% endif %}
+                    {% if ev.interviewer_department %} &middot; {{ ev.interviewer_department }}{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" class="space-y-4" id="eval-form">
+        {% csrf_token %}
+
+        {# ── Criteria ── #}
+        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+                <div>
+                    <h2 class="font-bold text-zinc-900 dark:text-white">Evaluation Criteria</h2>
+                    <p class="mt-0.5 text-xs text-zinc-400">1 = Poor &nbsp;&middot;&nbsp; 2 = Fair &nbsp;&middot;&nbsp; 3 = Good &nbsp;&middot;&nbsp; 4 = Very Good &nbsp;&middot;&nbsp; 5 = Excellent</p>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-2xl font-black tabular-nums text-zinc-800 dark:text-zinc-200" x-text="rated">0</span>
+                    <span class="text-sm text-zinc-300 dark:text-zinc-600">/{{ criteria|length }}</span>
+                </div>
+            </div>
+
+            <div class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                {% for key, label in criteria %}
+                <div class="criteria-row flex items-center justify-between gap-3 px-5 py-3 transition-colors"
+                     :class="scores['{{ key }}'] ? 'bg-zinc-50/80 dark:bg-zinc-800/30' : ''">
+                    <div class="flex min-w-0 flex-1 items-center gap-3">
+                        <span class="w-5 shrink-0 text-right text-xs font-medium tabular-nums text-zinc-300 dark:text-zinc-600">{{ forloop.counter }}</span>
+                        <p class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ label }}</p>
+                        <span x-show="scores['{{ key }}']"
+                              class="ml-auto shrink-0 hidden sm:inline-flex items-center justify-center h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                            <svg class="h-3 w-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="flex shrink-0 gap-1.5">
+                        {% for val in score_range %}
+                        <button type="button" data-v="{{ val }}"
+                                :class="scores['{{ key }}'] == {{ val }} ? 'active' : ''"
+                                @click="setScore('{{ key }}', {{ val }})"
+                                class="score-btn">{{ val }}</button>
+                        {% endfor %}
+                        <input type="hidden" name="score_{{ key }}" :value="scores['{{ key }}'] || ''">
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# ── Score Summary ── #}
+        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+                <h2 class="font-bold text-zinc-900 dark:text-white">Score Summary</h2>
+            </div>
+
+            {# Three stat boxes #}
+            <div class="grid grid-cols-3 divide-x divide-zinc-100 dark:divide-zinc-800">
+                <div class="flex flex-col items-center justify-center px-4 py-7">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Score</p>
+                    <p class="mt-3 text-5xl font-black tabular-nums leading-none text-zinc-900 dark:text-white" x-text="total">0</p>
+                    <p class="mt-1.5 text-xs text-zinc-400">out of 100</p>
+                </div>
+                <div class="flex flex-col items-center justify-center px-4 py-7">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Percentage</p>
+                    <p class="mt-3 text-5xl font-black tabular-nums leading-none transition-colors"
+                       :class="{
+                           'text-emerald-500': pct >= 80 && rated > 0,
+                           'text-amber-500':   pct >= 60 && pct < 80 && rated > 0,
+                           'text-rose-500':    pct < 60  && rated > 0,
+                           'text-zinc-200 dark:text-zinc-700': rated === 0
+                       }"
+                       x-text="pct + '%'">0%</p>
+                    <p class="mt-1.5 text-xs text-zinc-400">of 100%</p>
+                </div>
+                <div class="flex flex-col items-center justify-center px-4 py-7">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Impression</p>
+                    <div class="mt-3">
+                        <template x-if="!impression">
+                            <span class="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-bold text-zinc-300 dark:bg-zinc-800 dark:text-zinc-600">—</span>
+                        </template>
+                        <template x-if="impression === 'Good'">
+                            <span class="rounded-xl bg-emerald-100 px-4 py-2.5 text-sm font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">✓ Good</span>
+                        </template>
+                        <template x-if="impression === 'Satisfactory'">
+                            <span class="rounded-xl bg-amber-100 px-4 py-2.5 text-sm font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Satisfactory</span>
+                        </template>
+                        <template x-if="impression === 'Unsatisfactory'">
+                            <span class="rounded-xl bg-rose-100 px-4 py-2.5 text-sm font-bold text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">Unsatisfactory</span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            {# Progress bar #}
+            <div class="px-6 pb-5">
+                <div class="flex items-center justify-between text-xs text-zinc-400 mb-2">
+                    <span><span x-text="rated">0</span> of {{ criteria|length }} criteria rated</span>
+                    <span x-show="remaining > 0" x-text="remaining + ' remaining'"></span>
+                    <span x-show="remaining === 0" class="font-semibold text-emerald-500">All rated ✓</span>
+                </div>
+                <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full rounded-full transition-all duration-500 ease-out"
+                         :class="{
+                             'bg-emerald-400': remaining === 0,
+                             'bg-primary-500': remaining > 0
+                         }"
+                         :style="'width: ' + (rated / {{ criteria|length }} * 100) + '%'"></div>
+                </div>
+            </div>
+
+            {# Divider #}
+            <div class="border-t border-zinc-100 dark:border-zinc-800"></div>
+
+            {# Recommendation + Suggestions #}
+            <div class="grid gap-6 px-6 py-5 sm:grid-cols-2">
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recommendation</label>
+                    {{ form.recommendation }}
+                    <p class="mt-1.5 text-xs text-zinc-400">Leave blank to auto-calculate from score</p>
+                </div>
+                <div>
+                    <p class="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Suggestions</p>
+                    <div class="space-y-2">
+                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
+                            {{ form.another_phase_required }}<span>{{ form.another_phase_required.label }}</span>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
+                            {{ form.hard_negotiation }}<span>{{ form.hard_negotiation.label }}</span>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
+                            {{ form.suitable_other_dept }}<span>{{ form.suitable_other_dept.label }}</span>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
+                            {{ form.suitable_higher_position }}<span>{{ form.suitable_higher_position.label }}</span>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
+                            {{ form.suitable_junior_position }}<span>{{ form.suitable_junior_position.label }}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            {# Additional Notes #}
+            <div class="border-t border-zinc-100 px-6 pb-6 pt-4 dark:border-zinc-800">
+                <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Additional Notes</label>
+                {{ form.additional_notes }}
+            </div>
+        </div>
+
+        {# ── Validation notice ── #}
+        <div id="validation-msg"
+             class="hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
+            Please rate all {{ criteria|length }} criteria before submitting.
+        </div>
+
+        {# ── Submit ── #}
+        <div class="relative">
+            <button type="submit"
+                    :disabled="remaining > 0"
+                    class="group relative inline-flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-6 py-4 text-base font-bold transition-all duration-200"
+                    :class="remaining === 0
+                        ? 'btn-primary text-white shadow-lg hover:shadow-xl hover:scale-[1.01]'
+                        : 'bg-zinc-100 text-zinc-400 cursor-not-allowed dark:bg-zinc-800 dark:text-zinc-600'">
+                <template x-if="remaining === 0">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </template>
+                <template x-if="remaining > 0">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </template>
+                <span x-text="remaining > 0 ? remaining + ' criteria left to rate' : 'Submit Evaluation'">Submit Evaluation</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('eval-form').addEventListener('submit', function(e) {
+    let missing = 0;
+    this.querySelectorAll('input[type=hidden]').forEach(h => {
+        if (h.name.startsWith('score_') && !h.value) missing++;
+    });
+    if (missing > 0) {
+        e.preventDefault();
+        const msg = document.getElementById('validation-msg');
+        msg.classList.remove('hidden');
+        msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
+</script>
+{% endblock %}

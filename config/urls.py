@@ -21,6 +21,7 @@ _login_view = ratelimit(key='ip', rate='10/m', method='POST', block=True)(_login
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.core.urls')),
+    path('', include('apps.interviews.urls')),
 
     # API URLs
     path('api/', include('apps.core.api_urls')),

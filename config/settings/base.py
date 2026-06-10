@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     
     # Local apps
     'apps.core',
+    'apps.interviews',
 ]
 
 MIDDLEWARE = [
@@ -205,7 +206,7 @@ REST_FRAMEWORK = {
 
 # DRF Spectacular Configuration (OpenAPI/Swagger)
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'ResumeAI API',
+    'TITLE': 'Career API',
     'DESCRIPTION': 'AI-powered resume screening API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Schedule Interview — {{ resume.candidate_name|title }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-xl">
+    <nav class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
+        <a href="{% url 'core:resume_detail' resume.uuid %}" class="hover:text-primary-600 transition">{{ resume.candidate_name|title }}</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-zinc-900 dark:text-white font-medium">Schedule Interview</span>
+    </nav>
+
+    <div class="rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+        <h1 class="text-xl font-bold text-zinc-900 dark:text-white">Schedule Interview</h1>
+        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">For <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ resume.candidate_name|title }}</span> — {{ resume.job.title }}</p>
+
+        <form method="post" class="mt-6 space-y-5">
+            {% csrf_token %}
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Interview Phase</label>
+                    {{ form.phase }}
+                    {% if form.phase.errors %}<p class="mt-1 text-xs text-red-600">{{ form.phase.errors|striptags }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Scheduled Date</label>
+                    {{ form.scheduled_date }}
+                    {% if form.scheduled_date.errors %}<p class="mt-1 text-xs text-red-600">{{ form.scheduled_date.errors|striptags }}</p>{% endif %}
+                </div>
+            </div>
+            <div>
+                <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Notes <span class="font-normal text-zinc-400">(optional)</span></label>
+                {{ form.notes }}
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    Schedule
+                </button>
+                <a href="{% url 'core:resume_detail' resume.uuid %}" class="inline-flex items-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

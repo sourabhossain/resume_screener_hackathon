@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ resume.candidate_name|title }} - ResumeAI{% endblock %}
+{% block title %}{{ resume.candidate_name|title }} - Career{% endblock %}
 
 {% block content %}
 
@@ -84,6 +84,58 @@
         </div>
     </div>
 </div>
+
+{# ── Interviews section ── #}
+{% with interviews=resume.interviews.all %}
+<div class="mb-8 rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+        <div>
+            <h2 class="font-bold text-zinc-900 dark:text-white">Interviews</h2>
+            {% if interviews %}
+            <p class="mt-0.5 text-xs text-zinc-400">{{ interviews|length }} session{{ interviews|length|pluralize }}</p>
+            {% endif %}
+        </div>
+        <a href="{% url 'interviews:create' resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Schedule Interview
+        </a>
+    </div>
+
+    {% if interviews %}
+    <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {% for iv in interviews %}
+        <a href="{% url 'interviews:detail' iv.pk %}"
+           class="flex items-center justify-between px-6 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+            <div class="flex items-center gap-3">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
+                    <svg class="h-4 w-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+                <div>
+                    <p class="font-semibold text-zinc-900 dark:text-white">{{ iv.get_phase_display }}</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.scheduled_date|date:"F j, Y" }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.submitted_count }} of {{ iv.evaluations.count }} submitted</span>
+                {% with avg=iv.avg_score %}{% if avg %}
+                <span class="rounded-full px-3 py-1 text-xs font-bold
+                    {% if avg >= 80 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                    {% elif avg >= 60 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                    {% else %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                    Avg {{ avg }}%
+                </span>
+                {% endif %}{% endwith %}
+                <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="px-6 py-8 text-center text-sm text-zinc-400">No interviews scheduled yet.</p>
+    {% endif %}
+</div>
+{% endwith %}
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 

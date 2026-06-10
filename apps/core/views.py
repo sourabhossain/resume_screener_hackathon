@@ -154,7 +154,7 @@ def job_create(request):
 @login_required
 def job_detail(request, slug):
     job = get_object_or_404(Job, slug=slug)
-    resumes = _ordered_active_resumes_queryset(job.resumes)
+    resumes = _ordered_active_resumes_queryset(job.resumes).prefetch_related('interviews__evaluations')
 
     search_q = request.GET.get('q', '').strip()
     if search_q:

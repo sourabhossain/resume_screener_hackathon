@@ -23,7 +23,7 @@ class SoftDeleteManager(models.Manager):
 class SoftDeleteModel(models.Model):
     """Abstract base model with soft delete functionality."""
     
-    is_deleted = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False, db_default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     
     objects = SoftDeleteManager()

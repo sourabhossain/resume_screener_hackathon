@@ -23,9 +23,15 @@ IMPORTANT INSTRUCTIONS:
    - Training certifications and bootcamp completions
    - Any other professional credentials mentioned
 
+5. Extract the candidate's OWN contact info (not a reference person's):
+   - Email: look for an @ symbol and reconstruct the email even if letters are spaced out (PDF artifact). Example: "a l a m @ g m a i l . c o m" → "alam@gmail.com"
+   - Phone: the candidate's own phone number (not a referee/reference contact). Prefer numbers near "CONTACT" or at the start/end of the CV. Return digits-only or with + prefix.
+
 Return ONLY valid JSON with this exact structure:
 {{
     "candidate_name": "Full Name from resume",
+    "candidate_email": "email@example.com or empty string if not found",
+    "candidate_phone": "+8801XXXXXXXXX or local format, empty string if not found",
     "skills": ["skill1", "skill2", "skill3", ...],
     "experience_years": 0.0,
     "education": ["Bachelor of Science in Computer Science - University Name", ...],
@@ -34,3 +40,4 @@ Return ONLY valid JSON with this exact structure:
 }}
 
 Be thorough and accurate. The experience_years calculation is critical.
+For contact info: if multiple phones exist, return the CANDIDATE'S OWN number, not a reference person's. If unsure, return empty string.

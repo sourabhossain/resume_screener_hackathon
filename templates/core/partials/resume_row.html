@@ -20,34 +20,51 @@
         {% endif %}
     </td>
 
-    <td class="px-4 py-4">
+    <td class="px-4 py-3.5">
         {% with display_name=resume.candidate_name|title %}
-        <a href="{% url 'core:resume_detail' resume.uuid %}" class="group flex items-center gap-3 sm:gap-4">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white shadow-sm sm:h-11 sm:w-11 sm:text-base">
+        <div class="flex items-center gap-3">
+            <a href="{% url 'core:resume_detail' resume.uuid %}"
+               class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-500">
                 {{ display_name|slice:":1"|upper }}
-            </div>
+            </a>
             <div class="min-w-0">
-                <p class="font-semibold text-zinc-900 transition group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400">{{ display_name }}</p>
-                {% if resume.email or resume.phone %}
-                <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                {# Name — single line #}
+                <a href="{% url 'core:resume_detail' resume.uuid %}"
+                   class="block truncate font-semibold text-zinc-900 transition hover:text-primary-600 dark:text-white dark:hover:text-primary-400">
+                    {{ display_name }}
+                </a>
+                {# Contact info #}
+                <div class="mt-0.5 flex flex-col gap-0.5">
                     {% if resume.email %}
-                    <span class="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        <svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                        {{ resume.email }}
+                    <span class="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
+                        <svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        <span class="truncate">{{ resume.email }}</span>
                     </span>
                     {% endif %}
                     {% if resume.phone %}
-                    <span class="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        <svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                    <span class="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
+                        <svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                         {{ resume.phone }}
                     </span>
                     {% endif %}
                 </div>
-                {% else %}
-                <p class="text-xs text-zinc-500 dark:text-zinc-400">Added {{ resume.created_at|date:"M j, Y" }}</p>
+                {# Interview badges — separate from the name link #}
+                {% with interviews=resume.interviews.all %}
+                {% if interviews %}
+                <div class="mt-1.5 flex flex-wrap gap-1">
+                    {% for iv in interviews %}{% with avg=iv.avg_score %}
+                    <a href="{% url 'interviews:detail' iv.pk %}"
+                       class="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold leading-tight transition-colors
+                           {% if avg %}{% if avg >= 80 %}border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400{% elif avg >= 60 %}border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400{% else %}border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400{% endif %}{% else %}border-zinc-200 bg-zinc-50 text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400{% endif %}">
+                        <svg class="h-2.5 w-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        {{ iv.get_phase_display }}{% if avg %} &middot; {{ avg }}%{% endif %}
+                    </a>
+                    {% endwith %}{% endfor %}
+                </div>
                 {% endif %}
+                {% endwith %}
             </div>
-        </a>
+        </div>
         {% endwith %}
     </td>
 
