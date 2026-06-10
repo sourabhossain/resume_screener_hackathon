@@ -157,9 +157,14 @@ class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['email'].required = False
         self.fields['phone'].required = False
-        # On the public careers form, require an email so recruiters can reply.
+        # The model field is blank=True for flexibility, but a submitted
+        # application/resume must actually include a file.
+        self.fields['file'].required = True
+        # On the public careers form every field is required so recruiters get
+        # complete, contactable applications.
         if require_contact:
             self.fields['email'].required = True
+            self.fields['phone'].required = True
 
     def clean_file(self):
         """Validate uploaded file using mixin."""

@@ -93,14 +93,14 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="{{ form.email.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Email address</label>
+                    <label for="{{ form.email.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Email address <span class="text-red-500">*</span></label>
                     {{ form.email }}
                     {% if form.email.errors %}
                     <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.email.errors|striptags }}</p>
                     {% endif %}
                 </div>
                 <div>
-                    <label for="{{ form.phone.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Phone number</label>
+                    <label for="{{ form.phone.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Phone number <span class="text-red-500">*</span></label>
                     {{ form.phone }}
                     {% if form.phone.errors %}
                     <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.phone.errors|striptags }}</p>
