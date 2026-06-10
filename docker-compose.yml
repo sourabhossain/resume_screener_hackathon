@@ -137,6 +137,17 @@ services:
       db:
         condition: service_healthy
 
+  # Live log viewer: browse all containers' logs in the browser with search and
+  # filtering. Mounts the Docker socket read-only to read other containers' logs.
+  dozzle:
+    image: amir20/dozzle:latest
+    environment:
+      - DOZZLE_NO_ANALYTICS=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8888:8080"
+
 volumes:
   mysql_data:
   redis_data:
