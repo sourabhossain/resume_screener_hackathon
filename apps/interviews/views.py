@@ -11,10 +11,11 @@ from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
 
 
 def _can_access_interview(user, interview):
-    """Superusers and staff can access any interview; others only their own jobs."""
-    if user.is_staff or user.is_superuser:
-        return True
-    return interview.resume.job.owner == user
+    """Single-company internal tool: every authenticated recruiter can access all
+    interviews, matching the unscoped access to jobs/resumes in apps.core.
+    (Views are @login_required, so this is True for any logged-in user.)
+    """
+    return user.is_authenticated
 
 
 # ── Admin views (login required) ────────────────────────────────────────────

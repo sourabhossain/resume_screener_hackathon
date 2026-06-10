@@ -1,0 +1,203 @@
+"""Tests for the interviews app: models, recruiter views, and the public
+token-based evaluation flow."""
+from datetime import date, timedelta
+
+import pytest
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.core.models import Job, Resume
+from apps.interviews.models import (
+    Interview,
+    InterviewEvaluation,
+    CRITERIA_KEYS,
+    MAX_SCORE,
+)
+
+
+# ── Fixtures ─────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def interview(db, sample_resume):
+    return Interview.objects.create(
+        resume=sample_resume, phase='1', scheduled_date=date.today()
+    )
+
+
+@pytest.fixture
+def evaluation(db, interview):
+    return interview.evaluations.create(interviewer_name='Bob Reviewer')
+
+
+def _full_scores(value=4):
+    """A complete, valid evaluation POST payload (all criteria scored)."""
+    return {f'score_{k}': str(value) for k in CRITERIA_KEYS}
+
+
+# ── Model tests ──────────────────────────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestInterviewModels:
+    def test_evaluation_gets_token_and_expiry_on_create(self, evaluation):
+        assert evaluation.token is not None
+        assert evaluation.token_expires_at is not None
+        assert evaluation.token_expires_at > timezone.now()
+
+    def test_total_score_and_percentage(self, evaluation):
+        evaluation.scores = {k: 4 for k in CRITERIA_KEYS}
+        assert evaluation.total_score == len(CRITERIA_KEYS) * 4
+        assert evaluation.percentage == round((evaluation.total_score / MAX_SCORE) * 100)
+
+    def test_total_score_ignores_out_of_range_values(self, evaluation):
+        evaluation.scores = {'educational_background': 9, 'enthusiasm': 3}
+        # only the in-range (1..5) value counts
+        assert evaluation.total_score == 3
+
+    def test_impression_label_bands(self, evaluation):
+        evaluation.scores = {k: 5 for k in CRITERIA_KEYS}   # 100%
+        assert evaluation.impression_label == 'Good'
+        evaluation.scores = {k: 3 for k in CRITERIA_KEYS}   # 60%
+        assert evaluation.impression_label == 'Satisfactory'
+        evaluation.scores = {k: 1 for k in CRITERIA_KEYS}   # 20%
+        assert evaluation.impression_label == 'Unsatisfactory'
+
+    def test_is_expired_logic(self, interview):
+        ev = interview.evaluations.create(interviewer_name='X')
+        assert ev.is_expired is False
+        ev.token_expires_at = timezone.now() - timedelta(days=1)
+        ev.save(update_fields=['token_expires_at'])
+        assert ev.is_expired is True
+        # a submitted evaluation is never "expired"
+        ev.is_submitted = True
+        assert ev.is_expired is False
+
+    def test_interview_avg_and_counts(self, interview):
+        assert interview.avg_score() is None
+        e1 = interview.evaluations.create(interviewer_name='A', scores={k: 4 for k in CRITERIA_KEYS}, is_submitted=True)
+        interview.evaluations.create(interviewer_name='B')  # pending
+        assert interview.submitted_count == 1
+        assert interview.pending_count == 1
+        assert interview.avg_score() == e1.total_score
+
+
+# ── Recruiter view tests (login required) ─────────────────────────────────────
+
+@pytest.mark.django_db
+class TestRecruiterViews:
+    def test_create_requires_login(self, client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        resp = client.get(url)
+        assert resp.status_code == 302
+        assert 'login' in resp.url
+
+    def test_create_get_and_post(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        assert authenticated_client.get(url).status_code == 200
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': '2026-07-01', 'notes': 'x'})
+        assert resp.status_code == 302
+        assert Interview.objects.filter(resume=sample_resume).exists()
+
+    def test_detail_renders(self, authenticated_client, interview):
+        resp = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 200
+
+    def test_detail_add_interviewer(self, authenticated_client, interview):
+        url = reverse('interviews:detail', kwargs={'pk': interview.pk})
+        resp = authenticated_client.post(url, {'interviewer_name': 'Carol', 'interviewer_position': 'Lead'})
+        assert resp.status_code == 302
+        assert interview.evaluations.filter(interviewer_name='Carol').exists()
+
+    def test_delete_soft_deletes(self, authenticated_client, interview):
+        url = reverse('interviews:delete', kwargs={'pk': interview.pk})
+        resp = authenticated_client.post(url)
+        assert resp.status_code == 302
+        interview.refresh_from_db()
+        assert interview.is_deleted is True
+
+    def test_evaluation_renew_changes_token(self, authenticated_client, evaluation):
+        old = evaluation.token
+        url = reverse('interviews:evaluation_renew', kwargs={'token': evaluation.token})
+        authenticated_client.post(url)
+        evaluation.refresh_from_db()
+        assert evaluation.token != old
+
+    def test_evaluation_delete(self, authenticated_client, evaluation):
+        url = reverse('interviews:evaluation_delete', kwargs={'token': evaluation.token})
+        authenticated_client.post(url)
+        assert not InterviewEvaluation.objects.filter(pk=evaluation.pk).exists()
+
+    def test_any_authenticated_recruiter_can_access_others_interview(
+        self, client, django_user_model, interview
+    ):
+        """Single-company: a non-owner, non-staff recruiter still has access
+        (consistent with unscoped jobs/resumes in core)."""
+        interview.resume.job.owner = django_user_model.objects.create_user(
+            username='owner2', password='x'
+        )
+        interview.resume.job.save()
+        other = django_user_model.objects.create_user(username='recruiter2', password='x')
+        client.force_login(other)
+        resp = client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 200
+
+
+# ── Public evaluation flow (no login) ─────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestPublicEvaluate:
+    def test_evaluate_get_valid(self, client, evaluation):
+        resp = client.get(reverse('interviews:evaluate', kwargs={'token': evaluation.token}))
+        assert resp.status_code == 200
+
+    def test_evaluate_bogus_token_404(self, client):
+        import uuid
+        resp = client.get(reverse('interviews:evaluate', kwargs={'token': uuid.uuid4()}))
+        assert resp.status_code == 404
+
+    def test_submit_auto_recommendation_yes(self, client, evaluation):
+        url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
+        resp = client.post(url, _full_scores(4))  # 80% -> yes
+        assert resp.status_code == 302
+        evaluation.refresh_from_db()
+        assert evaluation.is_submitted is True
+        assert evaluation.recommendation == 'yes'
+        assert len(evaluation.scores) == len(CRITERIA_KEYS)
+
+    def test_submit_auto_recommendation_maybe_and_no(self, client, interview):
+        e_maybe = interview.evaluations.create(interviewer_name='M')
+        client.post(reverse('interviews:evaluate', kwargs={'token': e_maybe.token}), _full_scores(3))  # 60%
+        e_maybe.refresh_from_db()
+        assert e_maybe.recommendation == 'maybe'
+
+        e_no = interview.evaluations.create(interviewer_name='N')
+        client.post(reverse('interviews:evaluate', kwargs={'token': e_no.token}), _full_scores(1))  # 20%
+        e_no.refresh_from_db()
+        assert e_no.recommendation == 'no'
+
+    def test_manual_recommendation_overrides_score(self, client, evaluation):
+        url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
+        data = _full_scores(1)  # would auto-calc 'no'
+        data['recommendation'] = 'yes'
+        client.post(url, data)
+        evaluation.refresh_from_db()
+        assert evaluation.recommendation == 'yes'
+
+    def test_resubmit_blocked(self, client, evaluation):
+        url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
+        client.post(url, _full_scores(4))
+        # second GET shows the already-submitted page, not the form
+        resp = client.get(url)
+        assert resp.status_code == 200
+        assert b'score-radio' not in resp.content  # form not rendered
+
+    def test_expired_token_shows_expired_page(self, client, evaluation):
+        evaluation.token_expires_at = timezone.now() - timedelta(days=1)
+        evaluation.save(update_fields=['token_expires_at'])
+        resp = client.get(reverse('interviews:evaluate', kwargs={'token': evaluation.token}))
+        assert resp.status_code == 200
+        # the score form must not be served for an expired link
+        assert b'score-radio' not in resp.content
+
+    def test_evaluate_done_renders(self, client, evaluation):
+        resp = client.get(reverse('interviews:evaluate_done', kwargs={'token': evaluation.token}))
+        assert resp.status_code == 200
