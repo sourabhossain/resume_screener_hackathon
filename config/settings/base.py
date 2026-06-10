@@ -244,7 +244,8 @@ CELERY_TIMEZONE = 'UTC'
 _REDIS_CACHE_BASE = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0').rsplit('/', 1)[0]
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        # Resilient subclass: degrades (no-op) instead of 500-ing if Redis is down.
+        'BACKEND': 'config.cache_backends.ResilientRedisCache',
         'LOCATION': os.environ.get('CACHE_URL', f'{_REDIS_CACHE_BASE}/1'),
         'OPTIONS': {
             # Bound the Redis connection pool so a request/concurrency spike
@@ -255,6 +256,12 @@ CACHES = {
         },
     }
 }
+
+# Availability over strictness: if Redis (the rate-limit store) is briefly
+# unreachable, let requests through instead of 500-ing. Without this a Redis
+# blip takes down login / careers-apply / API writes entirely. The trade-off is
+# that rate limiting is disabled only for the duration of a Redis outage.
+RATELIMIT_FAIL_OPEN = True
 
 
 # OpenAI Configuration
