@@ -322,6 +322,7 @@
                         </span>
                     </a>
                     
+                    {% block recruiter_nav %}
                     {% if user.is_authenticated %}
                     <div class="hidden md:flex items-center space-x-1">
                         <a href="{% url 'core:dashboard' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
@@ -342,6 +343,7 @@
                         </a>
                     </div>
                     {% endif %}
+                    {% endblock recruiter_nav %}
                 </div>
                 
                 <!-- Right Side Actions -->
@@ -360,6 +362,7 @@
                     </button>
                     
                     <!-- Logout Button -->
+                    {% block recruiter_logout %}
                     {% if user.is_authenticated %}
                     <form action="{% url 'logout' %}" method="post" class="inline">
                         {% csrf_token %}
@@ -372,6 +375,7 @@
                         </button>
                     </form>
                     {% endif %}
+                    {% endblock recruiter_logout %}
                     
                     <!-- Post Job Button -->
                     {% block nav_action %}
@@ -444,6 +448,7 @@
             </div>
             
             <!-- Mobile Nav Links -->
+            {% block mobile_recruiter_nav %}
             {% if user.is_authenticated %}
             <div class="px-4 py-2">
                 <a href="{% url 'core:dashboard' %}" @click="mobileMenuOpen = false"
@@ -486,7 +491,8 @@
                 </a>
             </div>
             {% endif %}
-            
+            {% endblock mobile_recruiter_nav %}
+
             <!-- Mobile Menu Footer -->
             <div class="absolute bottom-0 left-0 right-0 border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div class="flex items-center justify-between">

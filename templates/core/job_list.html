@@ -50,16 +50,16 @@
 </div>
 
 <!-- Results Summary -->
-{% if search_query or status_filter %}
-<div class="mb-6 flex flex-wrap items-center gap-2 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+{% if search_query or has_active_filter %}
+<div class="mb-6 flex flex-wrap items-center gap-2 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
     <span>Showing {{ jobs|length }} result{{ jobs|length|pluralize }}</span>
     {% if search_query %}
     <span class="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded-lg font-medium">
         "{{ search_query }}"
     </span>
     {% endif %}
-    {% if status_filter %}
-    <span class="px-2 py-1 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium capitalize">
+    {% if has_active_filter and status_filter %}
+    <span class="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg font-medium capitalize">
         {{ status_filter }}
     </span>
     {% endif %}
@@ -81,16 +81,16 @@
                 <span class="px-3 py-1.5 text-xs font-bold rounded-full shrink-0
                     {% if job.status == 'active' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
                     {% elif job.status == 'draft' %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
-                    {% else %}bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400{% endif %}">
+                    {% else %}bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400{% endif %}">
                     {{ job.get_status_display }}
                 </span>
             </div>
             
 
-            <div class="space-y-3 text-sm text-gray-500 dark:text-gray-400 mb-6">
+            <div class="space-y-3 text-sm text-zinc-500 dark:text-zinc-400 mb-6">
                 {% if job.posted_date %}
                 <p class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
                     Posted {{ job.posted_date|date:"M d, Y" }}
@@ -98,7 +98,7 @@
                 {% endif %}
                 {% if job.closing_date %}
                 <p class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     Closes {{ job.closing_date|date:"M d, Y" }}
@@ -121,7 +121,7 @@
             
 
             <div class="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <div class="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                <div class="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
                     <div class="flex -space-x-2">
                         {% for letter in job.preview_initials %}
                         <div class="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary-600 text-xs font-semibold uppercase text-white dark:border-zinc-900">

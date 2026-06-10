@@ -3,10 +3,18 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.contrib import messages
+from django.http import Http404
 
 from apps.core.models import Resume
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
 from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
+
+
+def _can_access_interview(user, interview):
+    """Superusers and staff can access any interview; others only their own jobs."""
+    if user.is_staff or user.is_superuser:
+        return True
+    return interview.resume.job.owner == user
 
 
 # ── Admin views (login required) ────────────────────────────────────────────
@@ -26,7 +34,10 @@ def interview_create(request, resume_uuid):
 
 @login_required
 def interview_detail(request, pk):
-    interview = get_object_or_404(Interview, pk=pk, resume__job__owner=request.user)
+    interview = get_object_or_404(Interview.objects.select_related('resume__job__owner'), pk=pk)
+    if not _can_access_interview(request.user, interview):
+        messages.error(request, 'You do not have permission to view this interview.')
+        return redirect('core:dashboard')
     add_form = InterviewerAddForm(request.POST or None)
 
     if request.method == 'POST' and add_form.is_valid():
@@ -47,7 +58,10 @@ def interview_detail(request, pk):
 
 @login_required
 def interview_delete(request, pk):
-    interview = get_object_or_404(Interview, pk=pk, resume__job__owner=request.user)
+    interview = get_object_or_404(Interview.objects.select_related('resume__job__owner'), pk=pk)
+    if not _can_access_interview(request.user, interview):
+        messages.error(request, 'You do not have permission to delete this interview.')
+        return redirect('core:dashboard')
     resume_uuid = interview.resume.uuid
     if request.method == 'POST':
         interview.soft_delete()
@@ -57,7 +71,10 @@ def interview_delete(request, pk):
 
 @login_required
 def evaluation_delete(request, token):
-    ev = get_object_or_404(InterviewEvaluation, token=token, interview__resume__job__owner=request.user)
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview__resume__job__owner'), token=token)
+    if not _can_access_interview(request.user, ev.interview):
+        messages.error(request, 'You do not have permission to delete this evaluation.')
+        return redirect('core:dashboard')
     interview_pk = ev.interview_id
     if request.method == 'POST':
         ev.delete()
@@ -68,7 +85,10 @@ def evaluation_delete(request, token):
 @login_required
 def evaluation_renew(request, token):
     from datetime import timedelta
-    ev = get_object_or_404(InterviewEvaluation, token=token, interview__resume__job__owner=request.user)
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview__resume__job__owner'), token=token)
+    if not _can_access_interview(request.user, ev.interview):
+        messages.error(request, 'You do not have permission to renew this evaluation link.')
+        return redirect('core:dashboard')
     if request.method == 'POST' and not ev.is_submitted:
         ev.token = uuid.uuid4()
         ev.token_expires_at = timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS)

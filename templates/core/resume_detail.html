@@ -5,16 +5,16 @@
 {% block content %}
 
 <div class="mb-8">
-    <nav class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+    <nav class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:job_list' %}" class="hover:text-primary-600 dark:hover:text-primary-400 transition">Jobs</a>
-        <svg class="w-4 h-4 mx-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 mx-3 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
         </svg>
         <a href="{% url 'core:job_detail' resume.job.slug %}" class="hover:text-primary-600 dark:hover:text-primary-400 transition">{{ resume.job.title|truncatechars:25 }}</a>
-        <svg class="w-4 h-4 mx-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 mx-3 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
         </svg>
-        <span class="text-gray-900 dark:text-white font-medium">{{ resume.candidate_name|title }}</span>
+        <span class="text-zinc-900 dark:text-white font-medium">{{ resume.candidate_name|title }}</span>
     </nav>
     
     <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
@@ -23,24 +23,24 @@
                 {{ resume.candidate_name|title|slice:":1"|upper }}
             </div>
             <div class="min-w-0 flex-1">
-                <h1 class="break-words text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">{{ resume.candidate_name|title }}</h1>
-                <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 dark:text-gray-400">
+                <h1 class="break-words text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">{{ resume.candidate_name|title }}</h1>
+                <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-zinc-500 dark:text-zinc-400">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                     </svg>
                     Applied for:
-                    <span class="break-words font-medium text-gray-700 dark:text-gray-300">{{ resume.job.title }}</span>
+                    <span class="break-words font-medium text-zinc-700 dark:text-zinc-300">{{ resume.job.title }}</span>
                 </p>
                 {% if resume.email or resume.phone %}
                 <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                     {% if resume.email %}
-                    <a href="mailto:{{ resume.email }}" class="flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400">
+                    <a href="mailto:{{ resume.email }}" class="flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-primary-600 dark:text-zinc-400 dark:hover:text-primary-400">
                         <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                         {{ resume.email }}
                     </a>
                     {% endif %}
                     {% if resume.phone %}
-                    <a href="tel:{{ resume.phone }}" class="flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400">
+                    <a href="tel:{{ resume.phone }}" class="flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-primary-600 dark:text-zinc-400 dark:hover:text-primary-400">
                         <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
                         {{ resume.phone }}
                     </a>
@@ -147,11 +147,11 @@
     <div class="space-y-6">
 
         <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Skills Analysis</h2>
+            <h2 class="text-lg font-bold text-zinc-900 dark:text-white mb-4">Skills Analysis</h2>
             
             {% if resume.matched_skills %}
             <div class="mb-5">
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <h3 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                     Matched Skills
                 </h3>
@@ -165,7 +165,7 @@
             
             {% if resume.missing_skills %}
             <div>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <h3 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-red-500"></span>
                     Missing Skills
                 </h3>
@@ -178,29 +178,29 @@
             {% endif %}
             
             {% if not resume.matched_skills and not resume.missing_skills %}
-            <p class="text-gray-400 text-sm text-center py-4">No skills analysis available</p>
+            <p class="text-zinc-400 text-sm text-center py-4">No skills analysis available</p>
             {% endif %}
         </div>
         
 
         <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Details</h2>
+            <h2 class="text-lg font-bold text-zinc-900 dark:text-white mb-4">Details</h2>
             <dl class="space-y-4 text-sm">
                 {% if resume.file_name %}
                 <div>
-                    <dt class="text-gray-500 dark:text-gray-400">File Name</dt>
-                    <dd class="font-semibold text-gray-900 dark:text-white mt-1">{{ resume.file_name }}</dd>
+                    <dt class="text-zinc-500 dark:text-zinc-400">File Name</dt>
+                    <dd class="font-semibold text-zinc-900 dark:text-white mt-1">{{ resume.file_name }}</dd>
                 </div>
                 {% endif %}
                 {% if resume.file_type %}
                 <div>
-                    <dt class="text-gray-500 dark:text-gray-400">File Type</dt>
-                    <dd class="font-semibold text-gray-900 dark:text-white mt-1 uppercase">{{ resume.file_type }}</dd>
+                    <dt class="text-zinc-500 dark:text-zinc-400">File Type</dt>
+                    <dd class="font-semibold text-zinc-900 dark:text-white mt-1 uppercase">{{ resume.file_type }}</dd>
                 </div>
                 {% endif %}
                 <div>
-                    <dt class="text-gray-500 dark:text-gray-400">Added On</dt>
-                    <dd class="font-semibold text-gray-900 dark:text-white mt-1">{{ resume.created_at|date:"F d, Y" }}</dd>
+                    <dt class="text-zinc-500 dark:text-zinc-400">Added On</dt>
+                    <dd class="font-semibold text-zinc-900 dark:text-white mt-1">{{ resume.created_at|date:"F d, Y" }}</dd>
                 </div>
             </dl>
             {% if resume.file %}

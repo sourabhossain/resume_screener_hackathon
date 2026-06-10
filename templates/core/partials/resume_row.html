@@ -1,5 +1,5 @@
 <tr id="resume-row-{{ resume.pk }}"
-    class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+    class="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' or resume.verification_status == 'pending' %}
     hx-get="{% url 'core:resume_row_fragment' resume.uuid %}"
     hx-trigger="every 3s"

@@ -14,7 +14,7 @@ from apps.core.views import serve_protected_media
 
 # Throttle login attempts to blunt credential stuffing / brute force.
 # Two layers: per-IP and per-username; block=True returns 403 when exceeded.
-_login_view = auth_views.LoginView.as_view(template_name='auth/login.html')
+_login_view = auth_views.LoginView.as_view(template_name='auth/login.html', redirect_authenticated_user=True)
 _login_view = ratelimit(key='post:username', rate='5/m', method='POST', block=True)(_login_view)
 _login_view = ratelimit(key='ip', rate='10/m', method='POST', block=True)(_login_view)
 

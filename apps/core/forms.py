@@ -110,8 +110,8 @@ class JobForm(forms.ModelForm):
         self.fields['employment_type'].required = False
         self.fields['location_type'].required = False
         self.fields['location'].required = False
-        self.fields['employment_type'].empty_label = 'Select type…'
-        self.fields['location_type'].empty_label = 'Select type…'
+        self.fields['employment_type'].choices = [('', 'Select employment type…')] + list(Job.EMPLOYMENT_TYPE_CHOICES)
+        self.fields['location_type'].choices = [('', 'Select location type…')] + list(Job.LOCATION_TYPE_CHOICES)
 
     def clean(self):
         data = super().clean()

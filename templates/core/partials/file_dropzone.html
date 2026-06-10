@@ -28,7 +28,7 @@ Expects the bound form field `form.file` (name="file", id="id_file") in context.
 
     <div x-show="!fileName"
          class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors"
-         :class="dragCounter > 0 ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-300 bg-gray-50 hover:border-indigo-400 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-500'"
+         :class="dragCounter > 0 ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-zinc-300 bg-zinc-50 hover:border-indigo-400 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-500'"
          @dragenter.prevent="dragCounter++"
          @dragleave.prevent="dragCounter--"
          @dragover.prevent
@@ -37,10 +37,10 @@ Expects the bound form field `form.file` (name="file", id="id_file") in context.
         <svg class="mx-auto mb-3 h-10 w-10 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
         </svg>
-        <p class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Drag &amp; drop your resume here</p>
-        <p class="mb-3 text-xs text-gray-400">or</p>
+        <p class="mb-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">Drag &amp; drop your resume here</p>
+        <p class="mb-3 text-xs text-zinc-400">or</p>
         <span class="inline-block rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700">Browse file</span>
-        <p class="mt-3 text-xs text-gray-400 dark:text-gray-500">Supported: PDF, DOCX only · Max 5MB</p>
+        <p class="mt-3 text-xs text-zinc-400 dark:text-zinc-500">Supported: PDF, DOCX only · Max 5MB</p>
     </div>
 
     <div x-show="fileName"
@@ -55,9 +55,9 @@ Expects the bound form field `form.file` (name="file", id="id_file") in context.
             </svg>
         </div>
         <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-semibold text-gray-900 dark:text-white"
+            <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white"
                x-text="fileName.length > 40 ? fileName.slice(0, 37) + '…' : fileName"></p>
-            <p class="text-xs text-gray-400 dark:text-gray-500" x-text="fileSize"></p>
+            <p class="text-xs text-zinc-400 dark:text-zinc-500" x-text="fileSize"></p>
         </div>
         <svg class="h-5 w-5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
@@ -68,7 +68,7 @@ Expects the bound form field `form.file` (name="file", id="id_file") in context.
                 Change
             </button>
             <button type="button" @click="clearFile()"
-                    class="rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-zinc-800 dark:hover:text-gray-300"
+                    class="rounded p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                     aria-label="Remove file">
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>

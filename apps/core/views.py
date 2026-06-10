@@ -132,6 +132,7 @@ def job_list(request):
         'page_obj': page_obj,
         'search_query': search_query,
         'status_filter': status_filter,
+        'has_active_filter': 'status' in request.GET,
     }
     return render(request, 'core/job_list.html', context)
 
