@@ -444,17 +444,18 @@ def resume_bulk_create(request, job_slug):
                 skipped.append(f'"{file.name}" — already submitted for this job')
                 continue
 
-            candidate_name = os.path.splitext(file.name)[0].replace('_', ' ').replace('-', ' ').strip() or 'Unknown'
+            safe_basename = os.path.basename(file.name)
+            candidate_name = os.path.splitext(safe_basename)[0].replace('_', ' ').replace('-', ' ').strip()[:255] or 'Unknown'
 
             resume = Resume(
                 job=job,
                 candidate_name=candidate_name,
-                file_name=file.name,
+                file_name=safe_basename[:255],
                 file_type=ext,
                 file_hash=file_hash,
                 screening_status='processing',
             )
-            resume.file.save(file.name, file, save=True)
+            resume.file.save(safe_basename, file, save=True)
             screen_resume_task.delay(resume.id)
             queued += 1
 

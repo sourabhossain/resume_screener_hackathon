@@ -4,6 +4,8 @@ Django REST Framework Serializers for Job and Resume.
 from rest_framework import serializers
 from .models import Job, Resume
 
+_SCORE_FIELD = dict(min_value=0, max_value=100, allow_null=True, required=False)
+
 
 class ResumeSerializer(serializers.ModelSerializer):
     """Serializer for Resume with computed display fields."""
@@ -11,6 +13,12 @@ class ResumeSerializer(serializers.ModelSerializer):
     recommendation_display = serializers.CharField(source='get_recommendation_display', read_only=True)
     screening_status_display = serializers.CharField(source='get_screening_status_display', read_only=True)
     verification_status_display = serializers.CharField(source='get_verification_status_display', read_only=True)
+
+    experience_score = serializers.FloatField(**_SCORE_FIELD)
+    education_score = serializers.FloatField(**_SCORE_FIELD)
+    skills_score = serializers.FloatField(**_SCORE_FIELD)
+    certification_score = serializers.FloatField(**_SCORE_FIELD)
+    final_score = serializers.FloatField(**_SCORE_FIELD)
 
     class Meta:
         model = Resume

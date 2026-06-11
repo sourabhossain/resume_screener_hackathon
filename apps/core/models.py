@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F
 from django.utils import timezone
@@ -163,10 +164,11 @@ class Resume(SoftDeleteModel):
     recommendation = models.CharField(max_length=20, choices=RECOMMENDATION_CHOICES, blank=True)
     matched_skills = models.JSONField(default=list, blank=True)
     missing_skills = models.JSONField(default=list, blank=True)
-    experience_score = models.FloatField(null=True, blank=True)
-    education_score = models.FloatField(null=True, blank=True)
-    skills_score = models.FloatField(null=True, blank=True)
-    final_score = models.FloatField(null=True, blank=True)
+    _score_validators = [MinValueValidator(0), MaxValueValidator(100)]
+    experience_score = models.FloatField(null=True, blank=True, validators=_score_validators)
+    education_score = models.FloatField(null=True, blank=True, validators=_score_validators)
+    skills_score = models.FloatField(null=True, blank=True, validators=_score_validators)
+    final_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     file_type = models.CharField(max_length=50, blank=True)
@@ -177,8 +179,8 @@ class Resume(SoftDeleteModel):
     certifications = models.JSONField(default=list, blank=True, help_text="Extracted certifications")
     achievements = models.JSONField(default=list, blank=True, help_text="Extracted quantifiable achievements")
     experience_years = models.FloatField(null=True, blank=True, help_text="Total years of experience")
-    certification_score = models.FloatField(null=True, blank=True)
-    achievement_score = models.FloatField(null=True, blank=True)
+    certification_score = models.FloatField(null=True, blank=True, validators=_score_validators)
+    achievement_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     reasoning = models.TextField(blank=True, help_text="AI reasoning for recommendation")
     
     SCREENING_STATUS_CHOICES = [
@@ -210,7 +212,7 @@ class Resume(SoftDeleteModel):
         ],
         default='pending'
     )
-    verification_score = models.FloatField(null=True, blank=True)
+    verification_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     verified_at = models.DateTimeField(null=True, blank=True)
 
     RECRUITER_STATUS_CHOICES = [
