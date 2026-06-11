@@ -148,3 +148,100 @@ def evaluate(request, token):
 def evaluate_done(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
+
+
+# ── Rank Report ─────────────────────────────────────────────────────────────
+
+@login_required
+def rank_report(request, job_slug):
+    from apps.core.models import Job
+    job = get_object_or_404(Job, slug=job_slug)
+    phase_filter = request.GET.get('phase', '')
+
+    interviews_qs = (
+        Interview.objects
+        .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,
+                evaluations__is_submitted=True)
+        .prefetch_related('evaluations', 'resume')
+        .select_related('resume')
+        .distinct()
+    )
+    if phase_filter:
+        interviews_qs = interviews_qs.filter(phase=phase_filter)
+
+    resume_map = {}
+    for iv in interviews_qs:
+        r = iv.resume
+        if r.id not in resume_map:
+            resume_map[r.id] = {
+                'resume': r,
+                'phases': [],
+                'evals': [],
+                'yes': 0, 'no': 0, 'maybe': 0,
+                'interview_pct': None,
+                'composite': None,
+            }
+        d = resume_map[r.id]
+        d['phases'].append(iv.phase)
+        for ev in iv.evaluations.all():
+            if ev.is_submitted:
+                d['evals'].append(ev)
+                if ev.recommendation == 'yes':   d['yes']   += 1
+                elif ev.recommendation == 'no':  d['no']    += 1
+                elif ev.recommendation == 'maybe': d['maybe'] += 1
+
+    candidates = []
+    for d in resume_map.values():
+        pcts = [e.percentage for e in d['evals'] if e.percentage is not None]
+        if pcts:
+            d['interview_pct'] = round(sum(pcts) / len(pcts))
+
+        ai = d['resume'].final_score
+        iv_pct = d['interview_pct']
+        if iv_pct is not None and ai is not None:
+            d['composite'] = round(iv_pct * 0.7 + float(ai) * 0.3)
+        elif iv_pct is not None:
+            d['composite'] = iv_pct
+        elif ai is not None:
+            d['composite'] = round(float(ai))
+
+        total_votes = d['yes'] + d['no'] + d['maybe']
+        if total_votes == 0:
+            d['verdict'] = 'pending'
+        elif d['yes'] >= d['no'] and d['yes'] >= d['maybe'] and d['yes'] > 0:
+            d['verdict'] = 'hire'
+        elif d['no'] > d['yes']:
+            d['verdict'] = 'reject'
+        else:
+            d['verdict'] = 'review'
+
+        d['phases'] = sorted(set(d['phases']))
+        d['eval_count'] = len(d['evals'])
+        candidates.append(d)
+
+    candidates.sort(key=lambda x: (x['composite'] or 0), reverse=True)
+    for i, c in enumerate(candidates, 1):
+        c['rank'] = i
+
+    # Available phases for filter tabs
+    all_phases = (
+        Interview.objects
+        .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,
+                evaluations__is_submitted=True)
+        .values_list('phase', flat=True)
+        .distinct()
+        .order_by('phase')
+    )
+
+    top = candidates[0]['composite'] if candidates else 0
+    avg = round(sum(c['composite'] or 0 for c in candidates) / len(candidates)) if candidates else 0
+
+    return render(request, 'interviews/rank_report.html', {
+        'job': job,
+        'candidates': candidates,
+        'phase_filter': phase_filter,
+        'all_phases': list(all_phases),
+        'top_score': top,
+        'avg_score': avg,
+        'hire_count': sum(1 for c in candidates if c['verdict'] == 'hire'),
+    })

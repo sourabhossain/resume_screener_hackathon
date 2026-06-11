@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block title %}Rank Report — {{ job.title }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl">
+
+    {# ── Breadcrumb ── #}
+    <nav class="mb-6 flex flex-wrap items-center gap-2 text-sm print:hidden">
+        <a href="{% url 'core:job_list' %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            Jobs
+        </a>
+        <svg class="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <a href="{% url 'core:job_detail' job.slug %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            {{ job.title|truncatechars:28 }}
+        </a>
+        <svg class="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="font-semibold text-zinc-900 dark:text-white">Rank Report</span>
+    </nav>
+
+    {# ── Header ── #}
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl gradient-bg shadow-md">
+                    <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-zinc-900 dark:text-white">Interview Rank Report</h1>
+                    <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ job.title }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 print:hidden">
+            <button onclick="window.print()"
+                    class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Print / PDF
+            </button>
+        </div>
+    </div>
+
+    {# ── Stats cards ── #}
+    <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <p class="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Candidates</p>
+            <p class="mt-1 text-3xl font-black text-zinc-900 dark:text-white">{{ candidates|length }}</p>
+        </div>
+        <div class="rounded-2xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
+            <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-500">Hire</p>
+            <p class="mt-1 text-3xl font-black text-emerald-700 dark:text-emerald-400">{{ hire_count }}</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <p class="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Top Score</p>
+            <p class="mt-1 text-3xl font-black text-zinc-900 dark:text-white">{{ top_score }}<span class="text-base font-semibold text-zinc-400">%</span></p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <p class="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Avg Score</p>
+            <p class="mt-1 text-3xl font-black text-zinc-900 dark:text-white">{{ avg_score }}<span class="text-base font-semibold text-zinc-400">%</span></p>
+        </div>
+    </div>
+
+    {# ── Phase filter tabs ── #}
+    {% if all_phases %}
+    <div class="mb-5 flex flex-wrap gap-2 print:hidden">
+        <a href="?phase="
+           class="rounded-full px-4 py-1.5 text-sm font-semibold transition
+                  {% if not phase_filter %}bg-primary-600 text-white shadow-sm{% else %}bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700{% endif %}">
+            All Phases
+        </a>
+        {% for ph in all_phases %}
+        <a href="?phase={{ ph }}"
+           class="rounded-full px-4 py-1.5 text-sm font-semibold transition
+                  {% if phase_filter == ph %}bg-primary-600 text-white shadow-sm{% else %}bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700{% endif %}">
+            Interview {{ ph }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── Rank table ── #}
+    {% if candidates %}
+    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-zinc-100 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <th class="w-14 px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">#</th>
+                    <th class="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">Candidate</th>
+                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:table-cell">Phase</th>
+                    <th class="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">Interview</th>
+                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 md:table-cell">AI Score</th>
+                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 lg:table-cell">Evaluators</th>
+                    <th class="px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">Composite</th>
+                    <th class="px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">Verdict</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {% for c in candidates %}
+                {% with r=c.resume %}
+                <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30
+                           {% if c.rank == 1 %}bg-amber-50/40 dark:bg-amber-950/10{% elif c.rank == 2 %}bg-zinc-50/60 dark:bg-zinc-800/20{% elif c.rank == 3 %}bg-orange-50/30 dark:bg-orange-950/10{% endif %}">
+
+                    {# Rank badge #}
+                    <td class="px-4 py-4 text-center">
+                        {% if c.rank == 1 %}
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-white shadow-sm">1</span>
+                        {% elif c.rank == 2 %}
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-400 text-sm font-black text-white shadow-sm">2</span>
+                        {% elif c.rank == 3 %}
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-600 text-sm font-black text-white shadow-sm">3</span>
+                        {% else %}
+                        <span class="text-sm font-semibold text-zinc-400">{{ c.rank }}</span>
+                        {% endif %}
+                    </td>
+
+                    {# Candidate #}
+                    <td class="px-4 py-4">
+                        <a href="{% url 'core:resume_detail' r.uuid %}" class="group/link">
+                            <p class="font-semibold text-zinc-900 group-hover/link:text-primary-600 dark:text-zinc-100 dark:group-hover/link:text-primary-400">{{ r.candidate_name }}</p>
+                            <p class="text-xs text-zinc-400">{{ r.email|default:"" }}</p>
+                        </a>
+                    </td>
+
+                    {# Phases #}
+                    <td class="hidden px-4 py-4 sm:table-cell">
+                        <div class="flex flex-wrap gap-1">
+                            {% for ph in c.phases %}
+                            <span class="rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-semibold text-primary-700 dark:bg-primary-950/50 dark:text-primary-300">P{{ ph }}</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+
+                    {# Interview score bar #}
+                    <td class="px-4 py-4">
+                        {% if c.interview_pct is not None %}
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-20 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                <div class="h-full rounded-full
+                                            {% if c.interview_pct >= 75 %}bg-emerald-500{% elif c.interview_pct >= 55 %}bg-amber-400{% else %}bg-red-400{% endif %}"
+                                     style="width: {{ c.interview_pct }}%"></div>
+                            </div>
+                            <span class="text-sm font-semibold
+                                         {% if c.interview_pct >= 75 %}text-emerald-600 dark:text-emerald-400{% elif c.interview_pct >= 55 %}text-amber-600 dark:text-amber-400{% else %}text-red-500 dark:text-red-400{% endif %}">
+                                {{ c.interview_pct }}%
+                            </span>
+                        </div>
+                        <p class="mt-0.5 text-[11px] text-zinc-400">{{ c.eval_count }} evaluator{{ c.eval_count|pluralize }}</p>
+                        {% else %}
+                        <span class="text-xs text-zinc-400">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# AI Score #}
+                    <td class="hidden px-4 py-4 md:table-cell">
+                        {% if r.final_score %}
+                        <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{{ r.final_score }}</span>
+                        <span class="text-xs text-zinc-400">/100</span>
+                        {% else %}
+                        <span class="text-xs text-zinc-400">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# Evaluator recommendations #}
+                    <td class="hidden px-4 py-4 lg:table-cell">
+                        <div class="flex items-center gap-1.5">
+                            {% if c.yes > 0 %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                <svg class="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg>
+                                {{ c.yes }}
+                            </span>
+                            {% endif %}
+                            {% if c.maybe > 0 %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">~ {{ c.maybe }}</span>
+                            {% endif %}
+                            {% if c.no > 0 %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:bg-red-950/50 dark:text-red-400">✕ {{ c.no }}</span>
+                            {% endif %}
+                            {% if c.yes == 0 and c.maybe == 0 and c.no == 0 %}
+                            <span class="text-xs text-zinc-400">No votes</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    {# Composite score #}
+                    <td class="px-4 py-4 text-center">
+                        {% if c.composite is not None %}
+                        <span class="text-xl font-black
+                                     {% if c.composite >= 75 %}text-emerald-600 dark:text-emerald-400{% elif c.composite >= 55 %}text-amber-600 dark:text-amber-400{% else %}text-red-500 dark:text-red-400{% endif %}">
+                            {{ c.composite }}
+                        </span>
+                        <span class="text-xs text-zinc-400">%</span>
+                        {% else %}
+                        <span class="text-xs text-zinc-400">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# Verdict #}
+                    <td class="px-4 py-4 text-center">
+                        {% if c.verdict == 'hire' %}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                            <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg>
+                            Hire
+                        </span>
+                        {% elif c.verdict == 'reject' %}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600 dark:bg-red-950/50 dark:text-red-400">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                            Reject
+                        </span>
+                        {% elif c.verdict == 'review' %}
+                        <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Review</span>
+                        {% else %}
+                        <span class="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Score formula note ── #}
+    <p class="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-600 print:hidden">
+        Composite = Interview score × 70% + AI screening score × 30%
+    </p>
+
+    {% else %}
+    <div class="rounded-2xl border border-zinc-200/80 bg-white py-20 text-center shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+        <svg class="mx-auto mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <p class="text-base font-semibold text-zinc-500 dark:text-zinc-400">No completed interviews yet</p>
+        <p class="mt-1 text-sm text-zinc-400 dark:text-zinc-500">Candidates will appear here once their interviews are marked as completed and evaluations are submitted.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+@media print {
+    body { background: white !important; }
+    .dark body { background: white !important; color: black !important; }
+    nav, footer { display: none !important; }
+    .shadow-soft { box-shadow: none !important; }
+    table { font-size: 12px; }
+}
+</style>
+{% endblock %}

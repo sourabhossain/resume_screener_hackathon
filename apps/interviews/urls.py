@@ -10,6 +10,8 @@ urlpatterns = [
     path('interviews/evaluations/<uuid:token>/delete/', views.evaluation_delete, name='evaluation_delete'),
     path('interviews/evaluations/<uuid:token>/renew/', views.evaluation_renew, name='evaluation_renew'),
 
+    path('jobs/<slug:job_slug>/rank-report/', views.rank_report, name='rank_report'),
+
     # Public — no login
     path('evaluate/<uuid:token>/', views.evaluate, name='evaluate'),
     path('evaluate/<uuid:token>/done/', views.evaluate_done, name='evaluate_done'),
