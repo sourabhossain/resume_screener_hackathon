@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -11,9 +12,25 @@ from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from .models import Job, Resume
 from .forms import JobForm, ResumeForm, ResumeEditForm
-from .utils import candidate_initial
+from .utils import candidate_initial, compute_file_hash
 
 logger = logging.getLogger(__name__)
+
+
+def _form_errors_to_messages(request, form) -> None:
+    """Convert all form validation errors to Django messages so they appear as toasts."""
+    for field_name, error_list in form.errors.items():
+        if field_name == '__all__':
+            for err in error_list:
+                messages.error(request, str(err))
+        else:
+            label = (
+                form.fields[field_name].label
+                if field_name in form.fields and form.fields[field_name].label
+                else field_name.replace('_', ' ').title()
+            )
+            for err in error_list:
+                messages.error(request, f"{label}: {err}")
 
 
 def _ordered_active_resumes_queryset(resume_qs):
@@ -147,6 +164,8 @@ def job_create(request):
             job.save()
             messages.success(request, 'Job created successfully!')
             return redirect('core:job_detail', slug=job.slug)
+        else:
+            _form_errors_to_messages(request, form)
     else:
         form = JobForm()
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Post New Job'})
@@ -186,6 +205,8 @@ def job_edit(request, slug):
             form.save()
             messages.success(request, 'Job updated successfully!')
             return redirect('core:job_detail', slug=job.slug)
+        else:
+            _form_errors_to_messages(request, form)
     else:
         form = JobForm(instance=job)
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Edit Job', 'job': job})
@@ -250,8 +271,16 @@ def resume_create(request, job_slug):
     if request.method == 'POST':
         form = ResumeForm(request.POST, request.FILES)
         if form.is_valid():
+            uploaded_file = request.FILES.get('file')
+            file_hash = compute_file_hash(uploaded_file) if uploaded_file else ''
+
+            if file_hash and Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
+                messages.error(request, 'This resume file has already been submitted for this job.')
+                return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
+
             resume = form.save(commit=False)
             resume.job = job
+            resume.file_hash = file_hash
             resume.screening_status = 'processing'
             resume.save()
 
@@ -263,6 +292,8 @@ def resume_create(request, job_slug):
                 'Resume added. AI screening is running in the background—the pipeline row will refresh automatically.',
             )
             return redirect('core:job_detail', slug=job_slug)
+        else:
+            _form_errors_to_messages(request, form)
     else:
         form = ResumeForm()
     return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
@@ -378,6 +409,11 @@ def resume_bulk_create(request, job_slug):
                 skipped.append(f'"{file.name}" — file content does not match {ext.upper()} format')
                 continue
 
+            file_hash = compute_file_hash(file)
+            if Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
+                skipped.append(f'"{file.name}" — already submitted for this job')
+                continue
+
             candidate_name = os.path.splitext(file.name)[0].replace('_', ' ').replace('-', ' ').strip() or 'Unknown'
 
             resume = Resume(
@@ -385,6 +421,7 @@ def resume_bulk_create(request, job_slug):
                 candidate_name=candidate_name,
                 file_name=file.name,
                 file_type=ext,
+                file_hash=file_hash,
                 screening_status='processing',
             )
             resume.file.save(file.name, file, save=True)
@@ -464,7 +501,7 @@ def careers_list(request):
     return render(request, 'careers/job_list.html', context)
 
 
-@ratelimit(key='ip', rate='10/h', method='POST', block=True)
+@ratelimit(key='ip', rate='60/h', method='POST', block=True)
 def careers_apply(request, slug):
     """Public job detail + resume submission form. Only active jobs accept applications."""
     job = get_object_or_404(Job, slug=slug, status='active')
@@ -473,8 +510,49 @@ def careers_apply(request, slug):
         # require_contact: applicants must give an email so recruiters can reply.
         form = ResumeForm(request.POST, request.FILES, require_contact=True)
         if form.is_valid():
+            email = form.cleaned_data.get('email', '').strip().lower()
+            # Strip all spaces, dashes, and parentheses so "+880 1711-123456" == "+8801711123456".
+            phone = re.sub(r'[\s\-()]+', '', form.cleaned_data.get('phone', ''))
+            uploaded_file = request.FILES.get('file')
+            file_hash = compute_file_hash(uploaded_file) if uploaded_file else ''
+
+            # Block duplicate submissions: same email, phone, or file already on record for this job.
+            if email and Resume.objects.filter(job=job, email__iexact=email, is_deleted=False).exists():
+                messages.error(request, 'An application with this email address already exists for this position.')
+                return render(request, 'careers/apply.html', {'job': job, 'form': form})
+
+            if phone:
+                # Normalize DB values the same way before comparing so formatting differences don't bypass the check.
+                from django.db.models import F, Value as V
+                from django.db.models.functions import Replace
+                existing_phone = (
+                    Resume.objects.filter(job=job, is_deleted=False)
+                    .annotate(
+                        phone_normalized=Replace(
+                            Replace(
+                                Replace(
+                                    Replace(F('phone'), V(' '), V('')),
+                                    V('-'), V(''),
+                                ),
+                                V('('), V(''),
+                            ),
+                            V(')'), V(''),
+                        )
+                    )
+                    .filter(phone_normalized=phone)
+                    .exists()
+                )
+                if existing_phone:
+                    messages.error(request, 'An application with this phone number already exists for this position.')
+                    return render(request, 'careers/apply.html', {'job': job, 'form': form})
+
+            if file_hash and Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
+                messages.error(request, 'This resume has already been submitted for this position.')
+                return render(request, 'careers/apply.html', {'job': job, 'form': form})
+
             resume = form.save(commit=False)
             resume.job = job
+            resume.file_hash = file_hash
             resume.screening_status = 'processing'
             resume.save()
 
@@ -482,6 +560,8 @@ def careers_apply(request, slug):
             screen_resume_task.delay(resume.id)
 
             return redirect('core:careers_thanks', slug=job.slug)
+        else:
+            _form_errors_to_messages(request, form)
     else:
         form = ResumeForm(require_contact=True)
 

@@ -193,6 +193,9 @@ class Resume(SoftDeleteModel):
         default='pending'
     )
 
+    # SHA-256 of the uploaded file — used to detect duplicate submissions for the same job.
+    file_hash = models.CharField(max_length=64, blank=True, db_index=True)
+
     # Link Verification
     extracted_links = models.JSONField(default=list, blank=True)
     verification_results = models.JSONField(default=dict, blank=True)
