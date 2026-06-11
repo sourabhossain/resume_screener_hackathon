@@ -134,20 +134,28 @@ class TestResumeAPI:
 @pytest.mark.django_db
 class TestAPIDocumentation:
     """Tests for API documentation endpoints."""
-    
-    def test_schema_endpoint(self, client):
-        """Test OpenAPI schema endpoint is accessible."""
+
+    def test_schema_requires_auth(self, client):
         response = client.get('/api/schema/')
-        assert response.status_code == status.HTTP_200_OK
-        # Schema returns OpenAPI format, check content instead of .json()
-        assert b'openapi' in response.content
-    
-    def test_swagger_docs(self, client):
-        """Test Swagger UI is accessible."""
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_swagger_requires_auth(self, client):
         response = client.get('/api/docs/')
-        assert response.status_code == status.HTTP_200_OK
-    
-    def test_redoc_docs(self, client):
-        """Test ReDoc is accessible."""
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_redoc_requires_auth(self, client):
         response = client.get('/api/redoc/')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_schema_endpoint(self, authenticated_client):
+        response = authenticated_client.get('/api/schema/')
+        assert response.status_code == status.HTTP_200_OK
+        assert b'openapi' in response.content
+
+    def test_swagger_docs(self, authenticated_client):
+        response = authenticated_client.get('/api/docs/')
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_redoc_docs(self, authenticated_client):
+        response = authenticated_client.get('/api/redoc/')
         assert response.status_code == status.HTTP_200_OK

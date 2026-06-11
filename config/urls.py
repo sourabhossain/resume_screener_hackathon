@@ -11,6 +11,7 @@ from django.core.cache import caches
 from django.http import HttpResponse
 from django.shortcuts import render
 from django_ratelimit.decorators import ratelimit
+from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from apps.core.views import serve_protected_media
@@ -56,10 +57,10 @@ urlpatterns = [
     # API URLs
     path('api/', include('apps.core.api_urls')),
 
-    # API Documentation
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    # API Documentation — login required; schema exposes model structure that aids enumeration attacks.
+    path('api/schema/', SpectacularAPIView.as_view(permission_classes=[IsAuthenticated]), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[IsAuthenticated]), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema', permission_classes=[IsAuthenticated]), name='redoc'),
 
     # Authentication URLs
     path('login/', _login_view, name='login'),
