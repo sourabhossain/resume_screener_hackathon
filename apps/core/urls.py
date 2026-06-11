@@ -34,4 +34,10 @@ urlpatterns = [
     path('resumes/<uuid:uuid>/rescreen/', views.resume_rescreen, name='resume_rescreen'),
     path('resumes/<uuid:uuid>/status/', views.resume_status_fragment, name='resume_status_fragment'),
     path('resumes/<uuid:uuid>/row/', views.resume_row_fragment, name='resume_row_fragment'),
+
+    # User management — superuser only
+    path('users/', views.user_list, name='user_list'),
+    path('users/create/', views.user_create, name='user_create'),
+    path('users/<int:pk>/password/', views.user_change_password, name='user_change_password'),
+    path('users/<int:pk>/toggle/', views.user_toggle_active, name='user_toggle_active'),
 ]

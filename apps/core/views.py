@@ -5,6 +5,8 @@ import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
 from django.db.models import Avg, Case, Count, IntegerField, Prefetch, Q, Value, When
 from django.http import JsonResponse, FileResponse, Http404
 from django.db import connection
@@ -13,6 +15,8 @@ from django_ratelimit.decorators import ratelimit
 from .models import Job, Resume
 from .forms import JobForm, ResumeForm, ResumeEditForm
 from .utils import candidate_initial, compute_file_hash
+
+User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
@@ -572,3 +576,74 @@ def careers_thanks(request, slug):
     """Confirmation shown after a candidate submits an application."""
     job = get_object_or_404(Job, slug=slug)
     return render(request, 'careers/thanks.html', {'job': job})
+
+
+# ── User Management (superuser only) ────────────────────────────────────────
+
+def _superuser_required(view_fn):
+    """Decorator: must be logged in AND superuser."""
+    @login_required
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_superuser:
+            messages.error(request, "You don't have permission to access user management.")
+            return redirect('core:dashboard')
+        return view_fn(request, *args, **kwargs)
+    wrapped.__name__ = view_fn.__name__
+    return wrapped
+
+
+@_superuser_required
+def user_list(request):
+    users = User.objects.order_by('-is_superuser', '-is_active', 'username')
+    return render(request, 'users/user_list.html', {'users': users})
+
+
+@_superuser_required
+def user_create(request):
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.is_staff = request.POST.get('is_staff') == 'on'
+            user.is_superuser = request.POST.get('is_superuser') == 'on'
+            user.email = request.POST.get('email', '')
+            user.first_name = request.POST.get('first_name', '')
+            user.last_name = request.POST.get('last_name', '')
+            user.save()
+            messages.success(request, f'User "{user.username}" created successfully.')
+            return redirect('core:user_list')
+        else:
+            _form_errors_to_messages(request, form)
+    else:
+        form = UserCreationForm()
+    return render(request, 'users/user_form.html', {'form': form, 'action': 'Create'})
+
+
+@_superuser_required
+def user_change_password(request, pk):
+    target = get_object_or_404(User, pk=pk)
+    if request.method == 'POST':
+        form = SetPasswordForm(target, request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Password for "{target.username}" changed successfully.')
+            return redirect('core:user_list')
+        else:
+            _form_errors_to_messages(request, form)
+    else:
+        form = SetPasswordForm(target)
+    return render(request, 'users/user_password.html', {'form': form, 'target': target})
+
+
+@_superuser_required
+def user_toggle_active(request, pk):
+    if request.method == 'POST':
+        target = get_object_or_404(User, pk=pk)
+        if target == request.user:
+            messages.error(request, 'You cannot deactivate your own account.')
+        else:
+            target.is_active = not target.is_active
+            target.save()
+            state = 'activated' if target.is_active else 'deactivated'
+            messages.success(request, f'User "{target.username}" has been {state}.')
+    return redirect('core:user_list')

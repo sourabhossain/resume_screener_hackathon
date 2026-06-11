@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}Create User - Career{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl px-1 sm:px-0">
+
+    <nav class="mb-8 flex items-center gap-2 text-sm">
+        <a href="{% url 'core:user_list' %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700 dark:hover:bg-primary-950/40 dark:hover:text-primary-300 dark:hover:ring-primary-800">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Users
+        </a>
+        <svg class="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="font-semibold text-zinc-900 dark:text-white">Create User</span>
+    </nav>
+
+    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="border-b border-zinc-100 bg-zinc-50/80 px-6 py-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl gradient-bg shadow-sm">
+                    <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-semibold text-zinc-900 dark:text-white">Create New User</h1>
+                    <p class="text-sm text-zinc-500">Add a recruiter or admin account</p>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" class="space-y-6 p-6" x-data="{ submitting: false }" @submit="submitting = true">
+            {% csrf_token %}
+
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">First name</label>
+                    <input type="text" name="first_name" class="form-input" placeholder="John">
+                </div>
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Last name</label>
+                    <input type="text" name="last_name" class="form-input" placeholder="Doe">
+                </div>
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Username <span class="text-red-500">*</span></label>
+                <input type="text" name="username" required autofocus class="form-input" placeholder="john.doe">
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Email address</label>
+                <input type="email" name="email" class="form-input" placeholder="john@company.com">
+            </div>
+
+            <div x-data="{ show: false }">
+                <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Password <span class="text-red-500">*</span></label>
+                <div class="relative">
+                    <input :type="show ? 'text' : 'password'" name="password1" required class="form-input pr-11" placeholder="Min. 8 characters">
+                    <button type="button" @click="show = !show"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
+                        <svg x-show="!show" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg x-show="show" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-data="{ show: false }">
+                <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Confirm password <span class="text-red-500">*</span></label>
+                <div class="relative">
+                    <input :type="show ? 'text' : 'password'" name="password2" required class="form-input pr-11" placeholder="Re-enter password">
+                    <button type="button" @click="show = !show"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
+                        <svg x-show="!show" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg x-show="show" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-zinc-200/80 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+                <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Permissions</p>
+                <div class="space-y-3">
+                    <label class="flex cursor-pointer items-center gap-3">
+                        <input type="checkbox" name="is_staff" class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
+                        <div>
+                            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Staff</span>
+                            <p class="text-xs text-zinc-400">Can access Django admin panel</p>
+                        </div>
+                    </label>
+                    <label class="flex cursor-pointer items-center gap-3">
+                        <input type="checkbox" name="is_superuser" class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
+                        <div>
+                            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Superuser</span>
+                            <p class="text-xs text-zinc-400">Full access including user management</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex flex-col-reverse gap-3 border-t border-zinc-100 pt-6 dark:border-zinc-800 sm:flex-row sm:justify-end">
+                <a href="{% url 'core:user_list' %}" class="flex justify-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Cancel
+                </a>
+                <button type="submit" :disabled="submitting"
+                        class="btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white">
+                    <svg x-show="submitting" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <span x-show="!submitting" class="flex items-center gap-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        Create User
+                    </span>
+                    <span x-show="submitting">Creating...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

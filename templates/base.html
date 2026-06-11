@@ -390,6 +390,16 @@
                                 Jobs
                             </span>
                         </a>
+                        {% if user.is_superuser %}
+                        <a href="{% url 'core:user_list' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                Users
+                            </span>
+                        </a>
+                        {% endif %}
                     </div>
                     {% endif %}
                     {% endblock recruiter_nav %}
@@ -526,6 +536,21 @@
                     </div>
                 </a>
                 
+                {% if user.is_superuser %}
+                <a href="{% url 'core:user_list' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/40">
+                        <svg class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Users</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Manage accounts</p>
+                    </div>
+                </a>
+                {% endif %}
+
                 <a href="{% url 'core:job_create' %}" @click="mobileMenuOpen = false"
                    class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40">
