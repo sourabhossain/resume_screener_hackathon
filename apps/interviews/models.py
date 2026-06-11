@@ -124,6 +124,13 @@ class InterviewEvaluation(models.Model):
         return self.token_expires_at is not None and timezone.now() > self.token_expires_at
 
     @property
+    def days_until_expiry(self):
+        if self.is_submitted or self.is_expired or self.token_expires_at is None:
+            return None
+        delta = self.token_expires_at - timezone.now()
+        return max(0, delta.days)
+
+    @property
     def total_score(self):
         if not self.scores:
             return None

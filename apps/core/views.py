@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from datetime import timedelta
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -77,6 +78,9 @@ def health_check(request):
 @login_required
 def dashboard(request):
     # Single-company internal tool: every authenticated recruiter sees all data.
+    from django.utils import timezone as tz
+    from apps.interviews.models import InterviewEvaluation
+
     job_stats = Job.objects.aggregate(
         total=Count('id'),
         active=Count('id', filter=Q(status='active'))
@@ -90,7 +94,17 @@ def dashboard(request):
         low_tier=Count('id', filter=Q(tier='low')),
         pending=Count('id', filter=Q(screening_status='pending')),
         processing=Count('id', filter=Q(screening_status='processing')),
+        screening_failed=Count('id', filter=Q(screening_status='failed')),
+        talent_pool_count=Count('id', filter=Q(recommendation='talent_pool')),
     )
+
+    # Actionable alerts: evaluations expiring in <= 3 days, not yet submitted
+    expiry_threshold = tz.now() + timedelta(days=3)
+    expiring_evals = InterviewEvaluation.objects.filter(
+        is_submitted=False,
+        token_expires_at__lte=expiry_threshold,
+        token_expires_at__gte=tz.now(),
+    ).count()
 
     recent_jobs = Job.objects.annotate(
         resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
@@ -109,6 +123,9 @@ def dashboard(request):
         'low_tier': resume_stats['low_tier'],
         'pending_screening': resume_stats['pending'],
         'processing_screening': resume_stats['processing'],
+        'screening_failed': resume_stats['screening_failed'],
+        'talent_pool_count': resume_stats['talent_pool_count'],
+        'expiring_evals': expiring_evals,
     }
     return render(request, 'core/dashboard.html', context)
 
@@ -312,10 +329,19 @@ def resume_detail(request, uuid):
 @login_required
 def resume_edit(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    SCORE_FIELDS = {'experience_score', 'education_score', 'skills_score',
+                    'certification_score', 'achievement_score', 'final_score'}
     if request.method == 'POST':
         form = ResumeEditForm(request.POST, request.FILES, instance=resume)
         if form.is_valid():
-            form.save()
+            changed = {f for f in form.changed_data if f in SCORE_FIELDS}
+            instance = form.save(commit=False)
+            if changed:
+                from django.utils import timezone as tz
+                instance.score_manually_edited = True
+                instance.score_edited_at = tz.now()
+                instance.score_edited_by = request.user
+            instance.save()
             messages.success(request, 'Resume updated successfully!')
             return redirect('core:resume_detail', uuid=uuid)
     else:
@@ -510,6 +536,11 @@ def careers_apply(request, slug):
     """Public job detail + resume submission form. Only active jobs accept applications."""
     job = get_object_or_404(Job, slug=slug, status='active')
 
+    from django.utils import timezone as tz
+    if job.closing_date and tz.now().date() > job.closing_date:
+        messages.error(request, 'This position is no longer accepting applications.')
+        return redirect('core:careers')
+
     if request.method == 'POST':
         # require_contact: applicants must give an email so recruiters can reply.
         form = ResumeForm(request.POST, request.FILES, require_contact=True)
@@ -647,3 +678,133 @@ def user_toggle_active(request, pk):
             state = 'activated' if target.is_active else 'deactivated'
             messages.success(request, f'User "{target.username}" has been {state}.')
     return redirect('core:user_list')
+
+
+# ── Resume Notes ────────────────────────────────────────────────────────────
+
+@login_required
+def resume_note_add(request, uuid):
+    resume = get_object_or_404(Resume, uuid=uuid)
+    if request.method == 'POST':
+        text = request.POST.get('text', '').strip()
+        if text:
+            from .models import ResumeNote
+            ResumeNote.objects.create(resume=resume, author=request.user, text=text)
+            messages.success(request, 'Note added.')
+        else:
+            messages.error(request, 'Note cannot be empty.')
+    return redirect('core:resume_detail', uuid=uuid)
+
+
+@login_required
+def resume_note_delete(request, uuid, note_id):
+    resume = get_object_or_404(Resume, uuid=uuid)
+    from .models import ResumeNote
+    note = get_object_or_404(ResumeNote, pk=note_id, resume=resume)
+    if request.method == 'POST':
+        note.delete()
+        messages.success(request, 'Note deleted.')
+    return redirect('core:resume_detail', uuid=uuid)
+
+
+# ── Recruiter Status Update ──────────────────────────────────────────────────
+
+@login_required
+def resume_status_update(request, uuid):
+    resume = get_object_or_404(Resume, uuid=uuid)
+    if request.method == 'POST':
+        new_status = request.POST.get('recruiter_status', '').strip()
+        valid = {c[0] for c in Resume.RECRUITER_STATUS_CHOICES}
+        if new_status in valid:
+            resume.recruiter_status = new_status
+            resume.save(update_fields=['recruiter_status'])
+            messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
+        else:
+            messages.error(request, 'Invalid status.')
+    return redirect('core:resume_detail', uuid=uuid)
+
+
+# ── Talent Pool ──────────────────────────────────────────────────────────────
+
+@login_required
+def talent_pool(request):
+    from django.core.paginator import Paginator
+    resumes_qs = (
+        Resume.objects
+        .filter(recommendation='talent_pool', is_deleted=False)
+        .select_related('job')
+        .order_by('-final_score', '-created_at')
+    )
+    search_q = request.GET.get('q', '').strip()
+    if search_q:
+        resumes_qs = resumes_qs.filter(
+            Q(candidate_name__icontains=search_q) |
+            Q(job__title__icontains=search_q) |
+            Q(email__icontains=search_q)
+        )
+    page_obj = Paginator(resumes_qs, 20).get_page(request.GET.get('page', 1))
+    return render(request, 'core/talent_pool.html', {
+        'resumes': page_obj,
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'total': resumes_qs.count(),
+    })
+
+
+# ── CSV Export ───────────────────────────────────────────────────────────────
+
+@login_required
+def job_export_csv(request, slug):
+    import csv
+    from django.http import StreamingHttpResponse
+
+    job = get_object_or_404(Job, slug=slug)
+    resumes = (
+        Resume.objects
+        .filter(job=job, is_deleted=False)
+        .select_related('job')
+        .order_by('-final_score', '-created_at')
+    )
+
+    def rows():
+        header = [
+            'Candidate Name', 'Email', 'Phone', 'Tier', 'AI Recommendation',
+            'Recruiter Status', 'Final Score', 'Skills Score', 'Experience Score',
+            'Education Score', 'Certification Score', 'Achievement Score',
+            'Experience Years', 'Verification Score', 'Screening Status',
+            'Manually Edited', 'Applied On',
+        ]
+        yield header
+        for r in resumes:
+            yield [
+                r.candidate_name,
+                r.email,
+                r.phone,
+                r.get_tier_display(),
+                r.get_recommendation_display() if r.recommendation else '',
+                r.get_recruiter_status_display() if r.recruiter_status else '',
+                r.final_score if r.final_score is not None else '',
+                r.skills_score if r.skills_score is not None else '',
+                r.experience_score if r.experience_score is not None else '',
+                r.education_score if r.education_score is not None else '',
+                r.certification_score if r.certification_score is not None else '',
+                r.achievement_score if r.achievement_score is not None else '',
+                r.experience_years if r.experience_years is not None else '',
+                r.verification_score if r.verification_score is not None else '',
+                r.get_screening_status_display(),
+                'Yes' if r.score_manually_edited else 'No',
+                r.created_at.strftime('%Y-%m-%d'),
+            ]
+
+    class Echo:
+        def write(self, value):
+            return value
+
+    writer = csv.writer(Echo())
+    response = StreamingHttpResponse(
+        (writer.writerow(row) for row in rows()),
+        content_type='text/csv',
+    )
+    safe_title = re.sub(r'[^\w\-]', '_', job.title)[:50]
+    response['Content-Disposition'] = f'attachment; filename="{safe_title}_candidates.csv"'
+    return response

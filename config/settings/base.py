@@ -253,6 +253,11 @@ CACHES = {
             # an unbounded number of sockets to Redis.
             'pool_class': 'redis.connection.BlockingConnectionPool',
             'max_connections': int(os.environ.get('REDIS_MAX_CONNECTIONS', '50')),
+            # Bound per-connection I/O time so is_available() and all other
+            # Redis calls don't hold a gunicorn worker for the OS TCP timeout
+            # (~20-30 s) during a network-partition outage.
+            'socket_connect_timeout': 1,
+            'socket_timeout': 1,
         },
     }
 }

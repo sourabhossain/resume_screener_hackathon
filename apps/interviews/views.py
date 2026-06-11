@@ -25,11 +25,21 @@ def interview_create(request, resume_uuid):
     resume = get_object_or_404(Resume, uuid=resume_uuid)
     form = InterviewCreateForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        interview = form.save(commit=False)
-        interview.resume = resume
-        interview.save()
-        messages.success(request, 'Interview scheduled.')
-        return redirect('interviews:detail', pk=interview.pk)
+        phase = form.cleaned_data['phase']
+        # Enforce sequential phase ordering: phase N requires phase N-1 to exist.
+        required_prior = {'2': '1', '3': '2'}
+        prior_phase = required_prior.get(phase)
+        if prior_phase and not Interview.objects.filter(
+            resume=resume, phase=prior_phase, is_deleted=False
+        ).exists():
+            phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
+            form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
+        else:
+            interview = form.save(commit=False)
+            interview.resume = resume
+            interview.save()
+            messages.success(request, 'Interview scheduled.')
+            return redirect('interviews:detail', pk=interview.pk)
     return render(request, 'interviews/create.html', {'form': form, 'resume': resume})
 
 
@@ -198,8 +208,13 @@ def rank_report(request, job_slug):
 
         ai = d['resume'].final_score
         iv_pct = d['interview_pct']
-        if iv_pct is not None and ai is not None:
-            d['composite'] = round(iv_pct * 0.7 + float(ai) * 0.3)
+        v_score = d['resume'].verification_score
+        # Composite: interview 65%, AI score 25%, link-verification 10%.
+        # Gracefully degrades when verification is absent (skipped/failed).
+        if iv_pct is not None and ai is not None and v_score is not None:
+            d['composite'] = round(iv_pct * 0.65 + float(ai) * 0.25 + float(v_score) * 0.10)
+        elif iv_pct is not None and ai is not None:
+            d['composite'] = round(iv_pct * 0.70 + float(ai) * 0.30)
         elif iv_pct is not None:
             d['composite'] = iv_pct
         elif ai is not None:
@@ -208,7 +223,8 @@ def rank_report(request, job_slug):
         total_votes = d['yes'] + d['no'] + d['maybe']
         if total_votes == 0:
             d['verdict'] = 'pending'
-        elif d['yes'] >= d['no'] and d['yes'] >= d['maybe'] and d['yes'] > 0:
+        elif d['yes'] > d['no'] and d['yes'] > d['maybe'] and d['yes'] > 0:
+            # Strict majority: tied votes go to 'review', not 'hire'
             d['verdict'] = 'hire'
         elif d['no'] > d['yes']:
             d['verdict'] = 'reject'

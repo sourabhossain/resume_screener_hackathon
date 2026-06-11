@@ -109,3 +109,12 @@ class ResilientRedisCache(RedisCache):
         except RedisError as e:
             _warn(e)
             return list(data)
+
+    def is_available(self):
+        """Return True if Redis is reachable, False if the connection fails.
+        Calls the unguarded parent so RedisError is not swallowed here."""
+        try:
+            super().get('__health_check__')
+            return True
+        except RedisError:
+            return False

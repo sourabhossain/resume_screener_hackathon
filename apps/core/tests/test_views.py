@@ -414,3 +414,41 @@ class TestResumeViews:
             reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' not in response.content
+
+
+@pytest.mark.django_db
+class TestLoginRatelimitFailsafe:
+    """Login fails closed (503) when rate-limit cache is unreachable;
+    non-auth endpoints keep fail-open behavior."""
+
+    def test_login_post_returns_503_when_cache_unreachable(self, client, monkeypatch):
+        """POST /login/ returns 503 instead of bypassing rate limit when Redis is down."""
+        from django.core.cache import caches
+        monkeypatch.setattr(caches['default'], 'is_available', lambda: False, raising=False)
+        response = client.post(reverse('login'), {'username': 'x', 'password': 'y'})
+        assert response.status_code == 503
+
+    def test_login_post_503_carries_retry_after_header(self, client, monkeypatch):
+        """503 response includes Retry-After so clients know when to retry."""
+        from django.core.cache import caches
+        monkeypatch.setattr(caches['default'], 'is_available', lambda: False, raising=False)
+        response = client.post(reverse('login'), {'username': 'x', 'password': 'y'})
+        assert response.status_code == 503
+        assert response['Retry-After'] == '60'
+
+    def test_login_get_unaffected_when_cache_unreachable(self, client, monkeypatch):
+        """GET /login/ (form render) is not blocked; fail-closed applies to POST only."""
+        from django.core.cache import caches
+        monkeypatch.setattr(caches['default'], 'is_available', lambda: False, raising=False)
+        response = client.get(reverse('login'))
+        assert response.status_code == 200
+
+    def test_careers_apply_fails_open_when_cache_unreachable(self, client, sample_job, monkeypatch):
+        """careers_apply GET succeeds (fail-open) even when is_available() returns False.
+        _auth_cache_required is not applied to non-auth endpoints."""
+        from django.core.cache import caches
+        monkeypatch.setattr(caches['default'], 'is_available', lambda: False, raising=False)
+        response = client.get(
+            reverse('core:careers_apply', kwargs={'slug': sample_job.slug})
+        )
+        assert response.status_code == 200

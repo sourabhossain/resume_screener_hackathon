@@ -35,6 +35,19 @@ urlpatterns = [
     path('resumes/<uuid:uuid>/status/', views.resume_status_fragment, name='resume_status_fragment'),
     path('resumes/<uuid:uuid>/row/', views.resume_row_fragment, name='resume_row_fragment'),
 
+    # Resume notes
+    path('resumes/<uuid:uuid>/notes/add/', views.resume_note_add, name='resume_note_add'),
+    path('resumes/<uuid:uuid>/notes/<int:note_id>/delete/', views.resume_note_delete, name='resume_note_delete'),
+
+    # Recruiter status update
+    path('resumes/<uuid:uuid>/status-update/', views.resume_status_update, name='resume_status_update'),
+
+    # Talent pool
+    path('talent-pool/', views.talent_pool, name='talent_pool'),
+
+    # CSV export
+    path('jobs/<slug:slug>/export/', views.job_export_csv, name='job_export_csv'),
+
     # User management — superuser only
     path('users/', views.user_list, name='user_list'),
     path('users/create/', views.user_create, name='user_create'),

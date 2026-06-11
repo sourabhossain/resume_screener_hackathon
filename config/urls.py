@@ -1,22 +1,52 @@
 """
 URL configuration for Resume Screening System.
 """
+import logging
 from django.contrib import admin
 from django.urls import path, re_path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from django.core.cache import caches
+from django.http import HttpResponse
 from django.shortcuts import render
 from django_ratelimit.decorators import ratelimit
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from apps.core.views import serve_protected_media
 
-# Throttle login attempts to blunt credential stuffing / brute force.
-# Two layers: per-IP and per-username; block=True returns 403 when exceeded.
+logger = logging.getLogger(__name__)
+
+
+def _auth_cache_required(view_fn):
+    """Fail closed on POST when the rate-limit cache is unreachable.
+    Non-auth views keep the global fail-open default (RATELIMIT_FAIL_OPEN=True);
+    only the login endpoint uses this wrapper."""
+    def wrapper(request, *args, **kwargs):
+        if request.method == 'POST':
+            rl_cache_name = getattr(settings, 'RATELIMIT_USE_CACHE', 'default')
+            rl_cache = caches[rl_cache_name]
+            if hasattr(rl_cache, 'is_available') and not rl_cache.is_available():
+                logger.warning(
+                    "auth.rate_limit: login POST blocked, cache '%s' unreachable",
+                    rl_cache_name,
+                )
+                response = HttpResponse(
+                    'Service temporarily unavailable. Please try again later.',
+                    status=503,
+                )
+                response['Retry-After'] = '60'
+                return response
+        return view_fn(request, *args, **kwargs)
+    wrapper.__name__ = view_fn.__name__
+    return wrapper
+
+
+# Throttle login: two layers (per-username + per-IP); fail closed if cache unreachable.
 _login_view = auth_views.LoginView.as_view(template_name='auth/login.html', redirect_authenticated_user=True)
 _login_view = ratelimit(key='post:username', rate='5/m', method='POST', block=True)(_login_view)
 _login_view = ratelimit(key='ip', rate='10/m', method='POST', block=True)(_login_view)
+_login_view = _auth_cache_required(_login_view)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

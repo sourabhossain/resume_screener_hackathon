@@ -212,7 +212,33 @@ class Resume(SoftDeleteModel):
     )
     verification_score = models.FloatField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
-    
+
+    RECRUITER_STATUS_CHOICES = [
+        ('new', 'New'),
+        ('shortlisted', 'Shortlisted'),
+        ('phone_screen', 'Phone Screen'),
+        ('interviewing', 'Interviewing'),
+        ('offer_extended', 'Offer Extended'),
+        ('hired', 'Hired'),
+        ('rejected', 'Rejected'),
+        ('withdrawn', 'Withdrawn'),
+    ]
+    recruiter_status = models.CharField(
+        max_length=20,
+        choices=RECRUITER_STATUS_CHOICES,
+        default='new',
+        blank=True,
+    )
+    # Tracks whether a recruiter manually changed AI-generated scores.
+    score_manually_edited = models.BooleanField(default=False)
+    score_edited_at = models.DateTimeField(null=True, blank=True)
+    score_edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='edited_resumes',
+    )
+
     class Meta:
         db_table = 'resumes'
         ordering = [F('final_score').desc(nulls_last=True), '-created_at']
@@ -245,3 +271,22 @@ class Resume(SoftDeleteModel):
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
         super().save(*args, **kwargs)
+
+
+class ResumeNote(models.Model):
+    """Internal recruiter notes attached to a resume."""
+    resume = models.ForeignKey(Resume, on_delete=models.CASCADE, related_name='notes')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='resume_notes',
+    )
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Note on {self.resume.candidate_name} by {self.author}"
