@@ -175,33 +175,11 @@
             {# Divider #}
             <div class="border-t border-zinc-100 dark:border-zinc-800"></div>
 
-            {# Recommendation + Suggestions #}
-            <div class="grid gap-6 px-6 py-5 sm:grid-cols-2">
-                <div>
-                    <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recommendation</label>
-                    {{ form.recommendation }}
-                    <p class="mt-1.5 text-xs text-zinc-400">Leave blank to auto-calculate from score</p>
-                </div>
-                <div>
-                    <p class="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Suggestions</p>
-                    <div class="space-y-2">
-                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
-                            {{ form.another_phase_required }}<span>{{ form.another_phase_required.label }}</span>
-                        </label>
-                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
-                            {{ form.hard_negotiation }}<span>{{ form.hard_negotiation.label }}</span>
-                        </label>
-                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
-                            {{ form.suitable_other_dept }}<span>{{ form.suitable_other_dept.label }}</span>
-                        </label>
-                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
-                            {{ form.suitable_higher_position }}<span>{{ form.suitable_higher_position.label }}</span>
-                        </label>
-                        <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
-                            {{ form.suitable_junior_position }}<span>{{ form.suitable_junior_position.label }}</span>
-                        </label>
-                    </div>
-                </div>
+            {# Recommendation #}
+            <div class="px-6 py-5">
+                <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recommendation</label>
+                {{ form.recommendation }}
+                <p class="mt-1.5 text-xs text-zinc-400">Leave blank to auto-calculate from score</p>
             </div>
 
             {# Additional Notes #}
