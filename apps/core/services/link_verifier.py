@@ -5,8 +5,8 @@ from typing import Any
 
 from django.utils import timezone
 
-from apps.core.services.link_crawler import LinkCrawler, CrawlResult
-from apps.core.services.link_extractor import LinkExtractor, LinkType
+from apps.core.services.link_crawler import LinkCrawler
+from apps.core.services.link_extractor import LinkExtractor
 
 logger = logging.getLogger(__name__)
 

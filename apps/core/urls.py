@@ -45,6 +45,10 @@ urlpatterns = [
     # Talent pool
     path('talent-pool/', views.talent_pool, name='talent_pool'),
 
+    # Screening failed — bulk re-screen
+    path('screening-failed/', views.screening_failed_list, name='screening_failed'),
+    path('screening-failed/rescreen/', views.screening_rescreen_bulk, name='screening_rescreen_bulk'),
+
     # CSV export
     path('jobs/<slug:slug>/export/', views.job_export_csv, name='job_export_csv'),
 

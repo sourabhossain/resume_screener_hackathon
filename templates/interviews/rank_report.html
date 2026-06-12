@@ -33,6 +33,11 @@
                 </div>
             </div>
         </div>
+        {# Print-only generated stamp #}
+        <div class="hidden text-right print:block">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Generated</p>
+            <p class="text-sm font-medium text-zinc-700">{% now "M j, Y · g:i A" %}</p>
+        </div>
         <div class="flex items-center gap-2 print:hidden">
             <button onclick="window.print()"
                     class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
@@ -90,10 +95,10 @@
                 <tr class="border-b border-zinc-100 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-900/60">
                     <th class="w-14 px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">#</th>
                     <th class="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">Candidate</th>
-                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:table-cell">Phase</th>
+                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:table-cell print:table-cell">Phase</th>
                     <th class="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">Interview</th>
-                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 md:table-cell">AI Score</th>
-                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 lg:table-cell">Evaluators</th>
+                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 md:table-cell print:table-cell">AI Score</th>
+                    <th class="hidden px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 lg:table-cell print:table-cell">Evaluators</th>
                     <th class="px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">Composite</th>
                     <th class="px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">Verdict</th>
                 </tr>
@@ -126,7 +131,7 @@
                     </td>
 
                     {# Phases #}
-                    <td class="hidden px-4 py-4 sm:table-cell">
+                    <td class="hidden px-4 py-4 sm:table-cell print:table-cell">
                         <div class="flex flex-wrap gap-1">
                             {% for ph in c.phases %}
                             <span class="rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-semibold text-primary-700 dark:bg-primary-950/50 dark:text-primary-300">P{{ ph }}</span>
@@ -155,7 +160,7 @@
                     </td>
 
                     {# AI Score #}
-                    <td class="hidden px-4 py-4 md:table-cell">
+                    <td class="hidden px-4 py-4 md:table-cell print:table-cell">
                         {% if r.final_score %}
                         <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{{ r.final_score }}</span>
                         <span class="text-xs text-zinc-400">/100</span>
@@ -165,7 +170,7 @@
                     </td>
 
                     {# Evaluator recommendations #}
-                    <td class="hidden px-4 py-4 lg:table-cell">
+                    <td class="hidden px-4 py-4 lg:table-cell print:table-cell">
                         <div class="flex items-center gap-1.5">
                             {% if c.yes > 0 %}
                             <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
@@ -223,10 +228,16 @@
         </table>
     </div>
 
-    {# ── Score formula note ── #}
+    {# ── Score formula note (on-screen) ── #}
     <p class="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-600 print:hidden">
         Composite = Interview score × 70% + AI screening score × 30%
     </p>
+
+    {# ── Print-only report footer: methodology + branding ── #}
+    <div class="mt-6 hidden items-center justify-between border-t border-zinc-200 pt-3 print:flex">
+        <p class="text-[10px] text-zinc-500">Composite = Interview score × 70% + AI screening score × 30%</p>
+        <p class="text-[10px] font-semibold text-zinc-500">Career · Interview Rank Report</p>
+    </div>
 
     {% else %}
     <div class="rounded-2xl border border-zinc-200/80 bg-white py-20 text-center shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
@@ -241,11 +252,47 @@
 
 <style>
 @media print {
-    body { background: white !important; }
-    .dark body { background: white !important; color: black !important; }
+    /* A4 sheet with comfortable margins */
+    @page {
+        size: A4;
+        margin: 14mm 12mm 15mm;
+    }
+
+    /* Force the full design to render — backgrounds, gradients, badge fills,
+       progress bars and pills are stripped by browsers unless we force this. */
+    *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Clean white sheet, even when the app is in dark mode */
+    html, body,
+    .dark body {
+        background: #ffffff !important;
+        color: #18181b !important;
+    }
+
+    /* Drop chrome we don't want on paper */
     nav, footer { display: none !important; }
-    .shadow-soft { box-shadow: none !important; }
-    table { font-size: 12px; }
+
+    /* Use the full page width */
+    main { padding: 0 !important; }
+    .max-w-6xl { max-width: none !important; }
+
+    /* Softer on screen, crisp & flat on paper */
+    .shadow-soft, .shadow-sm, .shadow-md { box-shadow: none !important; }
+
+    /* Keep the report on one tight block where possible */
+    .mb-6 { margin-bottom: 0.9rem !important; }
+
+    /* Table: repeat the header on every page, never split a row */
+    table { font-size: 10.5px; width: 100% !important; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+    td, th { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+
+    /* Avoid an orphaned stat row */
+    .grid { break-inside: avoid; }
 }
 </style>
 {% endblock %}

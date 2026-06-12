@@ -5,9 +5,7 @@ Security tests for serve_protected_media:
 - Path-traversal attempts (../../../etc/passwd etc.) → 404
 - Non-existent file → 404
 """
-import os
 import pytest
-from django.urls import reverse
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

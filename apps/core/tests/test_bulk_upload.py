@@ -16,7 +16,7 @@ import pytest
 from unittest.mock import patch
 from django.urls import reverse
 
-from apps.core.models import Job, Resume
+from apps.core.models import Resume
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

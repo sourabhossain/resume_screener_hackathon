@@ -189,12 +189,6 @@
             </div>
         </div>
 
-        {# ── Validation notice ── #}
-        <div id="validation-msg"
-             class="hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-400">
-            Please rate all {{ criteria|length }} criteria before submitting.
-        </div>
-
         {# ── Submit ── #}
         <div class="relative">
             <button type="submit"
@@ -227,9 +221,14 @@ document.getElementById('eval-form').addEventListener('submit', function(e) {
     });
     if (missing > 0) {
         e.preventDefault();
-        const msg = document.getElementById('validation-msg');
-        msg.classList.remove('hidden');
-        msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (window.Toast) {
+            window.Toast.fire({
+                icon: 'warning',
+                title: 'Please rate ' + (missing > 1 ? missing + ' more criteria' : '1 more criterion') + ' before submitting.',
+                timer: 4500,
+            });
+        }
+        this.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 });
 </script>

@@ -105,6 +105,13 @@ class JobForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Title and description are mandatory — a job posting is meaningless
+        # without both. (The model leaves description blank=True for flexibility,
+        # so we enforce it at the form level.)
+        self.fields['title'].required = True
+        self.fields['title'].error_messages['required'] = 'Please enter a job title.'
+        self.fields['description'].required = True
+        self.fields['description'].error_messages['required'] = 'Please enter a job description.'
         self.fields['posted_date'].required = False
         self.fields['closing_date'].required = False
         self.fields['employment_type'].required = False

@@ -2,7 +2,6 @@
 Unit tests for Job and Resume models.
 """
 import pytest
-from django.utils import timezone
 from apps.core.models import Job, Resume
 
 

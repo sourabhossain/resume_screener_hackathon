@@ -207,7 +207,7 @@ class TestJobViews:
             'description': sample_job.description,
             'status': sample_job.status
         }
-        response = authenticated_client.post(
+        authenticated_client.post(
             reverse('core:job_edit', kwargs={'slug': sample_job.slug}),
             data
         )

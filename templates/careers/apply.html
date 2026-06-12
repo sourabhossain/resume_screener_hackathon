@@ -2,6 +2,9 @@
 {% load md %}
 
 {% block title %}{{ job.title }} · Apply · Career{% endblock %}
+{% block meta_description %}Apply for {{ job.title }}{% if job.location %} in {{ job.location }}{% endif %}. Upload your resume and submit your application.{% endblock %}
+{% block og_title %}{{ job.title }} · Career{% endblock %}
+{% block og_description %}Apply for {{ job.title }}{% if job.location %} in {{ job.location }}{% endif %}.{% endblock %}
 
 {% block recruiter_nav %}{% endblock %}
 {% block recruiter_logout %}{% endblock %}

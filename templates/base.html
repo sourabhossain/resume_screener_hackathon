@@ -4,10 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Career{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Screen resumes with structured AI scoring, clear tiers, and consistent criteria across every role.{% endblock %}">
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+    {% block social_meta %}
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{% block og_title %}Career{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Find a role that fits you and submit your resume.{% endblock %}">
+    <meta name="twitter:card" content="summary">
+    {% endblock %}
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>window.CSRF_TOKEN = '{{ csrf_token }}';</script>
     <script>
         document.addEventListener('htmx:afterSettle', function (evt) {
             if (typeof Alpine !== 'undefined') {
@@ -15,70 +26,200 @@
             }
         });
 
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('messageToast', () => ({
-                visible: false,
-                paused: false,
-                _duration: 5200,
-                _timer: null,
-                _start: null,
-                _remaining: 5200,
-                title: '',
-                body: '',
+        /* ───────── SweetAlert2 — global helpers (system-wide) ───────── */
 
-                init() {
-                    const raw = this.$el.getAttribute('data-dismiss-ms');
-                    const ms = parseInt(raw || '5200', 10);
-                    this._duration = (Number.isFinite(ms) && ms > 0) ? Math.max(2500, ms) : 5200;
-                    this._remaining = this._duration;
+        // Map Django message tags → SweetAlert2 icons
+        function djIcon(tags) {
+            if (!tags) return 'info';
+            if (tags.indexOf('success') !== -1) return 'success';
+            if (tags.indexOf('error') !== -1) return 'error';
+            if (tags.indexOf('warning') !== -1) return 'warning';
+            return 'info';
+        }
 
-                    // Split "Field Name: error detail" → title + body for richer display.
-                    // Only treat the part before ": " as a title if it's short (≤ 35 chars)
-                    // so long single-sentence messages don't get incorrectly split.
-                    const msg = (this.$el.dataset.message || '').trim();
-                    const sep = msg.indexOf(': ');
-                    if (sep > 0 && sep <= 35) {
-                        this.title = msg.slice(0, sep);
-                        this.body  = msg.slice(sep + 2);
-                    } else {
-                        this.title = '';
-                        this.body  = msg;
-                    }
-
-                    requestAnimationFrame(() => {
-                        this.visible = true;
-                        this._kick();
-                    });
-                },
-
-                _kick() {
-                    this._start = Date.now();
-                    this._timer = window.setTimeout(() => this.dismiss(), this._remaining);
-                },
-
-                pause() {
-                    if (this._timer) {
-                        window.clearTimeout(this._timer);
-                        this._remaining -= Date.now() - this._start;
-                        this._timer = null;
-                        this.paused = true;
-                    }
-                },
-
-                resume() {
-                    if (!this._timer) {
-                        this.paused = false;
-                        this._kick();
-                    }
-                },
-
-                dismiss() {
-                    window.clearTimeout(this._timer);
-                    this._timer = null;
-                    this.visible = false;
-                },
-            }));
+        // Toast notification (top-end), auto-dismiss, pause on hover.
+        window.Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4200,
+            timerProgressBar: true,
+            didOpen: (el) => {
+                el.addEventListener('mouseenter', Swal.stopTimer);
+                el.addEventListener('mouseleave', Swal.resumeTimer);
+            },
         });
+
+        // Quick helper: window.notify('success', 'Saved!')
+        window.notify = function (icon, title, timer) {
+            return window.Toast.fire({ icon: icon, title: title, timer: timer || 4200 });
+        };
+
+        // Escape arbitrary (possibly user-supplied) text for safe HTML insertion.
+        function djEsc(s) {
+            const d = document.createElement('div');
+            d.textContent = s == null ? '' : String(s);
+            return d.innerHTML;
+        }
+
+        // Branded confirmation dialog. Returns a Promise<SweetAlertResult>.
+        // opts.strong is treated as untrusted (e.g. a candidate name) and escaped;
+        // opts.text is a trusted static sentence supplied by our own templates.
+        window.swalConfirm = function (opts) {
+            opts = opts || {};
+            const danger = opts.danger !== false; // default to danger styling
+            let html = '';
+            if (opts.strong) html += '<b>' + djEsc(opts.strong) + '</b>';
+            if (opts.text) html += (html ? '<br>' : '') + opts.text;
+            return Swal.fire({
+                title: opts.title || 'Are you sure?',
+                html: html,
+                icon: opts.icon || (danger ? 'warning' : 'question'),
+                showCancelButton: true,
+                confirmButtonText: opts.confirmText || (danger ? 'Yes, delete' : 'Confirm'),
+                cancelButtonText: opts.cancelText || 'Cancel',
+                reverseButtons: true,
+                focusCancel: danger,
+                buttonsStyling: true,
+                customClass: { confirm: danger ? 'swal-danger' : '' },
+            });
+        };
+
+        // Build + submit a POST form (with CSRF) to a given URL.
+        function djPostTo(url) {
+            const f = document.createElement('form');
+            f.method = 'POST';
+            f.action = url;
+            const t = document.createElement('input');
+            t.type = 'hidden';
+            t.name = 'csrfmiddlewaretoken';
+            t.value = window.CSRF_TOKEN;
+            f.appendChild(t);
+            document.body.appendChild(f);
+            f.submit();
+        }
+
+        // Read confirmation options from data-* attributes on an element.
+        function djConfirmOpts(el) {
+            return {
+                title: el.dataset.confirmTitle,
+                text: el.dataset.confirmText,
+                strong: el.dataset.confirmStrong,
+                confirmText: el.dataset.confirmButton,
+                icon: el.dataset.confirmIcon,
+                danger: el.dataset.confirmSafe === undefined,
+            };
+        }
+
+        // Delegated handler: any <a data-confirm> or <form data-confirm> in the
+        // whole app gets a SweetAlert2 confirmation. Links may POST via
+        // data-method="post"; forms submit themselves after confirmation.
+        document.addEventListener('click', function (e) {
+            const link = e.target.closest('a[data-confirm]');
+            if (!link) return;
+            e.preventDefault();
+            window.swalConfirm(djConfirmOpts(link)).then((res) => {
+                if (!res.isConfirmed) return;
+                if ((link.dataset.method || 'get').toLowerCase() === 'post') {
+                    djPostTo(link.href);
+                } else {
+                    window.location.href = link.href;
+                }
+            });
+        });
+
+        // Friendly label for a form control (used in validation toasts).
+        function djFieldLabel(field) {
+            if (field.labels && field.labels.length) {
+                return field.labels[0].textContent.replace('*', '').trim();
+            }
+            return field.getAttribute('aria-label') || field.placeholder || '';
+        }
+
+        // Show a validation toast for an invalid field — with a graceful fallback
+        // to the browser's native message if SweetAlert2 didn't load.
+        function djFieldValidationToast(field) {
+            const label = djFieldLabel(field);
+            const msg = field.validationMessage || 'Please complete this field.';
+            if (window.Swal && window.Toast) {
+                window.Toast.fire({
+                    icon: 'warning',
+                    title: label ? (label + ' — ' + msg) : msg,
+                    timer: 4500,
+                });
+            } else if (typeof field.reportValidity === 'function') {
+                field.reportValidity(); // native fallback
+            }
+        }
+
+        // Turn off the browser's native validation bubbles so we can render our
+        // own toast-based validation consistently (applied to current + HTMX forms).
+        function djDisableNativeValidation(root) {
+            (root || document).querySelectorAll('form:not([data-native-validate])')
+                .forEach((f) => f.setAttribute('novalidate', ''));
+        }
+        // Run once the body's forms exist, and again for any HTMX-swapped content.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => djDisableNativeValidation());
+        } else {
+            djDisableNativeValidation();
+        }
+        document.addEventListener('htmx:afterSettle', (e) => djDisableNativeValidation(e.detail && e.detail.elt));
+
+        // Unified submit handler: (1) HTML5 validation → toast, then (2) confirmation.
+        document.addEventListener('submit', function (e) {
+            const form = e.target;
+
+            // 1) Constraint validation (we disabled native UI above).
+            if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+                e.preventDefault();
+                e.stopPropagation(); // keep the form's own @submit (e.g. spinner) from firing
+                const field = form.querySelector(':invalid');
+                if (field) {
+                    djFieldValidationToast(field);
+                    try { field.focus({ preventScroll: false }); } catch (_) {}
+                }
+                return;
+            }
+
+            // 2) Confirmation dialog for destructive forms.
+            if (form.matches('form[data-confirm]')) {
+                if (form.dataset.confirmed === '1') return; // already confirmed → let it submit
+                e.preventDefault();
+                window.swalConfirm(djConfirmOpts(form)).then((res) => {
+                    if (res.isConfirmed) {
+                        form.dataset.confirmed = '1';
+                        form.submit();
+                    }
+                });
+            }
+        }, true); // capture phase — run before the form's own handlers
+
+        // Fire Django flash messages as toasts once the DOM is ready.
+        function djFlushMessages() {
+            const el = document.getElementById('dj-messages');
+            if (!el) return;
+            let items = [];
+            try { items = JSON.parse(el.textContent); } catch (_) { return; }
+            el.remove();
+            // Show sequentially so multiple messages stack visibly.
+            (function show(i) {
+                if (i >= items.length) return;
+                const m = items[i];
+                const isErr = djIcon(m.tags) === 'error';
+                window.Toast.fire({
+                    icon: djIcon(m.tags),
+                    title: djEsc(m.text), // escape — message text may contain user data
+                    timer: isErr ? 6500 : 4200,
+                }).then(() => show(i + 1));
+            })(0);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', djFlushMessages);
+        } else {
+            djFlushMessages();
+        }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -327,14 +468,95 @@
             display: none !important;
         }
 
-        @keyframes toast-drain {
-            from { transform: scaleX(1); }
-            to   { transform: scaleX(0); }
+        /* ── SweetAlert2 — themed to match the design system ── */
+        .swal2-popup {
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            border-radius: 1.25rem;
+            padding: 2rem 1.75rem 1.75rem;
+            box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.28), 0 4px 12px -4px rgba(15, 23, 42, 0.12);
         }
-        .ease-spring { transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .swal2-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #18181b;
+        }
+        .swal2-html-container {
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            color: #52525b;
+        }
+        .swal2-actions {
+            gap: 0.625rem;
+        }
+        .swal2-styled {
+            border-radius: 0.7rem !important;
+            padding: 0.7rem 1.5rem !important;
+            font-size: 0.875rem !important;
+            font-weight: 600 !important;
+            box-shadow: none !important;
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+        .swal2-styled:hover {
+            transform: translateY(-1px);
+            filter: brightness(0.96);
+        }
+        .swal2-styled:focus {
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3) !important;
+        }
+        .swal2-styled.swal2-confirm {
+            background-color: #4f46e5 !important;
+        }
+        .swal2-styled.swal2-confirm.swal-danger {
+            background-color: #dc2626 !important;
+        }
+        .swal2-styled.swal2-cancel {
+            background-color: #f4f4f5 !important;
+            color: #3f3f46 !important;
+        }
+        .swal2-icon {
+            border-width: 3px;
+        }
+        .swal2-timer-progress-bar {
+            background: rgba(99, 102, 241, 0.4);
+        }
+        /* Toast variant */
+        .swal2-toast {
+            border-radius: 0.9rem !important;
+            box-shadow: 0 8px 32px -8px rgba(15, 23, 42, 0.25), 0 2px 6px -2px rgba(15, 23, 42, 0.1) !important;
+            padding: 0.85rem 1rem !important;
+        }
+        .swal2-toast .swal2-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        /* Dark mode */
+        .dark .swal2-popup {
+            background: #18181b;
+            box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+        }
+        .dark .swal2-title { color: #fafafa; }
+        .dark .swal2-html-container { color: #a1a1aa; }
+        .dark .swal2-styled.swal2-cancel {
+            background-color: #27272a !important;
+            color: #e4e4e7 !important;
+        }
+        .dark .swal2-close { color: #71717a; }
+
+        /* Respect users who prefer reduced motion (vestibular / accessibility) */
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+            }
+        }
     </style>
 </head>
 <body class="relative flex min-h-screen flex-col bg-zinc-50 text-zinc-900 antialiased transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-100" x-data="{ mobileMenuOpen: false }">
+
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
 
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
         <div class="absolute -top-40 left-1/2 h-[min(42rem,90vh)] w-[min(140%,52rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-primary-500/[0.12] to-transparent blur-3xl dark:from-primary-500/[0.16] dark:to-transparent"></div>
@@ -592,123 +814,11 @@
     </nav>
 
     {% if messages %}
-    <div
-        class="pointer-events-none fixed inset-x-3 top-[4.5rem] z-[100] flex flex-col gap-3 sm:inset-x-auto sm:left-auto sm:right-5 sm:top-[4.75rem] sm:w-[22rem]"
-        aria-live="polite"
-        aria-atomic="false"
-    >
-        {% for message in messages %}
-        {% with t=message.tags %}
-        <div
-            data-dismiss-ms="{% if t == 'error' %}9000{% elif t == 'warning' %}7000{% else %}5200{% endif %}"
-            data-message="{{ message }}"
-            x-data="messageToast()"
-            x-show="visible"
-            x-cloak
-            @mouseenter="pause()"
-            @mouseleave="resume()"
-            x-transition:enter="transition ease-spring duration-500"
-            x-transition:enter-start="opacity-0 translate-y-5 scale-[0.92]"
-            x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100 translate-x-0 scale-100"
-            x-transition:leave-end="opacity-0 translate-x-10 scale-95"
-            class="pointer-events-auto relative w-full overflow-hidden rounded-2xl border
-                   {% if t == 'success' %}bg-gradient-to-br from-emerald-50/70 via-white to-white dark:from-emerald-950/30 dark:via-zinc-900 dark:to-zinc-900
-                       border-emerald-200/80 dark:border-emerald-800/50
-                       shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_14px_44px_-6px_rgba(16,185,129,0.32)]
-                       dark:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4),0_14px_44px_-6px_rgba(16,185,129,0.18)]
-                   {% elif t == 'error' %}bg-gradient-to-br from-red-50/70 via-white to-white dark:from-red-950/30 dark:via-zinc-900 dark:to-zinc-900
-                       border-red-200/80 dark:border-red-900/60
-                       shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_14px_44px_-6px_rgba(239,68,68,0.32)]
-                       dark:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4),0_14px_44px_-6px_rgba(239,68,68,0.18)]
-                   {% elif t == 'warning' %}bg-gradient-to-br from-amber-50/70 via-white to-white dark:from-amber-950/30 dark:via-zinc-900 dark:to-zinc-900
-                       border-amber-200/80 dark:border-amber-800/50
-                       shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_14px_44px_-6px_rgba(245,158,11,0.32)]
-                       dark:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4),0_14px_44px_-6px_rgba(245,158,11,0.18)]
-                   {% else %}bg-gradient-to-br from-sky-50/70 via-white to-white dark:from-sky-950/30 dark:via-zinc-900 dark:to-zinc-900
-                       border-sky-200/80 dark:border-sky-800/50
-                       shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_14px_44px_-6px_rgba(14,165,233,0.32)]
-                       dark:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4),0_14px_44px_-6px_rgba(14,165,233,0.18)]{% endif %}"
-            role="alert"
-        >
-            {# ── Inner top shimmer line (glass depth) ── #}
-            <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/10" aria-hidden="true"></div>
-
-            {# ── Left accent bar with gradient ── #}
-            <div class="absolute inset-y-0 left-0 w-1 rounded-l-2xl
-                        {% if t == 'success' %}bg-gradient-to-b from-emerald-400 to-emerald-600
-                        {% elif t == 'error' %}bg-gradient-to-b from-red-400 to-red-600
-                        {% elif t == 'warning' %}bg-gradient-to-b from-amber-400 to-amber-600
-                        {% else %}bg-gradient-to-b from-sky-400 to-sky-600{% endif %}">
-            </div>
-
-            {# ── Body ── #}
-            <div class="flex items-start gap-3.5 px-4 py-4 pl-5">
-                {# Solid-color filled icon for strong visual presence #}
-                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl
-                            {% if t == 'success' %}bg-emerald-500 dark:bg-emerald-600
-                            {% elif t == 'error' %}bg-red-500 dark:bg-red-600
-                            {% elif t == 'warning' %}bg-amber-400 dark:bg-amber-500
-                            {% else %}bg-sky-500 dark:bg-sky-600{% endif %}"
-                     style="box-shadow:0 2px 8px -1px rgba(0,0,0,0.22),inset 0 1px 0 rgba(255,255,255,0.18)">
-                    {% if t == 'success' %}
-                    <svg class="h-[17px] w-[17px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    {% elif t == 'error' %}
-                    <svg class="h-[17px] w-[17px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                    {% elif t == 'warning' %}
-                    <svg class="h-[17px] w-[17px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v4m0 4h.01"/>
-                    </svg>
-                    {% else %}
-                    <svg class="h-[17px] w-[17px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01"/>
-                    </svg>
-                    {% endif %}
-                </div>
-
-                {# Content: title bold + body muted when "Field: error" format, else single line #}
-                <div class="min-w-0 flex-1">
-                    <template x-if="title">
-                        <p class="text-[13.5px] font-semibold leading-snug text-zinc-900 dark:text-zinc-50" x-text="title"></p>
-                    </template>
-                    <p :class="title ? 'mt-0.5 text-[12.5px] leading-relaxed text-zinc-500 dark:text-zinc-400' : 'text-[13.5px] font-medium leading-snug text-zinc-800 dark:text-zinc-100'"
-                       x-text="body"></p>
-                </div>
-
-                {# Close button #}
-                <button
-                    type="button"
-                    @click="dismiss()"
-                    aria-label="Dismiss"
-                    class="-mr-0.5 shrink-0 rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-white/[0.06] dark:hover:text-zinc-300"
-                >
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-
-            {# ── Progress drain bar ── #}
-            <div
-                class="absolute bottom-0 left-1 right-0 h-[2px] origin-left
-                       {% if t == 'success' %}bg-emerald-500/40
-                       {% elif t == 'error' %}bg-red-500/40
-                       {% elif t == 'warning' %}bg-amber-400/40
-                       {% else %}bg-sky-500/40{% endif %}"
-                :style="`animation: toast-drain ${_duration}ms linear forwards; animation-play-state: ${paused ? 'paused' : 'running'}`"
-            ></div>
-        </div>
-        {% endwith %}
-        {% endfor %}
-    </div>
+    {# Django flash messages → rendered as SweetAlert2 toasts by the helper script below #}
+    <script id="dj-messages" type="application/json">[{% for message in messages %}{"text": "{{ message|escapejs }}", "tags": "{{ message.tags|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]</script>
     {% endif %}
 
-    <main class="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8">
         {% block content %}
         {% endblock %}
     </main>

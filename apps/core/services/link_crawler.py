@@ -5,7 +5,6 @@ Uses httpx for simple pages, Playwright for JS-heavy pages.
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional
 from urllib.parse import urljoin
 
 import httpx

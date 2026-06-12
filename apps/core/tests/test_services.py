@@ -2,10 +2,7 @@
 Tests for AI Services: ai_screener, llm_client, document_extractor, resume_service.
 """
 import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
-import tempfile
-import os
+from unittest.mock import patch
 
 
 @pytest.mark.django_db
