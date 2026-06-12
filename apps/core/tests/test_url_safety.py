@@ -1,7 +1,6 @@
 """Tests for SSRF guard used by link crawling."""
 import ipaddress
 
-import pytest
 
 from apps.core.services.url_safety import is_safe_public_http_url
 

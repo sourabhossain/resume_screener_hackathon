@@ -88,7 +88,19 @@
                             </a>
                             {% if u != request.user %}
                             <form method="post" action="{% url 'core:user_toggle_active' u.pk %}" class="inline"
-                                  onsubmit="return confirm('{% if u.is_active %}Deactivate{% else %}Activate{% endif %} {{ u.username }}?')">
+                                  data-confirm
+                                  data-confirm-strong="{{ u.username }}"
+                                  {% if u.is_active %}
+                                  data-confirm-title="Deactivate this user?"
+                                  data-confirm-text="This user will lose access until reactivated."
+                                  data-confirm-button="Deactivate"
+                                  {% else %}
+                                  data-confirm-safe
+                                  data-confirm-icon="question"
+                                  data-confirm-title="Activate this user?"
+                                  data-confirm-text="This user will regain access to the system."
+                                  data-confirm-button="Activate"
+                                  {% endif %}>
                                 {% csrf_token %}
                                 <button type="submit" title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}"
                                         class="rounded-lg p-2 transition-colors {% if u.is_active %}text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:text-zinc-500 dark:hover:bg-red-950/40 dark:hover:text-red-400{% else %}text-zinc-400 hover:bg-emerald-50 hover:text-emerald-600 dark:text-zinc-500 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400{% endif %}">

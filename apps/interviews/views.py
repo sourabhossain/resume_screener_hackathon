@@ -3,7 +3,6 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.contrib import messages
-from django.http import Http404
 
 from apps.core.models import Resume
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
@@ -121,31 +120,36 @@ def evaluate(request, token):
 
     form = EvaluationSubmitForm(request.POST or None)
 
-    if request.method == 'POST' and form.is_valid():
-        d = form.cleaned_data
+    if request.method == 'POST':
+        if form.is_valid():
+            d = form.cleaned_data
 
-        # Collect scores
-        ev.scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
-        ev.additional_notes = d.get('additional_notes', '')
-        ev.another_phase_required = d.get('another_phase_required', False)
-        ev.hard_negotiation = d.get('hard_negotiation', False)
-        ev.suitable_other_dept = d.get('suitable_other_dept', False)
-        ev.suitable_higher_position = d.get('suitable_higher_position', False)
-        ev.suitable_junior_position = d.get('suitable_junior_position', False)
+            # Collect scores
+            ev.scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
+            ev.additional_notes = d.get('additional_notes', '')
+            ev.another_phase_required = d.get('another_phase_required', False)
+            ev.hard_negotiation = d.get('hard_negotiation', False)
+            ev.suitable_other_dept = d.get('suitable_other_dept', False)
+            ev.suitable_higher_position = d.get('suitable_higher_position', False)
+            ev.suitable_junior_position = d.get('suitable_junior_position', False)
 
-        # Use manual recommendation if given, otherwise auto-calculate
-        manual_rec = d.get('recommendation', '')
-        if manual_rec:
-            ev.recommendation = manual_rec
+            # Use manual recommendation if given, otherwise auto-calculate
+            manual_rec = d.get('recommendation', '')
+            if manual_rec:
+                ev.recommendation = manual_rec
+            else:
+                total = sum(ev.scores.values())
+                pct = round((total / MAX_SCORE) * 100)
+                ev.recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
+            ev.is_submitted = True
+            ev.submitted_at = timezone.now()
+            ev.save()
+
+            return redirect('interviews:evaluate_done', token=token)
         else:
-            total = sum(ev.scores.values())
-            pct = round((total / MAX_SCORE) * 100)
-            ev.recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
-        ev.is_submitted = True
-        ev.submitted_at = timezone.now()
-        ev.save()
-
-        return redirect('interviews:evaluate_done', token=token)
+            # Server-side safety net (e.g. JS disabled): surface what went wrong
+            # as toasts instead of silently re-rendering the form.
+            messages.error(request, 'Please rate every criterion before submitting.')
 
     return render(request, 'interviews/evaluate.html', {
         'ev': ev,

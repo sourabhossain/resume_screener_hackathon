@@ -2,7 +2,7 @@
 Tests for CV Link Verification: LinkExtractor, LinkVerifier scoring, and the Celery task.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestLinkExtractor:

@@ -44,16 +44,35 @@
                     <label for="id_title" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                         Job Title <span class="text-red-500">*</span>
                     </label>
-                    {{ form.title }}
+                    <div class="{% if form.title.errors %}rounded-[0.7rem] ring-2 ring-red-400/60 dark:ring-red-500/50{% endif %}">
+                        {{ form.title }}
+                    </div>
+                    {% for error in form.title.errors %}
+                    <p class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                        <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        {{ error }}
+                    </p>
+                    {% endfor %}
                 </div>
-                
+
 
                 <div>
                     <label for="id_description" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                        Job Description
+                        Job Description <span class="text-red-500">*</span>
                     </label>
-                    {{ form.description }}
+                    <div class="{% if form.description.errors %}rounded-[0.7rem] ring-2 ring-red-400/60 dark:ring-red-500/50{% endif %}">
+                        {{ form.description }}
+                    </div>
+                    {% if form.description.errors %}
+                    {% for error in form.description.errors %}
+                    <p class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                        <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        {{ error }}
+                    </p>
+                    {% endfor %}
+                    {% else %}
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">Include requirements, responsibilities, and qualifications.</p>
+                    {% endif %}
                 </div>
                 
 

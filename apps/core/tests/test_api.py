@@ -2,7 +2,6 @@
 Tests for REST API endpoints.
 """
 import pytest
-from django.urls import reverse
 from rest_framework import status
 from apps.core.models import Job, Resume
 

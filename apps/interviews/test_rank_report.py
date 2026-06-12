@@ -17,7 +17,7 @@ import pytest
 from django.urls import reverse
 
 from apps.core.models import Job, Resume
-from apps.interviews.models import Interview, InterviewEvaluation, CRITERIA_KEYS
+from apps.interviews.models import Interview, CRITERIA_KEYS
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ class TestRankReportCompositeScore:
         resume = Resume.objects.create(
             job=job, candidate_name='Cand', final_score=65, verification_score=None
         )
-        iv = Interview.objects.create(resume=resume, phase='1', scheduled_date=date.today())
+        Interview.objects.create(resume=resume, phase='1', scheduled_date=date.today())
         # No submitted evaluations → avg_score() returns None
         # rank_report skips candidates with no submitted evals, so nothing in context
         resp = authenticated_client.get(

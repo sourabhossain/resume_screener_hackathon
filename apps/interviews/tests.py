@@ -6,7 +6,6 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.core.models import Job, Resume
 from apps.interviews.models import (
     Interview,
     InterviewEvaluation,

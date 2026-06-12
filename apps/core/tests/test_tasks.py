@@ -5,7 +5,7 @@ Covers: success path, timeout (SoftTimeLimitExceeded), resume-not-found,
 general-exception retry / permanent-failure, and batch concurrency guard.
 """
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch
 from celery.exceptions import SoftTimeLimitExceeded
 
 from apps.core.models import Resume

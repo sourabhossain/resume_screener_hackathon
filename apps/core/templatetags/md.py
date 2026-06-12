@@ -71,3 +71,29 @@ def markdown(value):
     else:
         html = _plain_to_html(value)
     return mark_safe(html)
+
+
+_MD_SYNTAX_RE = re.compile(
+    r'^#{1,6}\s+'          # ATX headings
+    r'|^[\s>*+\-]+'        # leading bullets / blockquotes (line start)
+    r'|[*_`~]+'            # emphasis / code / strike markers
+    r'|\[(.*?)\]\(.*?\)',  # links → keep label only (handled below)
+)
+
+
+@register.filter
+def plaintext(value):
+    """Strip markdown/markup so previews don't leak raw syntax (## , **, etc.)."""
+    if not value:
+        return ''
+    text = str(value)
+    # Replace markdown links [label](url) with just the label
+    text = re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', text)
+    # Drop heading hashes and blockquote/bullet markers at line starts
+    text = re.sub(r'(?m)^[\s>]*#{1,6}\s+', '', text)
+    text = re.sub(r'(?m)^[\s]*[*+\-]\s+', '', text)
+    # Remove inline emphasis/code markers
+    text = re.sub(r'[*_`~]+', '', text)
+    # Collapse whitespace to a clean single-paragraph preview
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
