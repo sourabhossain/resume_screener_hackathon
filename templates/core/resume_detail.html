@@ -305,7 +305,7 @@
                         <span class="font-semibold text-zinc-700 dark:text-zinc-200">
                             {{ note.author.get_full_name|default:note.author.username }}
                         </span>
-                        <span class="text-xs text-zinc-400 dark:text-zinc-500">{{ note.created_at|date:"M j, Y · g:i A" }}</span>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ note.created_at|date:"M j, Y · g:i A" }}</span>
                     </div>
                     <p class="text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">{{ note.text }}</p>
                 </div>
@@ -329,7 +329,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-sm text-zinc-400 dark:text-zinc-500 text-center py-6">No notes yet — add your first observation above.</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400 text-center py-6">No notes yet — add your first observation above.</p>
         {% endif %}
 
         </div>

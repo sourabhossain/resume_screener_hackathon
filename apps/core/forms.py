@@ -138,15 +138,21 @@ class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
         widgets = {
             'candidate_name': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': 'Enter candidate full name'
+                'placeholder': 'Enter candidate full name',
+                'autocomplete': 'name',
             }),
             'email': forms.EmailInput(attrs={
                 'class': 'form-input',
-                'placeholder': 'candidate@example.com'
+                'placeholder': 'candidate@example.com',
+                'autocomplete': 'email',
+                'inputmode': 'email',
             }),
             'phone': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': '+880 1XXX-XXXXXX'
+                'placeholder': '+880 1XXX-XXXXXX',
+                'type': 'tel',
+                'autocomplete': 'tel',
+                'inputmode': 'tel',
             }),
             'file': forms.FileInput(attrs={
                 'class': 'form-input-file',

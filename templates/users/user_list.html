@@ -74,7 +74,7 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="hidden px-5 py-4 text-zinc-400 dark:text-zinc-500 md:table-cell">
+                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 md:table-cell">
                         {% if u.last_login %}{{ u.last_login|timesince }} ago{% else %}Never{% endif %}
                     </td>
                     <td class="px-5 py-4">
@@ -121,7 +121,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="px-5 py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">No users found.</td>
+                    <td colspan="6" class="px-5 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">No users found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -1,5 +1,6 @@
 <div id="screening-status"
      class="space-y-8"
+     aria-live="polite"
      {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' %}
      hx-get="{% url 'core:resume_status_fragment' resume.uuid %}"
      hx-trigger="every 3s"

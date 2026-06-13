@@ -1,0 +1,13 @@
+{
+  "name": "career-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tailwind CSS build for the Career hiring workspace (Django templates).",
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/src/input.css -o ./static/css/app.css --minify",
+    "watch:css": "tailwindcss -i ./static/src/input.css -o ./static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}
