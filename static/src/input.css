@@ -6,6 +6,9 @@
 @layer base {
     html {
         scroll-behavior: smooth;
+        /* Always reserve the scrollbar gutter so the page doesn't shift
+           horizontally ("shake") when content height changes between views. */
+        scrollbar-gutter: stable;
     }
 
     body {
