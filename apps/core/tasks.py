@@ -135,3 +135,26 @@ def batch_screen_resumes(job_id: int):
         screen_resume_task.delay(resume_id)
 
     return {'queued': len(resume_ids)}
+
+
+@shared_task(ignore_result=True)
+def close_expired_jobs():
+    """Auto-close active jobs whose application deadline (closing_date) has passed.
+
+    Mirrors the public apply guard (a job is "over" once today is *after* its
+    closing_date), so listings and filters reflect reality without manual edits.
+    Scheduled daily via Celery Beat (see config/celery.py).
+    """
+    from django.utils import timezone
+    from apps.core.models import Job
+
+    today = timezone.now().date()
+    count = Job.objects.filter(
+        status='active',
+        closing_date__isnull=False,
+        closing_date__lt=today,
+    ).update(status='closed', updated_at=timezone.now())
+
+    if count:
+        logger.info("Auto-closed %d expired job(s) past their closing date", count)
+    return {'closed': count}

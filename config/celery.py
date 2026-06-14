@@ -30,6 +30,18 @@ app.conf.worker_prefetch_multiplier = 1
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
 
+# ── Periodic tasks (Celery Beat) ──
+# Requires a running `celery -A config beat` process (see docker-compose).
+from celery.schedules import crontab  # noqa: E402
+
+app.conf.beat_schedule = {
+    # Every day at 00:05 UTC: flip active jobs past their closing_date to 'closed'.
+    'close-expired-jobs-daily': {
+        'task': 'apps.core.tasks.close_expired_jobs',
+        'schedule': crontab(hour=0, minute=5),
+    },
+}
+
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):

@@ -87,6 +87,25 @@ services:
       retries: 3
       start_period: 30s
 
+  # Beat scheduler: fires periodic tasks (e.g. daily auto-close of expired jobs).
+  # Keep this to a SINGLE replica so periodic tasks aren't dispatched twice.
+  celery-beat:
+    build: .
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - DEBUG=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - logs_data:/app/logs
+
 volumes:
   redis_data:
   media_data:
