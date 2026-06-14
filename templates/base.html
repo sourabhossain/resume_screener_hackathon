@@ -220,6 +220,35 @@
         } else {
             djFlushMessages();
         }
+
+        // ── SPA navigation (hx-boost): highlight the active top-nav item by URL ──
+        function djSetActiveNav() {
+            const path = location.pathname;
+            document.querySelectorAll('nav a.nav-link').forEach((a) => {
+                let ap;
+                try { ap = new URL(a.href).pathname; } catch (_) { return; }
+                const active = ap === '/' ? path === '/' : path.startsWith(ap);
+                if (active) a.setAttribute('aria-current', 'page');
+                else a.removeAttribute('aria-current');
+            });
+        }
+        // After every boosted page swap: re-flush flash messages and refresh nav state.
+        document.addEventListener('htmx:afterSettle', function () {
+            djFlushMessages();
+            djSetActiveNav();
+        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', djSetActiveNav);
+        } else {
+            djSetActiveNav();
+        }
+        // Surface a "page is loading" cue during boosted navigation (htmx adds .htmx-request to body).
+        document.addEventListener('htmx:beforeRequest', function (e) {
+            if (e.detail && e.detail.boosted) document.documentElement.classList.add('app-navigating');
+        });
+        document.addEventListener('htmx:afterSettle', function () {
+            document.documentElement.classList.remove('app-navigating');
+        });
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -237,7 +266,12 @@
         window.applyThemeColor(document.documentElement.classList.contains('dark'));
     </script>
 </head>
-<body class="relative flex min-h-screen flex-col bg-zinc-50 text-zinc-900 antialiased transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-100" x-data="{ mobileMenuOpen: false }">
+<body class="relative flex min-h-screen flex-col bg-zinc-50 text-zinc-900 antialiased transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-100"
+      x-data="{ mobileMenuOpen: false }"
+      hx-boost="true"
+      hx-target="#main-content"
+      hx-select="#main-content"
+      hx-swap="outerHTML show:window:top transition:true">
 
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
 
@@ -328,7 +362,7 @@
                     <!-- Logout Button -->
                     {% block recruiter_logout %}
                     {% if user.is_authenticated %}
-                    <form action="{% url 'logout' %}" method="post" class="inline">
+                    <form action="{% url 'logout' %}" method="post" class="inline" hx-boost="false">
                         {% csrf_token %}
                         <button type="submit"
                                 class="rounded-lg border border-zinc-200/80 bg-white p-2.5 text-zinc-600 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/45 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-red-900 dark:hover:bg-red-950/40 dark:hover:text-red-400"
@@ -497,12 +531,12 @@
         </div>
     </nav>
 
-    {% if messages %}
-    {# Django flash messages → rendered as SweetAlert2 toasts by the helper script below #}
-    <script id="dj-messages" type="application/json">[{% for message in messages %}{"text": "{{ message|escapejs }}", "tags": "{{ message.tags|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]</script>
-    {% endif %}
-
     <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8">
+        {% if messages %}
+        {# Flash messages live INSIDE #main-content so they arrive with each boosted swap,
+           then get flushed to SweetAlert2 toasts (on load and on htmx:afterSettle). #}
+        <script id="dj-messages" type="application/json">[{% for message in messages %}{"text": "{{ message|escapejs }}", "tags": "{{ message.tags|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]</script>
+        {% endif %}
         {% block content %}
         {% endblock %}
     </main>

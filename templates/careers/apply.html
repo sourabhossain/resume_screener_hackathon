@@ -55,7 +55,7 @@
         <h2 class="text-xl font-bold text-zinc-900 dark:text-white">Submit your application</h2>
         <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">Upload your resume (PDF or DOCX, max 5MB).</p>
 
-        <form method="post" enctype="multipart/form-data" class="mt-5 space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
+        <form method="post" enctype="multipart/form-data" hx-boost="false" class="mt-5 space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
 
             <div class="{% if form.candidate_name.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">

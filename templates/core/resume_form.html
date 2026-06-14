@@ -34,7 +34,7 @@
             </div>
         </div>
         
-        <form method="post" enctype="multipart/form-data" class="space-y-8 p-5 sm:p-8" x-data="{ submitting: false }" @submit="submitting = true">
+        <form method="post" enctype="multipart/form-data" hx-boost="false" class="space-y-8 p-5 sm:p-8" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
             
             <div class="space-y-8">

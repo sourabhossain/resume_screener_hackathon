@@ -23,6 +23,7 @@
     <form
         method="post"
         enctype="multipart/form-data"
+        hx-boost="false"
         x-data="bulkUpload()"
         x-ref="form"
         @submit.prevent="submitForm()"

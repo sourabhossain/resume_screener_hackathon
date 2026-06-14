@@ -159,6 +159,15 @@
         color: #a5b4fc;
         background: rgba(99, 102, 241, 0.12);
     }
+    /* Active top-nav item (SPA navigation toggles aria-current via JS) */
+    .nav-link[aria-current="page"] {
+        color: #4338ca;
+        background: rgba(99, 102, 241, 0.10);
+    }
+    .dark .nav-link[aria-current="page"] {
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.16);
+    }
 
     /* Rendered job-description markdown (shared by careers/apply + core/job_detail) */
     .job-description {
@@ -279,6 +288,30 @@
 
 [x-cloak] {
     display: none !important;
+}
+
+/* ── SPA navigation: thin top progress bar while a boosted page loads ── */
+html.app-navigating::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    height: 2px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, #6366f1 40%, #818cf8 60%, transparent);
+    animation: appNav 0.9s linear infinite;
+}
+@keyframes appNav {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+/* Cross-fade the main content between pages (View Transitions API). */
+@media (prefers-reduced-motion: no-preference) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation-duration: 0.18s;
+    }
 }
 
 /* ── Responsive pipeline table → stacked cards below md (F6) ── */
