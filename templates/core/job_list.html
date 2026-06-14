@@ -14,14 +14,18 @@ Tab bar + search stay STATIC (outside the swap) so they never flicker.
 Only #job-results swaps via HTMX; the active pill updates instantly via Alpine.
 Without JS, the links fall back to normal navigation.
 {% endcomment %}
-<div hx-target="#job-results"
+<div>
+
+{# Filter controls swap ONLY #job-results. The hx config lives here (not on an
+   ancestor of #job-results) so job-card links inside the results use the body's
+   SPA boost (#main-content) and navigate to job detail correctly. #}
+<!-- Search and Filters -->
+<div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
+     x-data="{ status: '{{ status_filter|default:"active" }}' }"
+     hx-target="#job-results"
      hx-select="#job-results"
      hx-swap="outerHTML show:none"
      hx-push-url="true">
-
-<!-- Search and Filters -->
-<div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
-     x-data="{ status: '{{ status_filter|default:"active" }}' }">
     <!-- Search Bar -->
     <form method="get" action="{% url 'core:job_list' %}" hx-get="{% url 'core:job_list' %}"
           class="relative w-full max-w-md min-w-0 flex-1">
@@ -192,7 +196,8 @@ Without JS, the links fall back to normal navigation.
 
 <!-- Pagination -->
 {% if page_obj.has_other_pages %}
-<div class="mt-10 flex flex-wrap items-center justify-center gap-2">
+<div class="mt-10 flex flex-wrap items-center justify-center gap-2"
+     hx-target="#job-results" hx-select="#job-results" hx-swap="outerHTML show:none" hx-push-url="true">
     <!-- Previous -->
     {% if page_obj.has_previous %}
     <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
