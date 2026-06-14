@@ -88,7 +88,7 @@ def dashboard(request):
 
     resume_stats = Resume.objects.filter(job__is_deleted=False).aggregate(
         total=Count('id'),
-        avg_score=Avg('final_score', filter=Q(final_score__isnull=False)),
+        avg_score=Avg('final_score', filter=Q(final_score__isnull=False, screening_status='completed')),
         top_tier=Count('id', filter=Q(tier='top')),
         mid_tier=Count('id', filter=Q(tier='mid')),
         low_tier=Count('id', filter=Q(tier='low')),
@@ -341,6 +341,16 @@ def resume_edit(request, uuid):
                 instance.score_manually_edited = True
                 instance.score_edited_at = tz.now()
                 instance.score_edited_by = request.user
+                # Keep tier + recommendation consistent with the (edited) final score,
+                # using the same thresholds the AI screener applies (rank_node).
+                cfg = settings.AI_SCREENING_CONFIG
+                score = instance.final_score or 0
+                if score >= cfg['TOP_TIER_THRESHOLD']:
+                    instance.tier, instance.recommendation = 'top', 'interview'
+                elif score >= cfg['MID_TIER_THRESHOLD']:
+                    instance.tier, instance.recommendation = 'mid', 'talent_pool'
+                else:
+                    instance.tier, instance.recommendation = 'low', 'reject'
             instance.save()
             messages.success(request, 'Resume updated successfully!')
             return redirect('core:resume_detail', uuid=uuid)
