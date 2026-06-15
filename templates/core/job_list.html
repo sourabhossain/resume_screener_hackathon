@@ -16,9 +16,7 @@ Without JS, the links fall back to normal navigation.
 {% endcomment %}
 <div>
 
-{# Filter controls swap ONLY #job-results. The hx config lives here (not on an
-   ancestor of #job-results) so job-card links inside the results use the body's
-   SPA boost (#main-content) and navigate to job detail correctly. #}
+
 <!-- Search and Filters -->
 <div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
      x-data="{ status: '{{ status_filter|default:"active" }}' }"

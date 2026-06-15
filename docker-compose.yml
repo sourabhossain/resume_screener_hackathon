@@ -58,8 +58,7 @@ services:
       - DB_HOST=db
       - DB_PORT=3306
       - DJANGO_SETTINGS_MODULE=config.settings.dev
-      # DEBUG off so query logs don't grow memory under load (dev.py reads this).
-      - DEBUG=False
+      - DEBUG=True
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     healthcheck:
@@ -69,10 +68,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Screening worker: LLM calls (I/O-bound). Higher concurrency = many CVs
-  # screened in parallel. Scale out with `--scale celery-screening=N` when the
-  # upload backlog grows. Uses the default prefork pool so the task
-  # soft_time_limit (120s) still fires on a hung run.
   celery-screening:
     build:
       context: .
@@ -101,8 +96,6 @@ services:
       retries: 3
       start_period: 30s
 
-  # Verification worker: Playwright/Chromium (CPU+RAM-heavy). Low concurrency
-  # so a burst of link checks doesn't spawn enough headless browsers to OOM.
   celery-verification:
     build:
       context: .
@@ -131,8 +124,6 @@ services:
       retries: 3
       start_period: 30s
 
-  # Beat scheduler: fires periodic tasks (e.g. daily auto-close of expired jobs).
-  # Run exactly ONE replica — multiple beats would double-dispatch.
   celery-beat:
     build:
       context: .
