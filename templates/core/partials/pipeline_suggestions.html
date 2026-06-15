@@ -4,7 +4,7 @@
         <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Candidates</p>
     </div>
     {% for s in suggestions %}
-    <a href="{% url 'core:resume_detail' s.uuid %}"
+    <a href="{% url 'core:resume_detail' s.uuid %}" hx-boost="false"
        class="group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/70 dark:active:bg-zinc-800 {% if not forloop.last %}border-b border-zinc-50 dark:border-zinc-800/60{% endif %}">
         <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white shadow-sm group-hover:bg-primary-500">
             {{ s.candidate_name|slice:":1"|upper }}

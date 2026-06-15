@@ -172,7 +172,7 @@
                         :class="{ 'opacity-50 cursor-not-allowed': submitting }"
                         class="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-8 py-3 text-sm font-semibold text-white sm:w-auto">
                     <!-- Loading spinner -->
-                    <svg x-show="submitting" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                    <svg x-show="submitting" style="display:none" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
@@ -193,7 +193,7 @@
                         </span>
                     </template>
                     <!-- Submitting state -->
-                    <span x-show="submitting">Processing...</span>
+                    <span x-show="submitting" style="display:none">Processing...</span>
                 </button>
             </div>
         </form>

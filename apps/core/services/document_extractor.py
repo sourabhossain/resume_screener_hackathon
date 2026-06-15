@@ -58,12 +58,11 @@ class DocumentExtractor:
 
     @staticmethod
     def _sanitize(text: str) -> str:
-        """
-        Make extracted text safe to store in the latin1 raw_text column.
+        """Replace common typographic glyphs with ASCII equivalents.
 
-        Replaces common typographic glyphs with ASCII equivalents, then drops
-        any remaining characters that latin1 can't represent (symbol-font icons,
-        non-Latin scripts, etc.) so a single decorative glyph can't fail the save.
+        The DB column is utf8mb4 (inherits the table charset), so all Unicode
+        is stored correctly. We only normalise decorative symbols so the LLM
+        sees clean text rather than icon-font artefacts.
         """
         if not text:
             return text
@@ -71,8 +70,7 @@ class DocumentExtractor:
         for src, dst in _CHAR_REPLACEMENTS.items():
             text = text.replace(src, dst)
 
-        # Anything still outside latin1 (U+0000–U+00FF) is dropped.
-        return text.encode('latin-1', errors='ignore').decode('latin-1')
+        return text
     
     @staticmethod
     def _extract_from_pdf(file_path: str) -> str:

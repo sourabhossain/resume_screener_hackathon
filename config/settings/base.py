@@ -33,6 +33,12 @@ MIDDLEWARE = [
     # Serves collected static files directly from the app process so gunicorn
     # works with DEBUG=False without needing nginx in front for static.
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Attach a per-request correlation ID (X-Request-ID header) so web and
+    # Celery logs can be linked. Must come early so all downstream middleware
+    # and views can read request.request_id.
+    'config.middleware.RequestCorrelationMiddleware',
+    # Emit CSP on every response, including error pages.
+    'config.middleware.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -181,6 +187,11 @@ LOGGING = {
             'propagate': False,
         },
         'apps.core': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'apps.interviews': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': False,

@@ -20,6 +20,7 @@ app.conf.task_routes = {
     'apps.core.tasks.screen_resume_task': {'queue': 'screening'},
     'apps.core.tasks.batch_screen_resumes': {'queue': 'screening'},
     'apps.core.tasks.verify_resume_links_task': {'queue': 'verification'},
+    'apps.core.tasks.close_expired_jobs': {'queue': 'screening'},
 }
 app.conf.task_default_queue = 'screening'
 

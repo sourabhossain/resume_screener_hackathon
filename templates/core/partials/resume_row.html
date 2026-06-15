@@ -8,7 +8,7 @@
     {% endif %}>
 
     <td data-label="Rank" class="px-4 py-4 text-center align-middle">
-        {% if rank %}
+        {% if rank and resume.final_score is not None %}
         <span class="inline-flex h-7 w-7 items-center justify-center rounded-full
             {% if rank == 1 %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 font-bold
             {% elif rank == 2 %}bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 font-semibold
@@ -23,13 +23,13 @@
     <td class="px-4 py-3.5">
         {% with display_name=resume.candidate_name|title %}
         <div class="flex items-center gap-3">
-            <a href="{% url 'core:resume_detail' resume.uuid %}"
+            <a href="{% url 'core:resume_detail' resume.uuid %}" hx-boost="false"
                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-500">
                 {{ display_name|slice:":1"|upper }}
             </a>
             <div class="min-w-0">
                 {# Name — single line #}
-                <a href="{% url 'core:resume_detail' resume.uuid %}"
+                <a href="{% url 'core:resume_detail' resume.uuid %}" hx-boost="false"
                    class="block truncate font-semibold text-zinc-900 transition hover:text-primary-600 dark:text-white dark:hover:text-primary-400">
                     {{ display_name }}
                 </a>
@@ -53,7 +53,7 @@
                 {% if interviews %}
                 <div class="mt-1.5 flex flex-wrap gap-1">
                     {% for iv in interviews %}{% with avg=iv.avg_score %}
-                    <a href="{% url 'interviews:detail' iv.pk %}"
+                    <a href="{% url 'interviews:detail' iv.pk %}" hx-boost="false"
                        class="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold leading-tight transition-colors
                            {% if avg %}{% if avg >= 80 %}border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400{% elif avg >= 60 %}border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400{% else %}border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400{% endif %}{% else %}border-zinc-200 bg-zinc-50 text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400{% endif %}">
                         <svg class="h-2.5 w-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>

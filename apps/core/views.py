@@ -545,7 +545,7 @@ def careers_list(request):
     return render(request, 'careers/job_list.html', context)
 
 
-@ratelimit(key='ip', rate='60/h', method='POST', block=True)
+@ratelimit(key='ip', rate='10/h', method='POST', block=True)
 def careers_apply(request, slug):
     """Public job detail + resume submission form. Only active jobs accept applications."""
     job = get_object_or_404(Job, slug=slug, status='active')

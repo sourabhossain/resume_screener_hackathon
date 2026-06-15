@@ -167,8 +167,8 @@
             {% endif %}
             </div>
 
-            {# ── Pipeline search (HTMX live) ── #}
-            <div class="relative" hx-disinherit="hx-target hx-select hx-swap hx-push-url" x-data="{
+            {# Pipeline search — hx-disinherit goes on the hx-get elements below, not this wrapper #}
+            <div class="relative" x-data="{
                     hasValue: '{{ search_q|escapejs }}' !== '',
                     clear() {
                         const input = this.$refs.input;
@@ -193,6 +193,7 @@
                                hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
                                hx-target="#pipeline-tbody"
                                hx-swap="innerHTML"
+                               hx-disinherit="hx-target hx-select hx-swap hx-push-url"
                                @input="hasValue = $event.target.value.length > 0"
                                @blur="setTimeout(() => { document.getElementById('pipeline-suggestions').innerHTML = ''; }, 200)"
                                class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
@@ -208,6 +209,7 @@
                      hx-trigger="input changed delay:200ms from:#pipeline-search-input, focusin delay:100ms from:#pipeline-search-input"
                      hx-target="#pipeline-suggestions"
                      hx-swap="innerHTML"
+                     hx-disinherit="hx-target hx-select hx-swap hx-push-url"
                      hx-include="#pipeline-search-input"></div>
                 <div id="pipeline-suggestions" class="absolute left-0 right-10 top-full z-20 mt-1"></div>
             </div>
@@ -229,6 +231,7 @@
                         <th scope="col" class="w-24 px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Actions</th>
                     </tr>
                 </thead>
+                {# disinherit so polling rows don't inherit the body's hx-select="#main-content" (which would blank them); candidate links inside use hx-boost="false" #}
                 <tbody id="pipeline-tbody" aria-live="polite" hx-disinherit="hx-target hx-select hx-swap hx-push-url" class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for resume in resumes %}
                 {% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter %}

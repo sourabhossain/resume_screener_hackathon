@@ -134,6 +134,24 @@ class LinkCrawler:
                     page = await browser.new_page(
                         user_agent=cls.HEADERS['User-Agent']
                     )
+
+                    # Re-check SSRF on every navigation request so that
+                    # redirects (e.g. github.com → internal IP) can't bypass
+                    # the guard that was applied to the original URL in crawl().
+                    async def _ssrf_guard(route, request):
+                        if request.is_navigation_request():
+                            safe, reason = is_safe_public_http_url(request.url)
+                            if not safe:
+                                logger.info(
+                                    'Blocked Playwright navigation (SSRF guard): %s — %s',
+                                    request.url, reason,
+                                )
+                                await route.abort('blockedbyclient')
+                                return
+                        await route.continue_()
+
+                    await page.route('**/*', _ssrf_guard)
+
                     await page.goto(url, timeout=REQUEST_TIMEOUT * 1000)
                     await page.wait_for_load_state('networkidle', timeout=10000)
                     content = await page.content()

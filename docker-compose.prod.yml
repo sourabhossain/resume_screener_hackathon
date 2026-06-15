@@ -1,3 +1,10 @@
+# Production compose — requires an EXTERNAL MySQL database.
+# Set DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT in .env (or environment)
+# to point at your managed DB (RDS, PlanetScale, etc.) before starting.
+# Also set: SECRET_KEY, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS, OPENAI_API_KEY.
+# First deploy: run `docker compose -f docker-compose.prod.yml run --rm web python manage.py migrate`
+# before bringing the full stack up, or let the web entrypoint handle it (it does).
+
 services:
   redis:
     image: redis:7-alpine
@@ -18,7 +25,7 @@ services:
     command:
       - sh
       - -c
-      - "python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 4 --worker-class gthread --timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"
+      - "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 4 --worker-class gthread --timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"
     ports:
       - "4060:8000"
     env_file:
