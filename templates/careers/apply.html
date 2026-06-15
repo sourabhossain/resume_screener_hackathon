@@ -58,17 +58,17 @@
         <form method="post" enctype="multipart/form-data" hx-boost="false" class="mt-5 space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
 
-            <div class="{% if form.candidate_name.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+            <div>
                 <label for="{{ form.candidate_name.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Full name <span class="text-red-500">*</span></label>
                 {{ form.candidate_name }}
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
-                <div class="{% if form.email.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                <div>
                     <label for="{{ form.email.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Email address <span class="text-red-500">*</span></label>
                     {{ form.email }}
                 </div>
-                <div class="{% if form.phone.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                <div>
                     <label for="{{ form.phone.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Phone number <span class="text-red-500">*</span></label>
                     {{ form.phone }}
                 </div>
@@ -76,7 +76,7 @@
 
             <div>
                 <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Resume file <span class="text-red-500">*</span></label>
-                {% include 'core/partials/file_dropzone.html' with file_error=form.file.errors %}
+                {% include 'core/partials/file_dropzone.html' %}
             </div>
 
             <button type="submit"

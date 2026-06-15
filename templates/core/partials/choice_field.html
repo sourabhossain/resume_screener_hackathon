@@ -1,0 +1,87 @@
+{% comment %}
+Custom choice picker — replaces native <select> for Django form fields.
+Required: field (bound form field). Optional: preset, placeholder, aria_label, class.
+Presets: job_status, employment_type, location_type, interview_phase, recommendation
+{% endcomment %}
+<div class="status-picker relative w-full{% if class %} {{ class }}{% endif %}"
+     :class="{ 'status-picker--open': open }"
+     x-data="choicePicker({
+       name: '{{ field.html_name|escapejs }}',
+       value: '{% if field.value != None %}{{ field.value|escapejs }}{% endif %}',
+       preset: '{{ preset|default:''|escapejs }}',
+       placeholder: '{{ placeholder|default:''|escapejs }}',
+       ariaLabel: '{{ aria_label|default:field.label|escapejs }}',
+       options: [{% for val, label in field.field.choices %}{ value: '{{ val|escapejs }}', label: '{{ label|escapejs }}' }{% if not forloop.last %}, {% endif %}{% endfor %}]
+     })"
+     @keydown.escape.window="open = false">
+    <input type="hidden" :name="name" :value="value">
+
+    <button type="button"
+            id="{{ field.id_for_label }}"
+            @click="open = !open"
+            :aria-expanded="open"
+            aria-haspopup="listbox"
+            :aria-label="ariaLabel"
+            class="status-picker__trigger"
+            :class="'status-picker__trigger--' + tone(value)">
+        <span class="status-picker__badge status-picker__badge--sm" :class="'status-picker__badge--' + tone(value)" aria-hidden="true">
+            <span class="status-picker__dot" :class="'status-picker__dot--' + tone(value)"></span>
+        </span>
+        <span class="min-w-0 flex-1 text-left">
+            <span class="block truncate" :class="{ 'text-zinc-500 dark:text-zinc-400': !value }" x-text="labelFor(value)"></span>
+        </span>
+        <svg class="status-picker__chevron" :class="{ 'status-picker__chevron--open': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+    </button>
+
+    <div x-show="open"
+         x-cloak
+         @click.outside="open = false"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-[0.98] translate-y-1"
+         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95"
+         class="status-picker__menu"
+         role="listbox">
+        <div class="status-picker__group">
+            <template x-for="opt in listOptions()" :key="opt.value || '__empty'">
+                <button type="button"
+                        role="option"
+                        :aria-selected="opt.value === value"
+                        @click="pick(opt.value)"
+                        class="status-picker__option"
+                        :class="{
+                          'status-picker__option--active': opt.value === value,
+                          ['status-picker__option--' + tone(opt.value)]: opt.value === value && opt.value
+                        }">
+                    <span class="status-picker__badge" :class="'status-picker__badge--' + tone(opt.value)" aria-hidden="true">
+                        <span class="status-picker__dot" :class="'status-picker__dot--' + tone(opt.value)"></span>
+                    </span>
+                    <span class="status-picker__option-body">
+                        <span class="status-picker__option-label" x-text="opt.label"></span>
+                        <span class="status-picker__option-hint" x-show="hint(opt.value)" x-text="hint(opt.value)"></span>
+                    </span>
+                    <span class="status-picker__check" :class="{ 'status-picker__check--visible': opt.value === value }" aria-hidden="true">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </span>
+                </button>
+            </template>
+        </div>
+
+        <template x-if="allowsClear() && value">
+            <div>
+                <div class="status-picker__divider" aria-hidden="true"></div>
+                <button type="button"
+                        @click="clear()"
+                        class="status-picker__clear">
+                    Clear selection
+                </button>
+            </div>
+        </template>
+    </div>
+</div>

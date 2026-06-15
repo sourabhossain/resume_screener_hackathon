@@ -39,7 +39,7 @@
             
             <div class="space-y-8">
 
-                <div class="{% if form.candidate_name.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                <div>
                     <label for="id_candidate_name" class="block text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">
                         Candidate Name <span class="text-red-500">*</span>
                     </label>
@@ -47,12 +47,12 @@
                 </div>
 
                 <div class="grid gap-5 sm:grid-cols-2">
-                    <div class="{% if form.email.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                    <div>
                         <label for="{{ form.email.id_for_label }}" class="block text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">Email Address</label>
                         {{ form.email }}
                         <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">Auto-detected from CV if left blank</p>
                     </div>
-                    <div class="{% if form.phone.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                    <div>
                         <label for="{{ form.phone.id_for_label }}" class="block text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">Phone Number</label>
                         {{ form.phone }}
                         <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">Auto-detected from CV if left blank</p>

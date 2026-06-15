@@ -22,15 +22,6 @@
             {# Full page load on login so the nav re-renders for the authenticated state #}
             <form method="post" hx-boost="false" class="space-y-6" x-data="{ submitting: false }" @submit="submitting = true">
                 {% csrf_token %}
-                
-                {% if form.non_field_errors %}
-                <div class="flex w-full items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300" role="alert">
-                    <svg class="h-5 w-5 shrink-0 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    {{ form.non_field_errors.0 }}
-                </div>
-                {% endif %}
 
                 <!-- Username/Email -->
                 <div>
@@ -50,9 +41,6 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                         </svg>
                     </div>
-                    {% if form.username.errors %}
-                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.username.errors.0 }}</p>
-                    {% endif %}
                 </div>
 
                 <!-- Password -->
@@ -86,9 +74,6 @@
                             </svg>
                         </button>
                     </div>
-                    {% if form.password.errors %}
-                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.password.errors.0 }}</p>
-                    {% endif %}
                 </div>
 
                 <!-- Remember Me -->

@@ -3,6 +3,7 @@ import os
 import re
 from datetime import timedelta
 
+from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,6 +16,7 @@ from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from .models import Job, Resume
 from .forms import JobForm, ResumeForm, ResumeEditForm
+from .form_utils import form_errors_to_messages, clean_person_text
 from .utils import candidate_initial, compute_file_hash
 
 User = get_user_model()
@@ -22,20 +24,19 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-def _form_errors_to_messages(request, form) -> None:
-    """Convert all form validation errors to Django messages so they appear as toasts."""
-    for field_name, error_list in form.errors.items():
-        if field_name == '__all__':
-            for err in error_list:
-                messages.error(request, str(err))
-        else:
-            label = (
-                form.fields[field_name].label
-                if field_name in form.fields and form.fields[field_name].label
-                else field_name.replace('_', ' ').title()
-            )
-            for err in error_list:
-                messages.error(request, f"{label}: {err}")
+def _validate_user_name_fields(request) -> bool:
+    """Validate optional first/last name on user create; surfaces toast errors."""
+    ok = True
+    for label, raw in (
+        ('First name', request.POST.get('first_name', '')),
+        ('Last name', request.POST.get('last_name', '')),
+    ):
+        try:
+            clean_person_text(raw)
+        except forms.ValidationError as exc:
+            messages.error(request, f'{label}: {exc.messages[0]}')
+            ok = False
+    return ok
 
 
 def _ordered_active_resumes_queryset(resume_qs):
@@ -186,7 +187,7 @@ def job_create(request):
             messages.success(request, 'Job created successfully!')
             return redirect('core:job_detail', slug=job.slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = JobForm()
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Post New Job'})
@@ -227,7 +228,7 @@ def job_edit(request, slug):
             messages.success(request, 'Job updated successfully!')
             return redirect('core:job_detail', slug=job.slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = JobForm(instance=job)
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Edit Job', 'job': job})
@@ -314,7 +315,7 @@ def resume_create(request, job_slug):
             )
             return redirect('core:job_detail', slug=job_slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = ResumeForm()
     return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
@@ -354,6 +355,8 @@ def resume_edit(request, uuid):
             instance.save()
             messages.success(request, 'Resume updated successfully!')
             return redirect('core:resume_detail', uuid=uuid)
+        else:
+            form_errors_to_messages(request, form)
     else:
         form = ResumeEditForm(instance=resume)
     return render(request, 'core/resume_edit_form.html', {'form': form, 'job': resume.job, 'title': 'Edit Resume', 'resume': resume})
@@ -607,7 +610,7 @@ def careers_apply(request, slug):
 
             return redirect('core:careers_thanks', slug=job.slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = ResumeForm(require_contact=True)
 
@@ -644,18 +647,19 @@ def user_list(request):
 def user_create(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
-        if form.is_valid():
+        names_ok = _validate_user_name_fields(request)
+        if form.is_valid() and names_ok:
             user = form.save(commit=False)
             user.is_staff = request.POST.get('is_staff') == 'on'
             user.is_superuser = request.POST.get('is_superuser') == 'on'
             user.email = request.POST.get('email', '')
-            user.first_name = request.POST.get('first_name', '')
-            user.last_name = request.POST.get('last_name', '')
+            user.first_name = clean_person_text(request.POST.get('first_name', ''))
+            user.last_name = clean_person_text(request.POST.get('last_name', ''))
             user.save()
             messages.success(request, f'User "{user.username}" created successfully.')
             return redirect('core:user_list')
-        else:
-            _form_errors_to_messages(request, form)
+        elif not form.is_valid():
+            form_errors_to_messages(request, form)
     else:
         form = UserCreationForm()
     return render(request, 'users/user_form.html', {'form': form, 'action': 'Create'})
@@ -671,7 +675,7 @@ def user_change_password(request, pk):
             messages.success(request, f'Password for "{target.username}" changed successfully.')
             return redirect('core:user_list')
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = SetPasswordForm(target)
     return render(request, 'users/user_password.html', {'form': form, 'target': target})
@@ -887,3 +891,17 @@ def job_export_csv(request, slug):
     safe_title = re.sub(r'[^\w\-]', '_', job.title)[:50]
     response['Content-Disposition'] = f'attachment; filename="{safe_title}_candidates.csv"'
     return response
+
+
+from django.contrib.auth import views as auth_views  # noqa: E402
+
+
+class ToastLoginView(auth_views.LoginView):
+    """Login form errors surface as toasts (consistent with the rest of the app)."""
+
+    template_name = 'auth/login.html'
+    redirect_authenticated_user = True
+
+    def form_invalid(self, form):
+        form_errors_to_messages(self.request, form)
+        return super().form_invalid(form)

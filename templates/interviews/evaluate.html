@@ -67,7 +67,7 @@
         </div>
     </div>
 
-    <form method="post" class="space-y-4" id="eval-form">
+    <form method="post" hx-boost="false" class="space-y-4" id="eval-form">
         {% csrf_token %}
 
         {# ── Criteria ── #}
@@ -112,7 +112,7 @@
         </div>
 
         {# ── Score Summary ── #}
-        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="overflow-visible rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
             <div class="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
                 <h2 class="font-bold text-zinc-900 dark:text-white">Score Summary</h2>
             </div>
@@ -127,13 +127,13 @@
                 <div class="flex flex-col items-center justify-center px-4 py-7">
                     <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Percentage</p>
                     <p class="mt-3 text-5xl font-black tabular-nums leading-none transition-colors"
-                       :class="{
-                           'text-emerald-500': pct >= 80 && rated > 0,
-                           'text-amber-500':   pct >= 60 && pct < 80 && rated > 0,
-                           'text-rose-500':    pct < 60  && rated > 0,
-                           'text-zinc-200 dark:text-zinc-700': rated === 0
-                       }"
-                       x-text="pct + '%'">0%</p>
+                        :class="{
+                                'text-emerald-500': pct >= 80 && rated > 0,
+                                'text-amber-500':   pct >= 60 && pct < 80 && rated > 0,
+                                'text-rose-500':    pct < 60  && rated > 0,
+                                'text-zinc-200 dark:text-zinc-700': rated === 0
+                        }"
+                        x-text="pct + '%'">0%</p>
                     <p class="mt-1.5 text-xs text-zinc-400">of 100%</p>
                 </div>
                 <div class="flex flex-col items-center justify-center px-4 py-7">
@@ -176,9 +176,9 @@
             <div class="border-t border-zinc-100 dark:border-zinc-800"></div>
 
             {# Recommendation #}
-            <div class="px-6 py-5">
+            <div class="relative z-0 px-6 py-5">
                 <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recommendation</label>
-                {{ form.recommendation }}
+                {% include 'core/partials/choice_field.html' with field=form.recommendation preset='recommendation' %}
                 <p class="mt-1.5 text-xs text-zinc-400">Leave blank to auto-calculate from score</p>
             </div>
 

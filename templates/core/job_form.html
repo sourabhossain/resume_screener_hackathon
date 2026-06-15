@@ -19,7 +19,7 @@
     </nav>
     
 
-    <div class="overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+    <div class="overflow-visible rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
 
         <div class="border-b border-zinc-100 bg-zinc-50/80 px-5 py-6 dark:border-zinc-800 dark:bg-zinc-900/50 sm:px-8">
             <div class="flex items-center gap-4">
@@ -35,7 +35,7 @@
             </div>
         </div>
         
-        <form method="post" class="space-y-0 p-5 sm:p-8" x-data="{ submitting: false }" @submit="submitting = true">
+        <form method="post" hx-boost="false" class="space-y-0 p-5 sm:p-8" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
             
             <div class="space-y-8">
@@ -44,15 +44,7 @@
                     <label for="id_title" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                         Job Title <span class="text-red-500">*</span>
                     </label>
-                    <div class="{% if form.title.errors %}rounded-[0.7rem] ring-2 ring-red-400/60 dark:ring-red-500/50{% endif %}">
-                        {{ form.title }}
-                    </div>
-                    {% for error in form.title.errors %}
-                    <p class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-                        <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-                        {{ error }}
-                    </p>
-                    {% endfor %}
+                    {{ form.title }}
                 </div>
 
 
@@ -60,17 +52,8 @@
                     <label for="id_description" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                         Job Description <span class="text-red-500">*</span>
                     </label>
-                    <div class="{% if form.description.errors %}rounded-[0.7rem] ring-2 ring-red-400/60 dark:ring-red-500/50{% endif %}">
-                        {{ form.description }}
-                    </div>
-                    {% if form.description.errors %}
-                    {% for error in form.description.errors %}
-                    <p class="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-                        <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-                        {{ error }}
-                    </p>
-                    {% endfor %}
-                    {% else %}
+                    {{ form.description }}
+                    {% if not form.description.errors %}
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">Include requirements, responsibilities, and qualifications.</p>
                     {% endif %}
                 </div>
@@ -80,7 +63,7 @@
                     <label for="id_status" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                         Status
                     </label>
-                    {{ form.status }}
+                    {% include 'core/partials/choice_field.html' with field=form.status preset='job_status' %}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -88,13 +71,13 @@
                         <label for="id_employment_type" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                             Employment Type <span class="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span>
                         </label>
-                        {{ form.employment_type }}
+                        {% include 'core/partials/choice_field.html' with field=form.employment_type preset='employment_type' %}
                     </div>
                     <div>
                         <label for="id_location_type" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                             Location Type <span class="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span>
                         </label>
-                        {{ form.location_type }}
+                        {% include 'core/partials/choice_field.html' with field=form.location_type preset='location_type' %}
                     </div>
                 </div>
 

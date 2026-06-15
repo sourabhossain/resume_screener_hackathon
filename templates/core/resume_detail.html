@@ -119,16 +119,7 @@
         </span>
         {% endif %}
     </div>
-    <form method="post" action="{% url 'core:resume_status_update' resume.uuid %}" class="flex items-center gap-2">
-        {% csrf_token %}
-        <select name="recruiter_status"
-                class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-            {% for val, label in resume.RECRUITER_STATUS_CHOICES %}
-            <option value="{{ val }}" {% if resume.recruiter_status == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="btn-primary rounded-xl px-4 py-2 text-sm font-semibold text-white">Update</button>
-    </form>
+    {% include 'core/partials/recruiter_status_form.html' with resume=resume %}
 </div>
 
 {# ── Interviews section ── #}

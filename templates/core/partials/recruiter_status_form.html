@@ -1,0 +1,27 @@
+{% comment %}
+Reusable recruiter status form with custom picker. Requires `resume` in context.
+Uses hx-boost="false" so POST → redirect always does a full navigation and Alpine/CSS stay in sync.
+{% endcomment %}
+<form method="post"
+      action="{% url 'core:resume_status_update' resume.uuid %}"
+      hx-boost="false"
+      class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
+      x-data="statusPickerForm({
+        initial: '{{ resume.recruiter_status|default:'new'|escapejs }}',
+        options: [
+          {% for val, label in resume.RECRUITER_STATUS_CHOICES %}
+          { value: '{{ val|escapejs }}', label: '{{ label|escapejs }}' }{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        ]
+      })"
+      @keydown.escape.window="open = false">
+    {% csrf_token %}
+    {% include 'core/partials/status_picker.html' with name='recruiter_status' %}
+    <button type="submit"
+            x-show="dirty"
+            x-cloak
+            x-transition
+            class="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white sm:shrink-0">
+        Save status
+    </button>
+</form>

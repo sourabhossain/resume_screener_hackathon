@@ -1,6 +1,7 @@
 import os
 
 from django import forms
+from .form_utils import AriaInvalidMixin, clean_label_text, clean_person_text, clean_phone_text
 from .models import Job, Resume
 
 
@@ -62,7 +63,7 @@ class FileSaveMixin:
         return instance
 
 
-class JobForm(forms.ModelForm):
+class JobForm(AriaInvalidMixin, forms.ModelForm):
     """Form for creating and editing job descriptions."""
 
     class Meta:
@@ -128,8 +129,14 @@ class JobForm(forms.ModelForm):
             self.add_error('closing_date', 'Application deadline cannot be before the posted date.')
         return data
 
+    def clean_title(self):
+        return clean_label_text(self.cleaned_data.get('title'), required=True)
 
-class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
+    def clean_location(self):
+        return clean_label_text(self.cleaned_data.get('location'))
+
+
+class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for creating and editing resumes - only name and file required, AI handles the rest."""
 
     class Meta:
@@ -182,13 +189,27 @@ class ResumeForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
     def clean_file(self):
         """Validate uploaded file using mixin."""
         return self.validate_resume_file(self.cleaned_data.get('file'))
-    
+
+    def clean_candidate_name(self):
+        return clean_person_text(self.cleaned_data.get('candidate_name'), required=True)
+
+    def clean(self):
+        data = super().clean()
+        if self.fields['email'].required and not (data.get('email') or '').strip():
+            self.add_error('email', 'This field is required.')
+        phone_required = self.fields['phone'].required
+        try:
+            data['phone'] = clean_phone_text(data.get('phone'), required=phone_required)
+        except forms.ValidationError as exc:
+            self.add_error('phone', exc)
+        return data
+
     def save(self, commit=True):
         """Save with file metadata using mixin."""
         return self.save_with_file_metadata(commit)
 
 
-class ResumeEditForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
+class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for editing resumes - includes AI-generated fields that can be manually adjusted."""
 
     class Meta:
@@ -260,7 +281,13 @@ class ResumeEditForm(FileValidationMixin, FileSaveMixin, forms.ModelForm):
     def clean_file(self):
         """Validate uploaded file using mixin."""
         return self.validate_resume_file(self.cleaned_data.get('file'))
-    
+
+    def clean_candidate_name(self):
+        return clean_person_text(self.cleaned_data.get('candidate_name'), required=True)
+
+    def clean_phone(self):
+        return clean_phone_text(self.cleaned_data.get('phone'))
+
     def save(self, commit=True):
         """Save with file metadata using mixin."""
         return self.save_with_file_metadata(commit)

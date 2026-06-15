@@ -44,25 +44,16 @@
                         Candidate Name <span class="text-red-500">*</span>
                     </label>
                     {{ form.candidate_name }}
-                    {% if form.candidate_name.errors %}
-                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.candidate_name.errors.0 }}</p>
-                    {% endif %}
                 </div>
 
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div>
                         <label for="{{ form.email.id_for_label }}" class="block text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">Email Address</label>
                         {{ form.email }}
-                        {% if form.email.errors %}
-                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.email.errors.0 }}</p>
-                        {% endif %}
                     </div>
                     <div>
                         <label for="{{ form.phone.id_for_label }}" class="block text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">Phone Number</label>
                         {{ form.phone }}
-                        {% if form.phone.errors %}
-                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.phone.errors.0 }}</p>
-                        {% endif %}
                     </div>
                 </div>
 
@@ -156,9 +147,6 @@
                             </div>
                         </div>
 
-                        {% if form.file.errors %}
-                        <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ form.file.errors.0 }}</p>
-                        {% endif %}
                     </div>
                 </div>
 
