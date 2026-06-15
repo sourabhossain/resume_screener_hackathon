@@ -34,11 +34,6 @@ services:
     build:
       context: .
       target: app
-    # gthread workers handle the I/O-bound (DB + render) request mix; collectstatic
-    # runs first so WhiteNoise can serve static.
-    # --reload: gunicorn watches source files and restarts workers on change, so
-    # edits show up without a manual `docker compose restart web`. Remove --reload
-    # for production (it adds a file-watch overhead and isn't needed there).
     command:
       - sh
       - -c
