@@ -11,7 +11,9 @@ services:
       retries: 5
 
   web:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     command:
       - sh
@@ -33,14 +35,16 @@ services:
       - media_data:/app/media
       - logs_data:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
   celery-screening:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     command: celery -A config worker -Q screening --concurrency=8 -n screening@%h -l info
     env_file:
@@ -64,7 +68,9 @@ services:
       start_period: 30s
 
   celery-verification:
-    build: .
+    build:
+      context: .
+      target: verification
     restart: unless-stopped
     command: celery -A config worker -Q verification --concurrency=2 -n verification@%h -l info
     env_file:
@@ -90,7 +96,9 @@ services:
   # Beat scheduler: fires periodic tasks (e.g. daily auto-close of expired jobs).
   # Keep this to a SINGLE replica so periodic tasks aren't dispatched twice.
   celery-beat:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     command: celery -A config beat -l info
     env_file:
