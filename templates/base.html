@@ -533,8 +533,7 @@
 
     <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8">
         {% if messages %}
-        {# Flash messages live INSIDE #main-content so they arrive with each boosted swap,
-           then get flushed to SweetAlert2 toasts (on load and on htmx:afterSettle). #}
+
         <script id="dj-messages" type="application/json">[{% for message in messages %}{"text": "{{ message|escapejs }}", "tags": "{{ message.tags|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]</script>
         {% endif %}
         {% block content %}
