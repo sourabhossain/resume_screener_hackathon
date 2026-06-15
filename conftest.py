@@ -14,6 +14,16 @@ def _stub_verify_resume_links_delay(monkeypatch):
     monkeypatch.setattr(verify_resume_links_task, 'delay', lambda *a, **kw: None)
 
 
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Reset the cache between tests so django-ratelimit counters (cache-backed,
+    keyed by IP) don't leak across tests and trip the per-IP limits."""
+    from django.core.cache import cache
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def client():
     """Django test client fixture."""

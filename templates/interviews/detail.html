@@ -40,6 +40,22 @@
                     </span>
                     {% endif %}{% endwith %}
                 </div>
+
+                {% if interview.notes %}
+                <div class="relative mt-4 max-w-xl overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-900/20">
+                    {# accent bar #}
+                    <span class="absolute inset-y-0 left-0 w-1 bg-amber-400"></span>
+                    <div class="flex items-start gap-3 pl-2">
+                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Notes</p>
+                            <p class="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">{{ interview.notes }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <form method="post" action="{% url 'interviews:delete' interview.pk %}"

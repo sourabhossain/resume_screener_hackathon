@@ -45,13 +45,14 @@
 
         {% if page_obj.object_list or search_q %}
         <div class="flex flex-wrap items-center gap-2">
+            {# Only shown for a partial selection — when all are selected it duplicates "Re-screen all" #}
             <button type="button"
                     @click="rescreen('selected')"
-                    :disabled="count === 0"
-                    :class="count === 0 ? 'cursor-not-allowed opacity-50' : ''"
+                    x-show="count > 0 && count < total"
+                    style="display:none"
                     class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                Re-screen selected<span x-show="count > 0" x-text="' (' + count + ')'"></span>
+                Re-screen selected<span x-text="' (' + count + ')'"></span>
             </button>
             <button type="button"
                     @click="rescreen('all')"
