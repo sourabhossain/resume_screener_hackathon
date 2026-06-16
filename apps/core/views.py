@@ -311,7 +311,7 @@ def resume_create(request, job_slug):
 
             messages.success(
                 request,
-                'Resume added. AI screening is running in the background—the pipeline row will refresh automatically.',
+                'Resume added. AI screening is running in the background, the pipeline row will refresh automatically.',
             )
             return redirect('core:job_detail', slug=job_slug)
         else:
@@ -442,19 +442,19 @@ def resume_bulk_create(request, job_slug):
             _, raw_ext = os.path.splitext(file.name)
             ext = raw_ext.lstrip('.').lower()
             if ext not in ALLOWED:
-                skipped.append(f'"{file.name}" — only PDF or DOCX supported')
+                skipped.append(f'"{file.name}" - only PDF or DOCX supported')
                 continue
 
             file.seek(0)
             header = file.read(8)
             file.seek(0)
             if not header.startswith(MAGIC[ext]):
-                skipped.append(f'"{file.name}" — file content does not match {ext.upper()} format')
+                skipped.append(f'"{file.name}" - file content does not match {ext.upper()} format')
                 continue
 
             file_hash = compute_file_hash(file)
             if Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
-                skipped.append(f'"{file.name}" — already submitted for this job')
+                skipped.append(f'"{file.name}" - already submitted for this job')
                 continue
 
             safe_basename = os.path.basename(file.name)

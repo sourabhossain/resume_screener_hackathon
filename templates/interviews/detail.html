@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ interview.get_phase_display }} — {{ interview.resume.candidate_name|title }}{% endblock %}
+{% block title %}{{ interview.get_phase_display }} - {{ interview.resume.candidate_name|title }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-6">
 
@@ -76,7 +76,7 @@
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <div class="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <h2 class="font-bold text-zinc-900 dark:text-white">Evaluators</h2>
-            <p class="mt-0.5 text-xs text-zinc-400">Share the unique link with each evaluator — no login required.</p>
+            <p class="mt-0.5 text-xs text-zinc-400">Share the unique link with each evaluator, no login required.</p>
         </div>
 
         {% if evaluations %}
@@ -272,9 +272,9 @@
             <div class="flex flex-wrap gap-2">
                 {% if ev.another_phase_required %}<span class="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">Another phase required</span>{% endif %}
                 {% if ev.hard_negotiation %}<span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Hard negotiation</span>{% endif %}
-                {% if ev.suitable_other_dept %}<span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Suitable — other dept</span>{% endif %}
-                {% if ev.suitable_higher_position %}<span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Suitable — higher position</span>{% endif %}
-                {% if ev.suitable_junior_position %}<span class="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Suitable — junior position</span>{% endif %}
+                {% if ev.suitable_other_dept %}<span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Suitable - other dept</span>{% endif %}
+                {% if ev.suitable_higher_position %}<span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Suitable - higher position</span>{% endif %}
+                {% if ev.suitable_junior_position %}<span class="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Suitable - junior position</span>{% endif %}
             </div>
         </div>
         {% endif %}

@@ -49,7 +49,7 @@ class Interview(SoftDeleteModel):
         ordering = ['-scheduled_date']
 
     def __str__(self):
-        return f"{self.resume.candidate_name} — Interview {self.phase} ({self.scheduled_date})"
+        return f"{self.resume.candidate_name} - Interview {self.phase} ({self.scheduled_date})"
 
     @property
     def submitted_count(self):
@@ -69,9 +69,9 @@ class Interview(SoftDeleteModel):
 
 class InterviewEvaluation(models.Model):
     RECOMMENDATION_CHOICES = [
-        ('yes', 'Yes — Hire'),
-        ('no', 'No — Reject'),
-        ('maybe', 'Maybe — Further Review'),
+        ('yes', 'Yes - Hire'),
+        ('no', 'No - Reject'),
+        ('maybe', 'Maybe - Further Review'),
     ]
 
     TOKEN_VALIDITY_DAYS = 30

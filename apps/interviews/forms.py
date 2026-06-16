@@ -75,7 +75,7 @@ class EvaluationSubmitForm(forms.Form):
 
         self.fields['recommendation'] = forms.ChoiceField(
             label='Recommendation',
-            choices=[('', '— Select —')] + list(InterviewEvaluation.RECOMMENDATION_CHOICES),
+            choices=[('', '- Select -')] + list(InterviewEvaluation.RECOMMENDATION_CHOICES),
             required=False,
             widget=forms.Select(attrs={
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200',

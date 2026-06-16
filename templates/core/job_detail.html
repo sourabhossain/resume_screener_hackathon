@@ -157,7 +157,7 @@
             {% else %}
             <div class="flex flex-wrap items-center gap-2">
                 <span class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-                    {% if job.status == 'draft' %}Draft — activate to add resumes{% else %}Closed — no new resumes{% endif %}
+                    {% if job.status == 'draft' %}Draft, activate to add resumes{% else %}Closed, no new resumes{% endif %}
                 </span>
                 <span class="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-400 dark:bg-zinc-800">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>

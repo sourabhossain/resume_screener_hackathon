@@ -152,7 +152,7 @@
             if (window.Swal && window.Toast) {
                 window.Toast.fire({
                     icon: 'warning',
-                    title: label ? (label + ' — ' + msg) : msg,
+                    title: label ? (label + ' - ' + msg) : msg,
                     timer: 4500,
                 });
             } else if (typeof field.reportValidity === 'function') {
