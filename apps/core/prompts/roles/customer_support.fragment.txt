@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Customer Support
+
+@@ ROLE_SKILL_TAXONOMY
+   - Support delivery: ticket management, troubleshooting, escalation handling, SLA adherence
+   - Technical support: log analysis, basic scripting/SQL, API/product debugging, documentation
+   - Channels: helpdesk, live chat, phone, email; knowledge base authoring
+   - Tools: Zendesk, Freshdesk, Intercom, Jira Service Management, ServiceNow
+   - Soft skills: patience, clear communication, empathy, problem-solving
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: resolving customer issues (support engineer, technical support, helpdesk); proactive account growth is customer_success, not this family.
+- Relevant education: any degree; technical aptitude matters more for technical support.
+- Relevant certifications: ITIL, product/vendor support credentials.
+- Strong achievements: measurable CSAT/SLA performance, ticket volume handled, resolution-time reduction, or deflection via documentation. Qualitative claims are weak.

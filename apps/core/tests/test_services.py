@@ -56,9 +56,10 @@ class TestPromptLoader:
         from apps.core.services.prompt_loader import get_extraction_prompt
         
         prompt = get_extraction_prompt(resume_text="Sample resume text")
-        
+
         assert "Sample resume text" in prompt
-        assert "experience_years" in prompt
+        # Experience is computed in code now; the prompt extracts raw spans.
+        assert "work_history" in prompt
     
     def test_load_matching_prompt(self):
         """Test loading matching prompt template."""

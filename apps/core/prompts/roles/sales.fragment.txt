@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Sales
+
+@@ ROLE_SKILL_TAXONOMY
+   - Selling: prospecting, cold calling, discovery, negotiation, closing, objection handling
+   - Pipeline: pipeline management, forecasting, territory/account planning, quota attainment
+   - Roles/motions: AE, SDR/BDR, sales engineering, account management, inside/field sales
+   - Tools: Salesforce, HubSpot, Outreach, Salesloft, Gong, LinkedIn Sales Navigator
+   - Soft skills: relationship building, persuasion, resilience, communication
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: carrying or supporting a revenue number (closing deals, generating pipeline); marketing or customer success count only as partial fit.
+- Relevant education: any degree; Business/Communications relevant but strong sales results matter more.
+- Relevant certifications: sales methodology credentials (e.g. MEDDIC, Sandler), CRM certifications.
+- Strong achievements: quota attainment/over-attainment, revenue or ARR closed, pipeline generated, or deal-size/win-rate gains. Qualitative claims are weak.

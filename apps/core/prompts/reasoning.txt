@@ -1,4 +1,4 @@
-Based on this screening analysis, provide a brief recommendation:
+Based on this screening analysis, provide a brief recommendation. Use only the facts below; do not introduce new skills, achievements, or qualifications that are not listed here.
 
 Candidate: {candidate_name}
 Final Score: {final_score}/100
@@ -6,6 +6,10 @@ Tier: {tier}
 Matched Skills: {matched_skills}
 Missing Skills: {missing_skills}
 Experience: {experience_years} years
+Education: {education}
+Certifications: {certifications}
+Key Achievements: {achievements}
 
 Provide a 2-3 sentence reasoning for the recommendation.
 Be specific about strengths and gaps.
+Your explanation MUST stay consistent with the score and tier above; do not contradict the number (e.g. do not call a low-tier candidate "excellent" or a top-tier candidate "weak").

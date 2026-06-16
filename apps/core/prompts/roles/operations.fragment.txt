@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Operations
+
+@@ ROLE_SKILL_TAXONOMY
+   - Business operations: process design/improvement, cross-functional coordination, SOPs, project execution
+   - Analysis: data analysis, SQL, Excel/Sheets, dashboards, KPI tracking, forecasting
+   - Functional ops: RevOps, BizOps, strategy, vendor management, planning
+   - Tools: Excel, SQL, Tableau/Looker, CRM/ERP, automation tools
+   - Soft skills: analytical thinking, communication, problem-solving, stakeholder management
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: running the business engine cross-functionally (BizOps, RevOps, strategy, operations analyst); supply-chain/logistics or customer-facing support count as partial fit.
+- Relevant education: Business, Economics, Engineering, or related quantitative field.
+- Relevant certifications: Six Sigma, Lean, PMP, or analytics credentials.
+- Strong achievements: measurable efficiency/cost gains, process improvements, revenue-operations impact, or scaled processes. Qualitative claims are weak.

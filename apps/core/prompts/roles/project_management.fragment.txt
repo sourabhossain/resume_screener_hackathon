@@ -1,0 +1,14 @@
+@@ ROLE_TITLE
+Project Management
+
+@@ ROLE_SKILL_TAXONOMY
+   - PM methodologies (Agile, Scrum, Kanban, Waterfall, SAFe, PRINCE2)
+   - Planning and delivery skills (roadmapping, risk management, stakeholder management, budgeting)
+   - Tools (Jira, Confluence, MS Project, Asana, Monday.com, Smartsheet, etc.)
+   - Soft skills (leadership, communication, conflict resolution, decision-making)
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: project/program management work matching the job; related management domains (e.g. operations managing projects) count as partial fit with a delivery track record.
+- Relevant education: Business, Engineering, or required-field degrees, ideally with PM certifications; related degrees plus strong PM experience count as partial fit.
+- Relevant certifications: PMP, CSM, PMI-ACP, PRINCE2, SAFe, PSM, and similar.
+- Strong achievements: quantified delivery outcomes such as on-time/on-budget delivery, team scale led, portfolio value managed, or stakeholder satisfaction. Vague "managed projects" claims are weak.

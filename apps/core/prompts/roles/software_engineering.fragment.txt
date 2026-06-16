@@ -1,0 +1,16 @@
+@@ ROLE_TITLE
+Software Engineering
+
+@@ ROLE_SKILL_TAXONOMY
+   - Languages: Python, Java, JavaScript/TypeScript, Go, C#, Ruby, Kotlin, Swift, C++, PHP
+   - Backend/frameworks: REST/GraphQL APIs, Django, Spring, Node.js, .NET, Rails, microservices
+   - Frontend/mobile: React, Vue, Angular, React Native, iOS, Android, HTML/CSS
+   - Data/stores: SQL, PostgreSQL, MySQL, MongoDB, Redis, ORMs, caching
+   - Practices: system design, data structures and algorithms, testing, code review, Git, debugging
+   - Soft skills: collaboration, communication, ownership, problem-solving
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: hands-on application software development (backend, frontend, full-stack, or mobile); adjacent engineering work counts as partial fit.
+- Relevant education: Computer Science, Software Engineering, or related; bootcamps/self-taught with a strong project record count as partial fit.
+- Relevant certifications: cloud (AWS/Azure/GCP) and language/framework credentials where relevant.
+- Strong achievements: shipped features at scale, measurable performance/reliability gains, or systems built end-to-end. Vague "worked on the codebase" claims are weak.

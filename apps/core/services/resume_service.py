@@ -128,6 +128,14 @@ class ResumeService:
 
     @staticmethod
     def apply_screening_result(resume, result: ScreeningResult) -> None:
+        # The detector could not confidently assign a job family. Park the
+        # resume for a human to pick the family and re-screen, rather than
+        # scoring it against a guessed role.
+        if result.get('needs_review'):
+            from apps.core.models import Resume as ResumeModel
+            ResumeModel.objects.filter(pk=resume.pk).update(screening_status='needs_review')
+            return
+
         with transaction.atomic():
             from apps.core.models import Resume as ResumeModel
             resume = ResumeModel.objects.select_for_update().get(pk=resume.pk)
@@ -178,6 +186,15 @@ class ResumeService:
             # apply_screening_result saves a separately-fetched instance, so this
             # caller's `resume` is stale; refresh before logging/returning its fields.
             resume.refresh_from_db()
+
+            if resume.screening_status == 'needs_review':
+                logger.info(f"Resume {resume.id} flagged for manual review (job family uncertain)")
+                return {
+                    'success': True,
+                    'resume_id': resume.id,
+                    'needs_review': True,
+                    'screening_status': 'needs_review',
+                }
 
             logger.info(f"Completed processing resume {resume.id}: Score={resume.final_score}")
 

@@ -187,6 +187,7 @@ class Resume(SoftDeleteModel):
         ('pending', 'Pending'),
         ('processing', 'Processing'),
         ('completed', 'Completed'),
+        ('needs_review', 'Needs Review'),
         ('failed', 'Failed'),
     ]
     screening_status = models.CharField(

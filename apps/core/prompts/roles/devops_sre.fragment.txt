@@ -1,0 +1,16 @@
+@@ ROLE_TITLE
+DevOps / Site Reliability Engineering
+
+@@ ROLE_SKILL_TAXONOMY
+   - CI/CD: Jenkins, GitHub Actions, GitLab CI, ArgoCD, build/release pipelines
+   - Infrastructure as code: Terraform, Pulumi, CloudFormation, Ansible
+   - Cloud/containers: AWS, Azure, GCP, Kubernetes, Docker, Helm, service mesh
+   - Reliability: observability (Prometheus, Grafana, Datadog), logging, SLOs/SLIs, incident response, on-call
+   - Scripting/automation: Bash, Python, Go, networking, Linux administration
+   - Soft skills: collaboration, systematic troubleshooting, ownership
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: building and operating deployment/reliability for product or customer-facing infrastructure; pure feature development or internal IT count only as partial fit.
+- Relevant education: Computer Science/Engineering or equivalent; strong hands-on platform experience can substitute.
+- Relevant certifications: CKA/CKAD, AWS/Azure/GCP (esp. DevOps/SysOps/Architect), Terraform Associate.
+- Strong achievements: improved deployment frequency, uptime/MTTR, infra cost reduction, or successful large-scale migrations. Vague "maintained servers" claims are weak.

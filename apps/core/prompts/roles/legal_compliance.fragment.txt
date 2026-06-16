@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Legal and Compliance
+
+@@ ROLE_SKILL_TAXONOMY
+   - Legal: contract drafting/review, negotiation, corporate/commercial law, litigation management, IP
+   - Compliance: regulatory frameworks, policy development, audits, risk assessment, AML/KYC
+   - Privacy: GDPR, CCPA, data protection, DPIAs
+   - Governance: board/corporate governance, ethics, regulatory filings
+   - Soft skills: rigor, judgment, clear written communication, stakeholder management
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: handling law or regulatory risk (counsel, compliance, privacy); general admin with incidental policy work is partial fit.
+- Relevant education: Law degree (JD/LLB) or relevant compliance qualifications; bar admission where required.
+- Relevant certifications: CIPP/CIPM (privacy), CAMS (AML), compliance certifications, bar membership.
+- Strong achievements: regulatory exams/audits passed, risk or exposure reduced, frameworks implemented, or major matters/contracts handled. Qualitative claims are weak.

@@ -1,0 +1,14 @@
+@@ ROLE_TITLE
+Product Management
+
+@@ ROLE_SKILL_TAXONOMY
+   - Product skills (roadmapping, prioritization, PRD writing, user research, A/B testing)
+   - Strategic skills (market analysis, competitive intelligence, go-to-market, OKRs)
+   - Tools (Jira, Productboard, Amplitude, Mixpanel, Figma, Confluence, Looker, etc.)
+   - Soft skills (cross-functional leadership, storytelling, data-driven decision making)
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: product management work matching the job; adjacent roles (engineering, design, business analyst moving into PM) count as partial fit with product-impact evidence.
+- Relevant education: CS, Engineering, Business, or MBA; related technical/business degrees count as partial fit.
+- Relevant certifications: CSPO, SAFe PO/PM, Pragmatic Institute, Google PM, and similar.
+- Strong achievements: quantified product outcomes such as ARR impact, user/DAU growth, retention/churn improvement, or successful 0-to-1 launches. Vague "launched features" claims are weak.

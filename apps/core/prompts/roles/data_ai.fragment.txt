@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Data and AI
+
+@@ ROLE_SKILL_TAXONOMY
+   - Data engineering: SQL, ETL/ELT, Spark, Airflow, dbt, data warehouses (Snowflake, BigQuery, Redshift), pipelines
+   - Analysis/BI: Python (pandas), R, statistics, experimentation/A-B testing, Tableau, Power BI, Looker
+   - ML/AI: scikit-learn, TensorFlow, PyTorch, model training/evaluation, feature engineering, MLOps, LLMs
+   - Foundations: data modeling, probability/statistics, linear algebra
+   - Soft skills: communicating insights, rigor, stakeholder collaboration
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: core work centered on data or models (data engineering, analysis, data science, or ML/AI); roles that only "use SQL" for app features are not this family.
+- Relevant education: Statistics, Computer Science, Mathematics, or a quantitative field; advanced degrees common for science/ML roles.
+- Relevant certifications: cloud data/ML credentials (e.g. GCP/AWS ML), analytics certifications.
+- Strong achievements: models or pipelines shipped to production, measurable lift from experiments, or decisions driven by analysis. Vague "worked with data" claims are weak.

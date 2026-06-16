@@ -1,0 +1,16 @@
+@@ ROLE_TITLE
+Quality Assurance and Test
+
+@@ ROLE_SKILL_TAXONOMY
+   - Test automation: Selenium, Cypress, Playwright, Appium, REST-assured, pytest, JUnit, TestNG
+   - Practices: test strategy, test case design, regression, exploratory, manual QA, bug triage
+   - Performance/security testing: JMeter, k6, load/stress testing, basic security testing
+   - CI integration: running tests in CI/CD, test reporting, coverage
+   - Languages: Python, Java, JavaScript for test code; SQL for data validation
+   - Soft skills: attention to detail, communication, advocacy for quality
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: verifying software quality (SDET, automation, or manual QA); some feature development is fine but the core must be testing.
+- Relevant education: Computer Science/Engineering or related; strong QA experience can substitute.
+- Relevant certifications: ISTQB and automation-tool credentials.
+- Strong achievements: measurable defect-escape reduction, automation coverage built, or release-cycle/time-to-test improvements. Vague "tested the product" claims are weak.

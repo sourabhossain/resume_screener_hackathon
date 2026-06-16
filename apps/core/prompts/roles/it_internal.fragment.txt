@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Internal IT
+
+@@ ROLE_SKILL_TAXONOMY
+   - Endpoint/helpdesk: desktop support, ticketing, hardware/software provisioning, troubleshooting
+   - Systems admin: Active Directory, Windows/macOS/Linux administration, networking, VPN
+   - Corporate systems: Google Workspace, Microsoft 365, MDM, SSO/identity, SaaS administration
+   - Security hygiene: patching, endpoint protection, access management, backups
+   - Soft skills: service orientation, communication, patience, documentation
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: supporting internal employees and corporate systems (IT support, sysadmin, corp eng); product/customer-facing infra is devops_sre, not this family.
+- Relevant education: IT, Computer Science, or related; strong hands-on support experience can substitute.
+- Relevant certifications: CompTIA A+/Network+, Microsoft/Google Workspace admin, ITIL.
+- Strong achievements: measurable ticket resolution/SLA performance, rollouts completed, onboarding/provisioning automated, or downtime reduced. Qualitative claims are weak.
