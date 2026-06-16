@@ -283,10 +283,9 @@
 
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
 
+    {# One restrained warm wash at the top instead of the generic floating gradient blobs #}
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
-        <div class="absolute -top-40 left-1/2 h-[min(42rem,90vh)] w-[min(140%,52rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-primary-500/[0.12] to-transparent blur-3xl dark:from-primary-500/[0.16] dark:to-transparent"></div>
-        <div class="absolute right-[-10%] top-[12%] h-72 w-72 rounded-full bg-violet-600/[0.06] blur-3xl dark:bg-violet-500/[0.12] md:right-0"></div>
-        <div class="absolute bottom-0 left-[-20%] h-56 w-56 rounded-full bg-indigo-600/[0.05] blur-3xl dark:bg-indigo-500/[0.08] md:left-[-5%]"></div>
+        <div class="absolute -top-32 left-1/2 h-[28rem] w-[min(120%,46rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-amber-400/[0.07] to-transparent blur-3xl dark:from-amber-400/[0.06] dark:to-transparent"></div>
     </div>
 
     <nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
@@ -308,7 +307,7 @@
                     
                     <!-- Logo -->
                     <a href="{% if user.is_authenticated %}{% url 'core:dashboard' %}{% else %}{% url 'core:careers' %}{% endif %}" class="flex items-center space-x-3 group">
-                        <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center shadow-md shadow-indigo-500/25 transition-transform duration-200 group-hover:scale-[1.02]">
+                        <div class="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center shadow-md shadow-amber-500/25 transition-transform duration-200 group-hover:scale-[1.02]">
                             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
@@ -426,7 +425,7 @@
             <div class="border-b border-zinc-200 p-6 dark:border-zinc-800">
                 <div class="flex items-center justify-between">
                     <a href="{% if user.is_authenticated %}{% url 'core:dashboard' %}{% else %}{% url 'core:careers' %}{% endif %}" class="flex items-center space-x-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg gradient-bg shadow-md">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500 shadow-md">
                             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
@@ -554,7 +553,7 @@
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div class="flex flex-col items-center justify-between gap-4 md:flex-row">
                 <div class="flex items-center gap-2">
-                    <div class="flex h-8 w-8 items-center justify-center rounded-md gradient-bg">
+                    <div class="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500">
                         <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>

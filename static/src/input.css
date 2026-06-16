@@ -16,26 +16,33 @@
         font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     }
 
+    /* Tighter, more deliberate headline tracking — reads as hand-set type. */
+    h1, h2, h3 {
+        letter-spacing: -0.021em;
+    }
+
     ::selection {
-        background-color: rgba(99, 102, 241, 0.22);
+        background-color: rgba(245, 158, 11, 0.22);
         color: inherit;
     }
 
     .dark ::selection {
-        background-color: rgba(165, 180, 252, 0.28);
+        background-color: rgba(251, 191, 36, 0.28);
     }
 }
 
 /* ─────────────────────── Components ─────────────────────── */
 @layer components {
     .gradient-bg {
-        background: linear-gradient(145deg, #4f46e5 0%, #6366f1 55%, #7c3aed 100%);
+        /* solid warm ink — no more rainbow gradient */
+        background: #1c1917;
     }
     .gradient-text {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        /* solid ink wordmark/headings (light) — off-white in dark */
+        color: #1c1917;
+    }
+    .dark .gradient-text {
+        color: #fafaf9;
     }
     .glass {
         background: rgba(255, 255, 255, 0.72);
@@ -56,24 +63,33 @@
         box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.55);
     }
     .btn-primary {
-        background-color: #4f46e5;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px -4px rgba(79, 70, 229, 0.45);
+        background-color: #1c1917;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 16px -6px rgba(0, 0, 0, 0.30);
         transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
     }
     .btn-primary:hover {
-        background-color: #4338ca;
+        background-color: #0c0a09;
         transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 8px 24px -6px rgba(79, 70, 229, 0.5);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.10), 0 8px 24px -8px rgba(0, 0, 0, 0.35);
     }
+    /* amber focus ring — the brand accent */
     .btn-primary:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6366f1, 0 4px 16px -4px rgba(79, 70, 229, 0.5);
-    }
-    .dark .btn-primary:focus-visible {
-        box-shadow: 0 0 0 2px #09090b, 0 0 0 4px #818cf8, 0 8px 24px -6px rgba(79, 70, 229, 0.45);
+        box-shadow: 0 0 0 2px #fff, 0 0 0 4px #f59e0b, 0 4px 16px -6px rgba(0, 0, 0, 0.30);
     }
     .btn-primary:active {
         transform: translateY(0);
+    }
+    /* Dark mode: invert to a light "paper" button so it stays visible on near-black. */
+    .dark .btn-primary {
+        background-color: #fafaf9;
+        color: #1c1917;
+    }
+    .dark .btn-primary:hover {
+        background-color: #e7e5e4;
+    }
+    .dark .btn-primary:focus-visible {
+        box-shadow: 0 0 0 2px #09090b, 0 0 0 4px #fbbf24, 0 8px 24px -8px rgba(0, 0, 0, 0.45);
     }
     .form-input {
         width: 100%;
@@ -91,14 +107,14 @@
     }
     .form-input:focus {
         outline: none;
-        border-color: #6366f1;
+        border-color: #f59e0b;
         background-color: #fff;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px #6366f1;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px #f59e0b;
     }
     .dark .form-input:focus {
         background-color: #09090b;
-        border-color: #818cf8;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px #818cf8;
+        border-color: #fbbf24;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px #fbbf24;
     }
     .form-input::placeholder {
         color: #9ca3af;
@@ -129,14 +145,14 @@
     }
     .form-select:focus {
         outline: none;
-        border-color: #4f46e5;
+        border-color: #f59e0b;
         background-color: #ffffff;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px #4f46e5;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px #f59e0b;
     }
     .form-select:focus-visible {
         outline: none;
-        border-color: #4f46e5;
-        box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px rgba(79, 70, 229, 0.28);
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px rgba(245, 158, 11, 0.30);
     }
     .dark .form-select {
         color: #f4f4f5;
@@ -150,12 +166,12 @@
         background-color: #27272a;
     }
     .dark .form-select:focus {
-        border-color: #818cf8;
+        border-color: #fbbf24;
         background-color: #18181b;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px #818cf8;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px #fbbf24;
     }
     .dark .form-select:focus-visible {
-        box-shadow: 0 0 0 2px #09090b, 0 0 0 4px rgba(129, 140, 248, 0.32);
+        box-shadow: 0 0 0 2px #09090b, 0 0 0 4px rgba(251, 191, 36, 0.34);
     }
 
     /* Custom status picker (replaces native select on resume detail) */
@@ -452,8 +468,8 @@
         border-color: #52525b;
     }
     .form-input-file:hover {
-        border-color: #a5b4fc;
-        background: #eef2ff;
+        border-color: #fcd34d;
+        background: #fffbeb;
     }
     .dark .form-input-file:hover {
         background: #27272a;
@@ -467,24 +483,24 @@
     }
     .nav-link:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.40);
     }
     .nav-link:hover {
-        background: rgba(99, 102, 241, 0.08);
-        color: #4338ca;
+        background: rgba(245, 158, 11, 0.10);
+        color: #b45309;
     }
     .dark .nav-link:hover {
-        color: #a5b4fc;
-        background: rgba(99, 102, 241, 0.12);
+        color: #fbbf24;
+        background: rgba(245, 158, 11, 0.14);
     }
     /* Active top-nav item (SPA navigation toggles aria-current via JS) */
     .nav-link[aria-current="page"] {
-        color: #4338ca;
-        background: rgba(99, 102, 241, 0.10);
+        color: #b45309;
+        background: rgba(245, 158, 11, 0.12);
     }
     .dark .nav-link[aria-current="page"] {
-        color: #a5b4fc;
-        background: rgba(99, 102, 241, 0.16);
+        color: #fbbf24;
+        background: rgba(245, 158, 11, 0.18);
     }
 
     /* Rendered job-description markdown (shared by careers/apply + core/job_detail) */
@@ -617,7 +633,7 @@ html.app-navigating::after {
     z-index: 9999;
     height: 2px;
     width: 100%;
-    background: linear-gradient(90deg, transparent, #6366f1 40%, #818cf8 60%, transparent);
+    background: linear-gradient(90deg, transparent, #f59e0b 40%, #fbbf24 60%, transparent);
     animation: appNav 0.9s linear infinite;
 }
 @keyframes appNav {
@@ -731,10 +747,10 @@ html.app-navigating::after {
     filter: brightness(0.96);
 }
 .swal2-styled:focus {
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35) !important;
 }
 .swal2-styled.swal2-confirm {
-    background-color: #4f46e5 !important;
+    background-color: #1c1917 !important;
 }
 .swal2-styled.swal2-confirm.swal-danger {
     background-color: #dc2626 !important;
@@ -747,7 +763,7 @@ html.app-navigating::after {
     border-width: 3px;
 }
 .swal2-timer-progress-bar {
-    background: rgba(99, 102, 241, 0.4);
+    background: rgba(245, 158, 11, 0.45);
 }
 /* Toast variant */
 .swal2-toast {
