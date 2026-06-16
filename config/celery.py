@@ -31,7 +31,6 @@ app.conf.worker_prefetch_multiplier = 1
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
 
-# ── Periodic tasks (Celery Beat) ──
 # Requires a running `celery -A config beat` process (see docker-compose).
 from celery.schedules import crontab  # noqa: E402
 

@@ -13,8 +13,6 @@ from django.urls import reverse
 from apps.core.models import Job, Resume
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-
 def _fake_pdf(name="resume.pdf"):
     buf = io.BytesIO(b"%PDF-1.4 fake content for test")
     buf.name = name
@@ -34,8 +32,6 @@ def _post_apply(client, job, extra=None):
     with patch("apps.core.tasks.screen_resume_task.delay"):
         return client.post(url, data)
 
-
-# ── careers list ─────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestCareersList:
@@ -65,8 +61,6 @@ class TestCareersList:
         assert b"<!DOCTYPE" not in resp.content
 
 
-# ── careers_apply GET ─────────────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestCareersApplyGet:
     def test_active_job_renders_form(self, client, sample_job):
@@ -84,8 +78,6 @@ class TestCareersApplyGet:
         )
         assert resp.status_code == 404
 
-
-# ── careers_apply POST happy path ─────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestCareersApplyPost:
@@ -116,8 +108,6 @@ class TestCareersApplyPost:
         resume = Resume.objects.get(job=sample_job, candidate_name="Ali Hassan")
         assert resume.screening_status == "processing"
 
-
-# ── duplicate detection ───────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestCareersApplyDuplicates:
@@ -191,8 +181,6 @@ class TestCareersApplyDuplicates:
         assert resp.status_code == 302
 
 
-# ── expired / closed job ──────────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestCareersApplyExpired:
     def test_past_closing_date_blocks_submission(self, client, sample_job):
@@ -210,8 +198,6 @@ class TestCareersApplyExpired:
         assert Resume.objects.filter(job=sample_job).count() == 1
 
 
-# ── contact-info validation ───────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestCareersApplyContactValidation:
     def test_missing_email_blocked(self, client, sample_job):
@@ -224,8 +210,6 @@ class TestCareersApplyContactValidation:
         assert resp.status_code == 200
         assert Resume.objects.filter(job=sample_job).count() == 0
 
-
-# ── careers_thanks ────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestCareersThanks:

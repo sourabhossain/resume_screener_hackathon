@@ -18,8 +18,6 @@ def _can_access_interview(user, interview):
     return user.is_authenticated
 
 
-# ── Admin views (login required) ────────────────────────────────────────────
-
 @login_required
 def interview_create(request, resume_uuid):
     resume = get_object_or_404(Resume, uuid=resume_uuid)
@@ -112,8 +110,6 @@ def evaluation_renew(request, token):
     return redirect('interviews:detail', pk=ev.interview_id)
 
 
-# ── Public evaluation form (no login) ───────────────────────────────────────
-
 def evaluate(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
 
@@ -166,8 +162,6 @@ def evaluate_done(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
 
-
-# ── Rank Report ─────────────────────────────────────────────────────────────
 
 @login_required
 def rank_report(request, job_slug):

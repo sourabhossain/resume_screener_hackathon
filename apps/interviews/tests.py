@@ -15,8 +15,6 @@ from apps.interviews.models import (
 )
 
 
-# ── Fixtures ─────────────────────────────────────────────────────────────────
-
 @pytest.fixture
 def interview(db, sample_resume):
     return Interview.objects.create(
@@ -33,8 +31,6 @@ def _full_scores(value=4):
     """A complete, valid evaluation POST payload (all criteria scored)."""
     return {f'score_{k}': str(value) for k in CRITERIA_KEYS}
 
-
-# ── Model tests ──────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestInterviewModels:
@@ -79,8 +75,6 @@ class TestInterviewModels:
         assert interview.pending_count == 1
         assert interview.avg_score() == e1.total_score
 
-
-# ── InterviewerAddForm validation ─────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestInterviewerAddForm:
@@ -129,8 +123,6 @@ class TestInterviewerAddForm:
         assert form.cleaned_data['interviewer_name'] == 'Carol'
         assert form.cleaned_data['interviewer_position'] == 'Lead'
 
-
-# ── Recruiter view tests (login required) ─────────────────────────────────────
 
 @pytest.mark.django_db
 class TestRecruiterViews:
@@ -204,8 +196,6 @@ class TestRecruiterViews:
         resp = client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
         assert resp.status_code == 200
 
-
-# ── Public evaluation flow (no login) ─────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestPublicEvaluate:

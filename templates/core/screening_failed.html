@@ -27,7 +27,6 @@
         }
      }">
 
-    {# ── Header ── #}
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <div class="flex items-center gap-3">
@@ -64,7 +63,6 @@
         {% endif %}
     </div>
 
-    {# ── Search ── #}
     {% if page_obj.object_list or search_q %}
     <div class="mb-6">
         <form method="get" action="{% url 'core:screening_failed' %}" class="relative w-full max-w-md">

@@ -3,14 +3,12 @@
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-6">
 
-    {# ── Breadcrumb ── #}
     <nav class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:resume_detail' interview.resume.uuid %}" class="hover:text-primary-600 transition">{{ interview.resume.candidate_name|title }}</a>
         <svg class="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         <span class="font-medium text-zinc-900 dark:text-white">{{ interview.get_phase_display }}</span>
     </nav>
 
-    {# ── Header card ── #}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
         <div class="flex flex-col gap-5 p-6 sm:flex-row sm:items-start sm:justify-between">
@@ -72,7 +70,6 @@
         </div>
     </div>
 
-    {# ── Evaluators list ── #}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <div class="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <h2 class="font-bold text-zinc-900 dark:text-white">Evaluators</h2>
@@ -193,7 +190,6 @@
         {% endif %}
     </div>
 
-    {# ── Add Evaluator ── #}
     <div class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <h2 class="mb-1 font-bold text-zinc-900 dark:text-white">Add Evaluator</h2>
         <p class="mb-4 text-xs text-zinc-400">A unique evaluation link will be generated for each evaluator.</p>
@@ -220,7 +216,6 @@
         </form>
     </div>
 
-    {# ── Detailed results ── #}
     {% for ev in evaluations %}{% if ev.is_submitted %}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         {# Card header #}

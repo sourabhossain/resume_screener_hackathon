@@ -503,10 +503,8 @@ def resume_rescreen(request, uuid):
     return redirect('core:resume_detail', uuid=uuid)
 
 
-# ──────────────────────────────────────────────────────────────────────────
 # Public candidate (careers) pages — NO login required.
 # Candidates browse open jobs and submit their resume; they never see results.
-# ──────────────────────────────────────────────────────────────────────────
 
 def careers_list(request):
     """Public list of open (active) jobs candidates can apply to.
@@ -623,8 +621,6 @@ def careers_thanks(request, slug):
     return render(request, 'careers/thanks.html', {'job': job})
 
 
-# ── User Management (superuser only) ────────────────────────────────────────
-
 def _superuser_required(view_fn):
     """Decorator: must be logged in AND superuser."""
     @login_required
@@ -695,8 +691,6 @@ def user_toggle_active(request, pk):
     return redirect('core:user_list')
 
 
-# ── Resume Notes ────────────────────────────────────────────────────────────
-
 @login_required
 def resume_note_add(request, uuid):
     resume = get_object_or_404(Resume, uuid=uuid)
@@ -722,8 +716,6 @@ def resume_note_delete(request, uuid, note_id):
     return redirect('core:resume_detail', uuid=uuid)
 
 
-# ── Recruiter Status Update ──────────────────────────────────────────────────
-
 @login_required
 def resume_status_update(request, uuid):
     resume = get_object_or_404(Resume, uuid=uuid)
@@ -738,8 +730,6 @@ def resume_status_update(request, uuid):
             messages.error(request, 'Invalid status.')
     return redirect('core:resume_detail', uuid=uuid)
 
-
-# ── Talent Pool ──────────────────────────────────────────────────────────────
 
 @login_required
 def talent_pool(request):
@@ -765,8 +755,6 @@ def talent_pool(request):
         'total': resumes_qs.count(),
     })
 
-
-# ── Screening Failed ─────────────────────────────────────────────────────────
 
 def _failed_resumes_queryset():
     """Resumes whose AI screening did not complete (live jobs only)."""
@@ -833,8 +821,6 @@ def screening_rescreen_bulk(request):
     )
     return redirect('core:screening_failed')
 
-
-# ── CSV Export ───────────────────────────────────────────────────────────────
 
 @login_required
 def job_export_csv(request, slug):

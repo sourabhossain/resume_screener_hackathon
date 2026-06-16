@@ -34,7 +34,6 @@
             }
         });
 
-        /* ───────── SweetAlert2 — global helpers (system-wide) ───────── */
 
         // Map Django message tags → SweetAlert2 icons
         function djIcon(tags) {
@@ -229,7 +228,6 @@
             djFlushMessages();
         }
 
-        // ── SPA navigation (hx-boost): highlight the active top-nav item by URL ──
         function djSetActiveNav() {
             const path = location.pathname;
             document.querySelectorAll('nav a.nav-link').forEach((a) => {

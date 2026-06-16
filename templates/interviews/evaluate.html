@@ -43,7 +43,6 @@
         setScore(key, val) { this.scores = {...this.scores, [key]: val}; }
      }">
 
-    {# ── Header ── #}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
         <div class="flex items-center gap-4 p-6">
@@ -70,7 +69,6 @@
     <form method="post" hx-boost="false" class="space-y-4" id="eval-form">
         {% csrf_token %}
 
-        {# ── Criteria ── #}
         <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
             <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
                 <div>
@@ -111,7 +109,6 @@
             </div>
         </div>
 
-        {# ── Score Summary ── #}
         <div class="overflow-visible rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
             <div class="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
                 <h2 class="font-bold text-zinc-900 dark:text-white">Score Summary</h2>
@@ -189,7 +186,6 @@
             </div>
         </div>
 
-        {# ── Submit ── #}
         <div class="relative">
             <button type="submit"
                     :disabled="remaining > 0"

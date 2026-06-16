@@ -91,7 +91,6 @@
     </div>
 </div>
 
-{# ── Recruiter Status ── #}
 <div class="mb-6 flex flex-col gap-4 rounded-xl border border-zinc-200/90 bg-white p-5 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
     <div class="flex items-center gap-3">
         <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl
@@ -122,7 +121,6 @@
     {% include 'core/partials/recruiter_status_form.html' with resume=resume %}
 </div>
 
-{# ── Interviews section ── #}
 {% with interviews=resume.interviews.all %}
 <div class="mb-8 rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
     <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
@@ -247,7 +245,6 @@
             {% endif %}
         </div>
 
-        {# ── Recruiter Notes ── #}
         {% with notes=resume.notes.all %}
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-6 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
 

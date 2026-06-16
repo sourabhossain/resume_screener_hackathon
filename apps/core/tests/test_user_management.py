@@ -13,8 +13,6 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-# ── fixtures ──────────────────────────────────────────────────────────────────
-
 @pytest.fixture
 def superuser(db):
     return User.objects.create_superuser(
@@ -38,8 +36,6 @@ def regular_client(client, regular_user):
     client.force_login(regular_user)
     return client
 
-
-# ── access control ────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestUserManagementAccessControl:
@@ -80,8 +76,6 @@ class TestUserManagementAccessControl:
         resp = superuser_client.get(reverse('core:user_create'))
         assert resp.status_code == 200
 
-
-# ── user creation ─────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestUserCreate:
@@ -125,8 +119,6 @@ class TestUserCreate:
         assert not User.objects.filter(username='baduser').exists()
 
 
-# ── password change ───────────────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestUserPasswordChange:
 
@@ -146,8 +138,6 @@ class TestUserPasswordChange:
         assert resp.status_code == 200
         assert 'form' in resp.context
 
-
-# ── toggle active ─────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestUserToggleActive:

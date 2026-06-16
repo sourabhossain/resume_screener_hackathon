@@ -19,8 +19,6 @@ from django.urls import reverse
 from apps.core.models import Resume
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
-
 DOCX_MAGIC = b'PK\x03\x04'  # ZIP-based magic for DOCX
 PDF_MAGIC = b'%PDF'
 
@@ -43,8 +41,6 @@ def _bulk_post(client, job, files):
     with patch('apps.core.tasks.screen_resume_task.delay'):
         return client.post(url, {'files': files})
 
-
-# ── access & job-status guard ─────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestBulkUploadAccess:
@@ -78,8 +74,6 @@ class TestBulkUploadAccess:
         assert resp.status_code == 200
 
 
-# ── empty / over-limit guards ─────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestBulkUploadLimits:
 
@@ -96,8 +90,6 @@ class TestBulkUploadLimits:
         assert resp.status_code == 200  # re-renders with error
         assert Resume.objects.filter(job=sample_job).count() == 0
 
-
-# ── per-file validation ───────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestBulkUploadFileValidation:

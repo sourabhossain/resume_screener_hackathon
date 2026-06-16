@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ───────────────────────── Base ───────────────────────── */
 @layer base {
     html {
         scroll-behavior: smooth;
@@ -31,7 +30,6 @@
     }
 }
 
-/* ─────────────────────── Components ─────────────────────── */
 @layer components {
     .gradient-bg {
         /* solid warm ink — no more rainbow gradient */
@@ -575,7 +573,6 @@
     }
 }
 
-/* ───────────────── Animations & utilities ───────────────── */
 .animate-fade-in {
     animation: fadeIn 0.6s ease-out forwards;
 }
@@ -624,7 +621,6 @@
     display: none !important;
 }
 
-/* ── SPA navigation: thin top progress bar while a boosted page loads ── */
 html.app-navigating::after {
     content: '';
     position: fixed;
@@ -648,7 +644,6 @@ html.app-navigating::after {
     }
 }
 
-/* ── Responsive pipeline table → stacked cards below md (F6) ── */
 @media (max-width: 767px) {
     .resp-table {
         min-width: 0;
@@ -713,7 +708,6 @@ html.app-navigating::after {
     }
 }
 
-/* ── SweetAlert2 — themed to match the design system ── */
 .swal2-popup {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     border-radius: 1.25rem;

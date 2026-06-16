@@ -5,7 +5,6 @@
 {% block content %}
 <div class="mx-auto max-w-6xl">
 
-    {# ── Breadcrumb ── #}
     <nav class="mb-6 flex flex-wrap items-center gap-2 text-sm print:hidden">
         <a href="{% url 'core:job_list' %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
             Jobs
@@ -18,7 +17,6 @@
         <span class="font-semibold text-zinc-900 dark:text-white">Rank Report</span>
     </nav>
 
-    {# ── Header ── #}
     <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <div class="flex items-center gap-3">
@@ -49,7 +47,6 @@
         </div>
     </div>
 
-    {# ── Stats cards ── #}
     <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div class="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
             <p class="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Candidates</p>
@@ -69,7 +66,6 @@
         </div>
     </div>
 
-    {# ── Phase filter tabs ── #}
     {% if all_phases %}
     <div class="mb-5 flex flex-wrap gap-2 print:hidden">
         <a href="?phase="
@@ -87,7 +83,6 @@
     </div>
     {% endif %}
 
-    {# ── Rank table ── #}
     {% if candidates %}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
         <table class="w-full text-sm">
@@ -228,12 +223,10 @@
         </table>
     </div>
 
-    {# ── Score formula note (on-screen) ── #}
     <p class="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-600 print:hidden">
         Composite = Interview score × 70% + AI screening score × 30%
     </p>
 
-    {# ── Print-only report footer: methodology + branding ── #}
     <div class="mt-6 hidden items-center justify-between border-t border-zinc-200 pt-3 print:flex">
         <p class="text-[10px] text-zinc-500">Composite = Interview score × 70% + AI screening score × 30%</p>
         <p class="text-[10px] font-semibold text-zinc-500">Career · Interview Rank Report</p>
