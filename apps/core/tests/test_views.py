@@ -125,13 +125,13 @@ class TestJobViews:
         assert sample_job in response.context['jobs']
     
     def test_job_list_default_active(self, authenticated_client, sample_job):
-        """Test job list defaults to active status."""
+        """Bare /jobs/ defaults to the 'active' filter — only active jobs are shown."""
         # Create a draft job
         Job.objects.create(title='Draft Job', status='draft', owner=sample_job.owner)
-        
+
         response = authenticated_client.get(reverse('core:job_list'))
-        
-        # Should only contain active jobs (sample_job is active)
+
+        # Should only contain the active job (draft is filtered out by default)
         assert len(response.context['jobs']) == 1
         assert response.context['jobs'][0] == sample_job
         assert response.context['status_filter'] == 'active'
