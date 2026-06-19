@@ -114,6 +114,13 @@ class TestPollingRowFragment:
         body = authenticated_client.get(url).content.decode()
         assert 'hx-swap-oob' in body  # OOB refresh of pending badge / stat cards
 
+    def test_fragment_keeps_rank_for_scored_row(self, authenticated_client, scored_resume):
+        # A completed row polled once must keep its rank badge, not fall back to "—".
+        url = reverse('core:resume_row_fragment', args=[scored_resume.uuid])
+        cell = _rank_cell(authenticated_client.get(url).content.decode())
+        assert 'h-7 w-7' in cell  # numeric rank badge present (not the "—" dash)
+        assert '>1<' in cell  # sole scored resume → rank 1
+
 
 @pytest.mark.django_db
 class TestJobDetailHtmxSafety:

@@ -129,6 +129,37 @@ class TestResumeAPI:
         assert Resume.objects.filter(pk=sample_resume.pk).count() == 0
         assert Resume.objects.all_with_deleted().filter(pk=sample_resume.pk).count() == 1
 
+    def test_create_resume(self, authenticated_client, sample_job, monkeypatch):
+        """A resume can be created via the API and is linked to its job."""
+        from apps.core import tasks
+
+        dispatched = []
+        monkeypatch.setattr(tasks.screen_resume_task, 'delay', lambda rid: dispatched.append(rid))
+
+        response = authenticated_client.post('/api/resumes/', {
+            'job': sample_job.pk,
+            'candidate_name': 'API Candidate',
+            'email': 'api.candidate@example.com',
+        })
+        assert response.status_code == status.HTTP_201_CREATED
+        body = response.json()
+        assert body['job'] == sample_job.pk
+        assert body['candidate_name'] == 'API Candidate'
+
+        resume = Resume.objects.get(pk=body['id'])
+        assert resume.job_id == sample_job.pk
+        assert resume.screening_status == 'processing'
+        assert dispatched == [resume.id]
+
+    def test_create_resume_requires_job(self, authenticated_client, monkeypatch):
+        """Creating a resume without a job is rejected (400), not a 500 crash."""
+        from apps.core import tasks
+        monkeypatch.setattr(tasks.screen_resume_task, 'delay', lambda rid: None)
+
+        response = authenticated_client.post('/api/resumes/', {'candidate_name': 'No Job'})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'job' in response.json()
+
 
 @pytest.mark.django_db
 class TestAPIDocumentation:

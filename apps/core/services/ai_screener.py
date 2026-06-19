@@ -15,6 +15,7 @@ from .prompt_loader import (
 )
 from .experience import compute_experience_years
 from .job_families import VALID_JOB_TYPES, FALLBACK_ROLE
+from .schemas import ExtractionResult, MatchingResult, DetectorResult, parse_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +101,12 @@ def detect_job_type(job_description: str) -> Optional[str]:
         job_desc = job_description[:config['MAX_JOB_DESC_CHARS']]
         prompt = build_detector_prompt(job_desc)
         response = llm_client.invoke_json(prompt, "You are a job classification expert." + _INJECTION_GUARD)
-        job_type = response.get('job_type', 'uncertain')
+        detected = parse_llm_json(DetectorResult, response, context="detector")
+        job_type = detected.job_type or 'uncertain'
 
         # Aux fields are logged for auditing only (not persisted).
-        runner_up = response.get('runner_up', '')
-        signals = response.get('signals', [])
+        runner_up = detected.runner_up
+        signals = detected.signals
 
         # Explicit "uncertain" verdict, or any label without a downstream
         # fragment, is flagged for manual review (None) rather than guessed.
@@ -117,11 +119,9 @@ def detect_job_type(job_description: str) -> Optional[str]:
             return None
 
         # A valid but low-confidence label is a misroute risk, so flag it for
-        # manual review instead of trusting a guess.
-        try:
-            confidence = float(response.get('confidence', 0.0))
-        except (TypeError, ValueError):
-            confidence = 0.0
+        # manual review instead of trusting a guess. (confidence is already
+        # coerced and clamped to [0,1] by the schema.)
+        confidence = detected.confidence
         threshold = config.get('JOB_TYPE_CONFIDENCE_THRESHOLD', 0.4)
         if confidence < threshold:
             logger.info(
@@ -149,19 +149,22 @@ def extract_node(state: ResumeScreeningState) -> ResumeScreeningState:
         prompt = build_extraction_prompt(job_type, resume_text)
 
         response = llm_client.invoke_json(prompt, "You are an expert resume parser." + _INJECTION_GUARD)
+        parsed = parse_llm_json(
+            ExtractionResult, response, context=f"extraction[resume {state.get('resume_id')}]"
+        )
 
-        state['candidate_name'] = response.get('candidate_name', 'Unknown') or 'Unknown'
-        state['candidate_email'] = str(response.get('candidate_email', '') or '').strip()
-        state['candidate_phone'] = str(response.get('candidate_phone', '') or '').strip()
-        state['skills'] = response.get('skills', []) or []
+        state['candidate_name'] = parsed.candidate_name or 'Unknown'
+        state['candidate_email'] = parsed.candidate_email
+        state['candidate_phone'] = parsed.candidate_phone
+        state['skills'] = parsed.skills
         # Experience is computed deterministically from raw spans in code; the
         # model never does date math (its arithmetic is unreliable).
-        work_history = response.get('work_history', []) or []
+        work_history = [w.model_dump() for w in parsed.work_history]
         state['work_history'] = work_history
         state['experience_years'] = compute_experience_years(work_history)
-        state['education'] = response.get('education', []) or []
-        state['certifications'] = response.get('certifications', []) or []
-        state['achievements'] = response.get('achievements', []) or []
+        state['education'] = parsed.education
+        state['certifications'] = parsed.certifications
+        state['achievements'] = parsed.achievements
 
         logger.info(
             f"[Resume {state.get('resume_id')}] Extracted candidate profile (role={job_type})"
@@ -194,23 +197,19 @@ def match_node(state: ResumeScreeningState) -> ResumeScreeningState:
         prompt = build_matching_prompt(job_type, job_desc, profile)
 
         response = llm_client.invoke_json(prompt, "You are an expert HR analyst." + _INJECTION_GUARD)
+        # Schema validation coerces types, clamps every score to [0,100] (so a
+        # prompt-injected resume cannot push its ranking out of range), and logs
+        # any missing/renamed key instead of silently defaulting it.
+        matched = parse_llm_json(MatchingResult, response, context=f"matching[resume {state.get('resume_id')}]")
 
-        state['matched_skills'] = response.get('matched_skills', [])
-        state['missing_skills'] = response.get('missing_skills', [])
-        # Clamp every model-provided score to [0,100] so a prompt-injected
-        # resume cannot push its own ranking out of range.
-        state['experience_match_score'] = _clamp(response.get('experience_match_score', 0))
-        state['education_match_score'] = _clamp(response.get('education_match_score', 0))
-        state['achievement_score'] = _clamp(response.get('achievement_score', 0))
-
-        raw_cert = response.get('certification_match_score')
-        if raw_cert is not None:
-            try:
-                state['certification_match_score'] = _clamp(raw_cert)
-            except (TypeError, ValueError):
-                state['certification_match_score'] = None
-        else:
-            state['certification_match_score'] = None
+        state['matched_skills'] = matched.matched_skills
+        state['missing_skills'] = matched.missing_skills
+        state['experience_match_score'] = matched.experience_match_score
+        state['education_match_score'] = matched.education_match_score
+        state['achievement_score'] = matched.achievement_score
+        # None means the model did not score certifications -> code falls back to
+        # a certification-count heuristic in score_node.
+        state['certification_match_score'] = matched.certification_match_score
 
         logger.info(
             f"[Resume {state.get('resume_id')}] Matched {len(state['matched_skills'])} skills"

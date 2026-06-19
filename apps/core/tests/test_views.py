@@ -246,6 +246,30 @@ class TestResumeViews:
         assert response.status_code == 200
         assert response.context['resume'] == sample_resume
     
+    def test_detail_disables_screening_button_while_processing(self, authenticated_client, sample_resume):
+        """While screening is running, the action shows a disabled state and NO
+        rescreen form — so repeated clicks can't spam re-runs or pollute history."""
+        sample_resume.screening_status = 'processing'
+        sample_resume.save(update_fields=['screening_status'])
+        body = authenticated_client.get(
+            reverse('core:resume_detail', kwargs={'uuid': sample_resume.uuid})
+        ).content.decode()
+        assert 'Screening in progress' in body
+        assert reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid}) not in body
+        # The header action must appear exactly once (no duplicate id on full page).
+        assert body.count('id="screening-action"') == 1
+
+    def test_status_fragment_oob_refreshes_action_button(self, authenticated_client, sample_resume):
+        """The polling fragment carries an OOB swap of the action button so it
+        updates the moment screening finishes — no full reload needed."""
+        sample_resume.screening_status = 'processing'
+        sample_resume.save(update_fields=['screening_status'])
+        body = authenticated_client.get(
+            reverse('core:resume_status_fragment', kwargs={'uuid': sample_resume.uuid})
+        ).content.decode()
+        assert 'id="screening-action"' in body
+        assert 'hx-swap-oob="true"' in body
+
     def test_resume_delete(self, authenticated_client, sample_resume):
         """Test soft deleting a resume."""
         response = authenticated_client.post(
@@ -296,6 +320,43 @@ class TestResumeViews:
 
         assert response.status_code == 302
         mock_delay.assert_called_once_with(sample_resume.id)
+
+    def test_resume_rescreen_htmx_swaps_in_place_without_redirect(self, authenticated_client, sample_resume):
+        """An HTMX rescreen swaps the status region in place (200, no 302 redirect)
+        so it doesn't push a duplicate browser-history entry."""
+        from unittest.mock import patch
+
+        with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
+            response = authenticated_client.post(
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid}),
+                HTTP_HX_REQUEST='true',
+            )
+
+        assert response.status_code == 200  # fragment, not a 302 redirect
+        mock_delay.assert_called_once_with(sample_resume.id)
+        body = response.content.decode()
+        assert 'id="screening-status"' in body          # status region swapped in place
+        assert 'hx-swap-oob="true"' in body             # action button OOB-refreshed
+        sample_resume.refresh_from_db()
+        assert sample_resume.screening_status == 'processing'
+
+    def test_resume_rescreen_allowed_for_needs_review(self, authenticated_client, sample_resume):
+        """A needs_review resume shows the Run AI Screening button, so clicking it
+        must actually re-queue (not silently do nothing)."""
+        from unittest.mock import patch
+
+        sample_resume.screening_status = 'needs_review'
+        sample_resume.save(update_fields=['screening_status'])
+
+        with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
+            response = authenticated_client.post(
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid})
+            )
+
+        assert response.status_code == 302
+        mock_delay.assert_called_once_with(sample_resume.id)
+        sample_resume.refresh_from_db()
+        assert sample_resume.screening_status == 'processing'
 
     def test_resume_rescreen_blocked_while_processing(self, authenticated_client, sample_resume):
         """Test re-screening is blocked when screening is already in progress."""

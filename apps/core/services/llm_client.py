@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """
     Singleton LLM client with caching and retry logic.
-    Uses OpenAI GPT-4o for best quality responses.
+    Uses the OpenAI model configured via settings.OPENAI_MODEL.
     """
     
     _instance = None

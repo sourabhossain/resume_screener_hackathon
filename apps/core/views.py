@@ -383,25 +383,39 @@ def serve_protected_media(request, path):
         raise Http404
     if not os.path.exists(full_path):
         raise Http404
-    return FileResponse(open(full_path, 'rb'))
+    # as_attachment forces a download instead of letting the browser render the
+    # PII file inline (defence-in-depth alongside the upload magic-byte checks).
+    return FileResponse(open(full_path, 'rb'), as_attachment=True)
 
 
 @login_required
 def resume_status_fragment(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
-    return render(request, 'core/partials/resume_status.html', {'resume': resume})
+    # oob=True so the response also OOB-refreshes the header action button as
+    # screening transitions (e.g. processing -> completed/failed).
+    return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
 
 
 @login_required
 def resume_row_fragment(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    ordered = _ordered_active_resumes_queryset(resume.job.resumes)
     # Recompute pipeline stats so the polling response can OOB-refresh the
     # "pending screening" badge as rows finish (otherwise it goes stale).
-    pipeline_stats = _pipeline_stats(_ordered_active_resumes_queryset(resume.job.resumes))
+    pipeline_stats = _pipeline_stats(ordered)
+    # Recover this row's rank (its 1-based position in the same ordering the full
+    # table uses). The initial page render passes rank=forloop.counter; without
+    # recomputing it here, a polled row would lose its rank badge once screening
+    # completes and shows "—" until a full reload.
+    ordered_ids = list(ordered.values_list('id', flat=True))
+    try:
+        rank = ordered_ids.index(resume.id) + 1
+    except ValueError:
+        rank = None
     return render(
         request,
         'core/partials/resume_row.html',
-        {'resume': resume, 'pipeline_stats': pipeline_stats, 'is_fragment': True},
+        {'resume': resume, 'rank': rank, 'pipeline_stats': pipeline_stats, 'is_fragment': True},
     )
 
 
@@ -484,21 +498,39 @@ def resume_bulk_create(request, job_slug):
 
 @login_required
 def resume_rescreen(request, uuid):
-    resume = get_object_or_404(Resume, uuid=uuid)
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
 
     if request.method != 'POST':
         return redirect('core:resume_detail', uuid=uuid)
 
     from apps.core.tasks import screen_resume_task
+
+    # When the button is clicked via HTMX (the app is hx-boosted) we swap the
+    # status region in place and DON'T redirect. A redirect back to this same
+    # detail URL would make HTMX push a duplicate history entry every click,
+    # forcing the user to press Back many times to reach the pipeline.
+    is_htmx = bool(request.headers.get('HX-Request'))
+
+    def _status_fragment():
+        resume.refresh_from_db()
+        return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
+
     # Atomic update prevents duplicate tasks from concurrent clicks
     updated = Resume.objects.filter(
-        uuid=uuid, screening_status__in=['pending', 'completed', 'failed']
+        uuid=uuid, screening_status__in=['pending', 'completed', 'failed', 'needs_review']
     ).update(screening_status='processing')
+
     if not updated:
+        if is_htmx:
+            # Already running — just reflect current state in place, no toast.
+            return _status_fragment()
         messages.info(request, 'Screening is already in progress. Please wait for it to complete.')
         return redirect('core:resume_detail', uuid=uuid)
 
     screen_resume_task.delay(resume.id)
+
+    if is_htmx:
+        return _status_fragment()
     messages.success(request, 'AI screening queued! Results will appear shortly.')
     return redirect('core:resume_detail', uuid=uuid)
 

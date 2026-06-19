@@ -9,9 +9,9 @@ import docx
 
 # Fancy resume templates render icons/labels using symbol fonts, which PDF
 # extraction turns into decorative Unicode glyphs (e.g. ⌢ U+2322, bullets,
-# en/em dashes, smart quotes). The raw_text column is latin1, so any of these
-# raises MySQL error 1366. Map the common readable ones to ASCII, then drop the
-# rest — they carry no screening value but would otherwise fail the whole save.
+# en/em dashes, smart quotes). The raw_text column is utf8mb4 so these store
+# fine, but we still normalise the common readable ones to ASCII so the LLM
+# sees clean text rather than icon-font artefacts.
 _CHAR_REPLACEMENTS = {
     '–': '-', '—': '-', '−': '-',
     '•': '*', '·': '*', '●': '*', '○': '*',

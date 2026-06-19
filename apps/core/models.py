@@ -3,7 +3,7 @@ import uuid
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -250,6 +250,18 @@ class Resume(SoftDeleteModel):
             models.Index(fields=['tier'], name='resume_tier_idx'),
             models.Index(fields=['-final_score'], name='resume_score_idx'),
             models.Index(fields=['screening_status'], name='resume_status_idx'),
+        ]
+        constraints = [
+            # DB-level backstop against duplicate submissions: the same file can't
+            # be submitted twice for one job. Complements the app-level .exists()
+            # checks in the views, closing the race window between check and save.
+            # Scoped to non-deleted rows with a real hash so re-uploads after a
+            # delete, and rows without a file, are unaffected.
+            models.UniqueConstraint(
+                fields=['job', 'file_hash'],
+                condition=Q(is_deleted=False) & ~Q(file_hash=''),
+                name='uniq_active_resume_file_per_job',
+            ),
         ]
     
     def __str__(self):

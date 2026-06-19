@@ -141,11 +141,10 @@ class ResumeService:
             resume = ResumeModel.objects.select_for_update().get(pk=resume.pk)
 
             resume.candidate_name = result.get('candidate_name', resume.candidate_name)
-            # AI-extracted contact takes precedence over regex fallback but
-            # never overwrites what the user explicitly typed in the form.
-            # We detect "user typed" by checking if the value was already in DB
-            # before screening began — captured in the pre-fetch state above.
-            # Fill contact from AI only if still blank after regex extraction.
+            # Only fill contact details from the AI result when they are still
+            # blank — i.e. neither typed by the user in the form nor recovered by
+            # the earlier regex extraction (_fill_contact_info). This prevents AI
+            # output from overwriting recruiter- or candidate-provided values.
             if not resume.email and result.get('candidate_email'):
                 resume.email = result['candidate_email']
             if not resume.phone and result.get('candidate_phone'):
