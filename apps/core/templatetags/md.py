@@ -62,14 +62,31 @@ def _plain_to_html(text):
     return result
 
 
+# Neutralise dangerous URL schemes that survive markdown link rendering, e.g.
+# [click](javascript:alert(1)) -> <a href="javascript:alert(1)">. Markdown text
+# is recruiter-authored but shown on PUBLIC careers pages, so it must be XSS-safe.
+_UNSAFE_LINK_RE = re.compile(
+    r'(href|src)\s*=\s*(["\'])\s*(?:javascript|data|vbscript):[^"\']*\2',
+    re.IGNORECASE,
+)
+
+
+def _strip_unsafe_links(html: str) -> str:
+    return _UNSAFE_LINK_RE.sub(r'\1=\2#\2', html)
+
+
 @register.filter
 def markdown(value):
     if not value:
         return ''
     if _looks_like_markdown(value):
-        html = md_lib.markdown(value, extensions=['nl2br', 'sane_lists'])
+        # Escape the input first so raw HTML (<script>…) cannot pass through the
+        # markdown renderer; markdown syntax (#, -, *, [](…)) needs no <,>,&.
+        html = md_lib.markdown(escape(value), extensions=['nl2br', 'sane_lists'])
     else:
         html = _plain_to_html(value)
+    # Final guard: strip javascript:/data: hrefs from whichever branch produced links.
+    html = _strip_unsafe_links(html)
     return mark_safe(html)
 
 

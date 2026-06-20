@@ -58,6 +58,7 @@
                 Edit
             </a>
             <a href="{% url 'core:resume_delete' resume.uuid %}"
+               hx-boost="false"
                data-confirm data-method="post"
                data-confirm-title="Delete this candidate?"
                data-confirm-strong="{{ resume.candidate_name }}"

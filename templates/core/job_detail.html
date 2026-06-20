@@ -73,6 +73,7 @@
                 Edit job
             </a>
             <a href="{% url 'core:job_delete' job.slug %}"
+               hx-boost="false"
                data-confirm data-method="post"
                data-confirm-title="Delete this job?"
                data-confirm-strong="{{ job.title }}"
