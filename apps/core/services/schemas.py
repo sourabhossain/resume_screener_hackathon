@@ -162,6 +162,39 @@ class DetectorResult(BaseModel):
         return _to_str_list(v)
 
 
+class VerificationItem(BaseModel):
+    """Contract for the per-link verification LLM output. Without this, a model
+    that returns verified_claims as a bare string would be ``.extend()``-ed
+    character-by-character into the aggregate claim list."""
+    model_config = ConfigDict(extra="ignore")
+
+    belongs_to_candidate: bool = False
+    verified_claims: List[str] = []
+    discrepancies: List[str] = []
+    additional_insights: List[str] = []
+    confidence: float = 0.0
+
+    @field_validator("verified_claims", "discrepancies", "additional_insights", mode="before")
+    @classmethod
+    def _coerce_list(cls, v):
+        return _to_str_list(v)
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _clamp_confidence(cls, v):
+        try:
+            return max(0.0, min(1.0, float(v)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    @field_validator("belongs_to_candidate", mode="before")
+    @classmethod
+    def _coerce_bool(cls, v):
+        if isinstance(v, str):
+            return v.strip().lower() in {"true", "1", "yes"}
+        return bool(v)
+
+
 _M = TypeVar("_M", bound=BaseModel)
 
 

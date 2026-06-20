@@ -84,6 +84,13 @@ class TestDashboardView:
         assert 'active_jobs' in response.context
         assert 'total_resumes' in response.context
 
+    def test_dashboard_counts_needs_review(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        Resume.objects.create(job=sample_job, candidate_name="Pat", screening_status="needs_review")
+        response = authenticated_client.get(reverse('core:dashboard'))
+        assert response.context['needs_review_count'] == 1
+        assert b'Needs review' in response.content  # surfaced in the attention panel
+
     def test_dashboard_stats_deleted_job_resumes(self, authenticated_client, sample_job, sample_resume):
         """Test dashboard counts exclude resumes from deleted jobs."""
         # Initial check
@@ -246,6 +253,23 @@ class TestResumeViews:
         assert response.status_code == 200
         assert response.context['resume'] == sample_resume
     
+    def test_needs_review_list_shows_only_needs_review(self, authenticated_client, sample_job, sample_resume):
+        from apps.core.models import Resume
+        nr = Resume.objects.create(job=sample_job, candidate_name="Uncertain Uma", screening_status="needs_review")
+        resp = authenticated_client.get(reverse('core:needs_review'))
+        assert resp.status_code == 200
+        names = [r.candidate_name for r in resp.context['page_obj']]
+        assert "Uncertain Uma" in names
+        assert sample_resume.candidate_name not in names  # completed one excluded
+
+    def test_pipeline_row_shows_needs_review_badge(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        nr = Resume.objects.create(job=sample_job, candidate_name="Uma", screening_status="needs_review")
+        body = authenticated_client.get(
+            reverse('core:resume_row_fragment', kwargs={'uuid': nr.uuid})
+        ).content.decode()
+        assert "Needs review" in body  # distinguishable from a plain unscored row
+
     def test_detail_disables_screening_button_while_processing(self, authenticated_client, sample_resume):
         """While screening is running, the action shows a disabled state and NO
         rescreen form — so repeated clicks can't spam re-runs or pollute history."""

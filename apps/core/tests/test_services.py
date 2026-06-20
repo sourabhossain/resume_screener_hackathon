@@ -114,6 +114,32 @@ class TestLLMClient:
 class TestResumeService:
     """Tests for ResumeService."""
     
+    def test_process_resume_failure_saves_reason(self, sample_job, sample_resume, monkeypatch):
+        """A failed screening must persist WHY (shown on the Screening Failed page)."""
+        from apps.core.services.resume_service import ResumeService
+        from apps.core.exceptions import AIScreeningError
+
+        monkeypatch.setattr(ResumeService, 'extract_text', staticmethod(lambda r: 'cv text'))
+        monkeypatch.setattr(ResumeService, '_fill_contact_info', classmethod(lambda cls, r, t: None))
+        def _boom(resume):
+            raise AIScreeningError('Request timed out.', stage='screening')
+        monkeypatch.setattr(ResumeService, 'run_screening', staticmethod(_boom))
+
+        result = ResumeService.process_resume(sample_resume)
+        assert result['success'] is False
+        sample_resume.refresh_from_db()
+        assert sample_resume.screening_status == 'failed'
+        assert 'Request timed out' in sample_resume.reasoning
+
+    def test_apply_screening_result_needs_review_saves_reason(self, sample_job, sample_resume):
+        """needs_review must persist WHY (so the UI can show the specific reason)."""
+        from apps.core.services.resume_service import ResumeService
+        reason = "The AI judged the job description too vague to classify confidently."
+        ResumeService.apply_screening_result(sample_resume, {'needs_review': True, 'reasoning': reason})
+        sample_resume.refresh_from_db()
+        assert sample_resume.screening_status == 'needs_review'
+        assert sample_resume.reasoning == reason
+
     def test_apply_screening_result(self, sample_job, sample_resume):
         """Test applying screening results to resume."""
         from apps.core.services.resume_service import ResumeService

@@ -71,6 +71,13 @@
     <td data-label="Tier" class="px-4 py-4">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
         <div class="h-6 w-14 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
+        {% elif resume.screening_status == 'needs_review' %}
+        <a href="{% url 'core:needs_review' %}" hx-boost="false"
+           class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+           title="The AI could not confidently determine the job family. Clarify the job description and re-run screening.">
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            Needs review
+        </a>
         {% elif resume.tier %}
         <span class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold sm:px-3 sm:py-1.5
             {% if resume.tier == 'top' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-400

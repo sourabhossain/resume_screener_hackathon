@@ -30,9 +30,11 @@ class LLMClient:
     CACHE_TIMEOUT = 3600
 
     # Per-call ceiling so a hung OpenAI request can't pin a screening worker
-    # forever (the Celery soft_time_limit is 120s for the whole 3-4 call
-    # pipeline, so each call must finish well inside that).
-    REQUEST_TIMEOUT = 30  # seconds
+    # forever. gpt-5-nano is a reasoning model and can take 30-50s on a large
+    # resume, so 30s was too tight and caused spurious timeout failures; 60s
+    # lets a slow-but-valid call finish. The Celery soft_time_limit (180s) covers
+    # the whole 3-4 call pipeline.
+    REQUEST_TIMEOUT = 60  # seconds
     # We already retry transient errors ourselves via tenacity below; disable
     # the SDK's own retries so we don't get retries-on-retries (timeout blowup).
     MAX_RETRIES = 0
@@ -80,7 +82,9 @@ class LLMClient:
         retry=retry_if_exception_type(
             (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError, JSONDecodeError)
         ),
-        stop=stop_after_attempt(3),
+        # 2 attempts (was 3): with a 60s per-call timeout, 3 retries could exceed
+        # the pipeline's Celery budget; 2 still covers a transient blip.
+        stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=4, max=30),
         reraise=True,
     )

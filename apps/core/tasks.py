@@ -6,7 +6,7 @@ from django.db import transaction
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, soft_time_limit=120, time_limit=150, acks_late=True)
+@shared_task(bind=True, max_retries=3, soft_time_limit=180, time_limit=210, acks_late=True)
 def screen_resume_task(self, resume_id: int):
     from apps.core.models import Resume
     from apps.core.services.resume_service import ResumeService
@@ -24,9 +24,12 @@ def screen_resume_task(self, resume_id: int):
         return result
 
     except SoftTimeLimitExceeded:
-        logger.error(f"Resume {resume_id} screening timed out after 120s")
+        logger.error(f"Resume {resume_id} screening timed out after 180s")
         try:
-            Resume.objects.filter(id=resume_id).update(screening_status='failed')
+            Resume.objects.filter(id=resume_id).update(
+                screening_status='failed',
+                reasoning='Screening timed out — the AI took too long to respond. Re-run to try again.',
+            )
         except Exception as update_err:
             logger.warning(f"Could not update status after timeout for resume {resume_id}: {update_err}")
         return {'error': 'timeout', 'resume_id': resume_id}
@@ -49,7 +52,10 @@ def screen_resume_task(self, resume_id: int):
                 logger.warning(f"Could not reset status to pending for resume {resume_id}: {update_err}")
         else:
             try:
-                Resume.objects.filter(id=resume_id).update(screening_status='failed')
+                Resume.objects.filter(id=resume_id).update(
+                    screening_status='failed',
+                    reasoning=f'Screening failed repeatedly — {e}. Re-run to try again.',
+                )
             except Exception as update_err:
                 logger.warning(f"Could not update status to failed for resume {resume_id}: {update_err}")
             logger.error(f"Resume {resume_id} permanently failed after {self.max_retries} retries")

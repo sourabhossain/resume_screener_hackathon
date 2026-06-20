@@ -88,6 +88,30 @@ class TestJobTypeDetector:
             result = detect_job_type("a generalist role")
         assert result is None
 
+    def test_with_reason_explains_uncertain(self):
+        from apps.core.services.ai_screener import detect_job_type_with_reason
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'uncertain', 'confidence': 0.9}
+            jt, reason = detect_job_type_with_reason("a generalist role")
+        assert jt is None
+        assert reason and ('vague' in reason.lower() or 'classify' in reason.lower())
+
+    def test_with_reason_explains_low_confidence(self):
+        from apps.core.services.ai_screener import detect_job_type_with_reason
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'sales', 'confidence': 0.1, 'runner_up': 'marketing'}
+            jt, reason = detect_job_type_with_reason("vague role")
+        assert jt is None
+        # runner-up present -> names both families and the fix ("narrow")
+        assert 'sales' in reason and 'marketing' in reason and 'narrow' in reason.lower()
+
+    def test_with_reason_empty_on_confident(self):
+        from apps.core.services.ai_screener import detect_job_type_with_reason
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'finance_admin', 'confidence': 0.95}
+            jt, reason = detect_job_type_with_reason("Senior accountant")
+        assert jt == 'finance_admin' and reason == ''
+
     def test_detector_prompt_catalog_matches_valid_types(self):
         from apps.core.services.prompt_loader import build_detector_prompt
         from apps.core.services.job_families import VALID_JOB_TYPES

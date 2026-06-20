@@ -56,3 +56,37 @@ def test_hostname_blocked_when_resolve_private(monkeypatch):
     monkeypatch.setattr(us, '_resolved_ips', fake_ips)
     ok, _ = is_safe_public_http_url('https://evil.example/')
     assert ok is False
+
+
+def test_nat64_wrapped_public_ipv4_allowed(monkeypatch):
+    """Docker/NAT64 resolves public hosts to 64:ff9b::<public-v4>; that must be
+    allowed (judge the embedded IPv4), not treated as reserved and blocked."""
+    import apps.core.services.url_safety as us
+
+    def fake_ips(hostname):
+        # github-style: a public IPv4 plus its NAT64-wrapped form
+        return [ipaddress.ip_address('20.205.243.166'),
+                ipaddress.ip_address('64:ff9b::14cd:f3a6')]
+
+    monkeypatch.setattr(us, '_resolved_ips', fake_ips)
+    ok, reason = is_safe_public_http_url('https://github.com/torvalds')
+    assert ok is True, reason
+
+
+def test_nat64_wrapped_private_ipv4_blocked(monkeypatch):
+    """64:ff9b::<private-v4> must still be blocked (no SSRF bypass via NAT64)."""
+    import apps.core.services.url_safety as us
+
+    def fake_ips(hostname):
+        return [ipaddress.ip_address('64:ff9b::0a00:0001')]  # embeds 10.0.0.1
+
+    monkeypatch.setattr(us, '_resolved_ips', fake_ips)
+    ok, _ = is_safe_public_http_url('https://sneaky.example/')
+    assert ok is False
+
+
+def test_ipv4_mapped_loopback_blocked(monkeypatch):
+    import apps.core.services.url_safety as us
+    monkeypatch.setattr(us, '_resolved_ips', lambda h: [ipaddress.ip_address('::ffff:127.0.0.1')])
+    ok, _ = is_safe_public_http_url('https://mapped.example/')
+    assert ok is False

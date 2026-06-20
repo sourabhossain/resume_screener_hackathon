@@ -11,6 +11,7 @@ from apps.core.services.schemas import (
     ExtractionResult,
     MatchingResult,
     DetectorResult,
+    VerificationItem,
     parse_llm_json,
 )
 
@@ -114,3 +115,25 @@ class TestDetectorSchema:
 
     def test_missing_job_type_defaults_uncertain(self):
         assert parse_llm_json(DetectorResult, {"confidence": 0.9}).job_type == "uncertain"
+
+
+class TestVerificationSchema:
+    def test_string_claims_not_split_into_chars(self):
+        # The latent bug: verified_claims as a bare string would be extended
+        # character-by-character. Schema coerces it to a single-item list.
+        v = parse_llm_json(VerificationItem, {
+            "belongs_to_candidate": True, "verified_claims": "Python expert", "confidence": 0.8,
+        })
+        assert v.verified_claims == ["Python expert"]
+
+    def test_confidence_clamped(self):
+        assert parse_llm_json(VerificationItem, {"confidence": 9}).confidence == 1.0
+
+    def test_string_bool_coerced(self):
+        assert parse_llm_json(VerificationItem, {"belongs_to_candidate": "true"}).belongs_to_candidate is True
+        assert parse_llm_json(VerificationItem, {"belongs_to_candidate": "no"}).belongs_to_candidate is False
+
+    def test_defaults(self):
+        v = parse_llm_json(VerificationItem, {})
+        assert v.belongs_to_candidate is False
+        assert v.verified_claims == [] and v.discrepancies == [] and v.confidence == 0.0

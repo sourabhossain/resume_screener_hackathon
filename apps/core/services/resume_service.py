@@ -133,7 +133,12 @@ class ResumeService:
         # scoring it against a guessed role.
         if result.get('needs_review'):
             from apps.core.models import Resume as ResumeModel
-            ResumeModel.objects.filter(pk=resume.pk).update(screening_status='needs_review')
+            # Persist WHY it was flagged (from the detector) so the recruiter can
+            # see the specific reason in the UI, not just a generic message.
+            ResumeModel.objects.filter(pk=resume.pk).update(
+                screening_status='needs_review',
+                reasoning=result.get('reasoning', '') or '',
+            )
             return
 
         with transaction.atomic():
@@ -208,24 +213,31 @@ class ResumeService:
 
         except DocumentExtractionError as e:
             logger.error(f"Document extraction failed for resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(resume, f"Couldn't read the résumé file — {e}")
             return {'success': False, 'error': str(e), 'error_type': 'extraction'}
 
         except AIScreeningError as e:
             logger.error(f"AI screening failed for resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(resume, f"AI screening error — {e}")
             return {'success': False, 'error': str(e), 'error_type': 'screening'}
 
         except MissingJobDescriptionError as e:
             logger.error(f"Missing job description for resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(
+                resume,
+                "This job has no description, so the résumé couldn't be screened. "
+                "Add a job description, then re-run screening.",
+            )
             return {'success': False, 'error': str(e), 'error_type': 'job_description'}
 
         except Exception as e:
             logger.exception(f"Unexpected error processing resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(resume, f"Unexpected error during screening — {e}")
             return {'success': False, 'error': str(e), 'error_type': 'unknown'}
+
+    @staticmethod
+    def _mark_failed(resume, reason: str) -> None:
+        """Mark a résumé failed AND persist WHY (shown on the Screening Failed page)."""
+        resume.screening_status = 'failed'
+        resume.reasoning = reason
+        resume.save(update_fields=['screening_status', 'reasoning'])

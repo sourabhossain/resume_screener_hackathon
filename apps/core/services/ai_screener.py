@@ -93,9 +93,15 @@ class ResumeScreeningState(TypedDict):
     error: Optional[str]
 
 
-def detect_job_type(job_description: str) -> Optional[str]:
-    """Return a valid job family, or None when the role is uncertain,
-    low-confidence, or detection fails (caller flags it for manual review)."""
+def detect_job_type_with_reason(job_description: str) -> tuple[Optional[str], str]:
+    """Detect the job family and explain the verdict.
+
+    Returns (job_type, reason). job_type is a valid family, or None when the role
+    is uncertain / low-confidence / detection failed. When None, `reason` is a
+    short recruiter-facing explanation of WHY it was flagged for manual review,
+    so it can be stored on the resume and shown in the UI (not just logged).
+    On a confident detection, reason is ''.
+    """
     try:
         config = settings.AI_SCREENING_CONFIG
         job_desc = job_description[:config['MAX_JOB_DESC_CHARS']]
@@ -103,8 +109,6 @@ def detect_job_type(job_description: str) -> Optional[str]:
         response = llm_client.invoke_json(prompt, "You are a job classification expert." + _INJECTION_GUARD)
         detected = parse_llm_json(DetectorResult, response, context="detector")
         job_type = detected.job_type or 'uncertain'
-
-        # Aux fields are logged for auditing only (not persisted).
         runner_up = detected.runner_up
         signals = detected.signals
 
@@ -116,7 +120,11 @@ def detect_job_type(job_description: str) -> Optional[str]:
                 "flagging for manual review",
                 job_type, runner_up, signals,
             )
-            return None
+            reason = (
+                "The description is too vague or split across families. "
+                "Narrow it to a single role so screening can continue."
+            )
+            return None, reason
 
         # A valid but low-confidence label is a misroute risk, so flag it for
         # manual review instead of trusting a guess. (confidence is already
@@ -128,16 +136,33 @@ def detect_job_type(job_description: str) -> Optional[str]:
                 "Low-confidence detection (%s < %s) for job_type=%r, flagging for manual review",
                 confidence, threshold, job_type,
             )
-            return None
+            if runner_up:
+                reason = (
+                    f"The description spans {job_type.replace('_', ' ')} and "
+                    f"{runner_up.replace('_', ' ')} roles. Narrow it to a single role "
+                    "so screening can continue."
+                )
+            else:
+                reason = (
+                    f"Low confidence in '{job_type.replace('_', ' ')}' ({confidence:.0%}). "
+                    "Narrow the description to a single role so screening can continue."
+                )
+            return None, reason
 
         logger.info(
             "Detected job_type=%r (confidence=%s, runner_up=%r, signals=%r)",
             job_type, confidence, runner_up, signals,
         )
-        return job_type
+        return job_type, ''
     except Exception as e:
         logger.info("Job type detection failed (%s). Flagging for manual review", e)
-        return None
+        return None, f"Automatic job-type detection failed ({e}). Re-run screening to try again."
+
+
+def detect_job_type(job_description: str) -> Optional[str]:
+    """Return a valid job family, or None when uncertain/low-confidence/failed.
+    Thin wrapper over detect_job_type_with_reason for callers that only need the label."""
+    return detect_job_type_with_reason(job_description)[0]
 
 
 def extract_node(state: ResumeScreeningState) -> ResumeScreeningState:
@@ -346,9 +371,13 @@ def screen_resume(
             'recommendation': Recommendation.REJECT.value
         }
 
-    resolved_job_type = job_type.strip() or detect_job_type(job_description)
+    resolved_job_type = job_type.strip()
+    review_reason = ''
+    if not resolved_job_type:
+        resolved_job_type, review_reason = detect_job_type_with_reason(job_description)
 
-    # No confident family -> flag for manual review instead of guessing.
+    # No confident family -> flag for manual review instead of guessing. The
+    # per-candidate reason is carried so it can be stored and shown in the UI.
     if not resolved_job_type:
         return {
             'needs_review': True,
@@ -356,7 +385,7 @@ def screen_resume(
             'final_score': None,
             'tier': '',
             'recommendation': '',
-            'reasoning': '',
+            'reasoning': review_reason,
             'error': None,
         }
 

@@ -45,6 +45,9 @@ urlpatterns = [
     # Talent pool
     path('talent-pool/', views.talent_pool, name='talent_pool'),
 
+    # Needs review — detector could not confidently assign a job family
+    path('needs-review/', views.needs_review_list, name='needs_review'),
+
     # Screening failed — bulk re-screen
     path('screening-failed/', views.screening_failed_list, name='screening_failed'),
     path('screening-failed/rescreen/', views.screening_rescreen_bulk, name='screening_rescreen_bulk'),

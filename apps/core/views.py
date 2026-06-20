@@ -96,6 +96,7 @@ def dashboard(request):
         pending=Count('id', filter=Q(screening_status='pending')),
         processing=Count('id', filter=Q(screening_status='processing')),
         screening_failed=Count('id', filter=Q(screening_status='failed')),
+        needs_review=Count('id', filter=Q(screening_status='needs_review')),
         talent_pool_count=Count('id', filter=Q(recommendation='talent_pool')),
     )
 
@@ -125,6 +126,7 @@ def dashboard(request):
         'pending_screening': resume_stats['pending'],
         'processing_screening': resume_stats['processing'],
         'screening_failed': resume_stats['screening_failed'],
+        'needs_review_count': resume_stats['needs_review'],
         'talent_pool_count': resume_stats['talent_pool_count'],
         'expiring_evals': expiring_evals,
     }
@@ -796,6 +798,35 @@ def _failed_resumes_queryset():
         .select_related('job')
         .order_by('-created_at')
     )
+
+
+def _needs_review_resumes_queryset():
+    """Resumes the AI parked for a human because the job family was uncertain."""
+    return (
+        Resume.objects
+        .filter(screening_status='needs_review', is_deleted=False, job__is_deleted=False)
+        .select_related('job')
+        .order_by('-created_at')
+    )
+
+
+@login_required
+def needs_review_list(request):
+    from django.core.paginator import Paginator
+    resumes_qs = _needs_review_resumes_queryset()
+    search_q = request.GET.get('q', '').strip()
+    if search_q:
+        resumes_qs = resumes_qs.filter(
+            Q(candidate_name__icontains=search_q) |
+            Q(job__title__icontains=search_q) |
+            Q(email__icontains=search_q)
+        )
+    page_obj = Paginator(resumes_qs, 20).get_page(request.GET.get('page', 1))
+    return render(request, 'core/needs_review.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'total': resumes_qs.count(),
+    })
 
 
 @login_required
