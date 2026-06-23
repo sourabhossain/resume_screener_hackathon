@@ -11,8 +11,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 from apps.core.models import Resume
 
 
-# ── screen_resume_task ────────────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestScreenResumeTaskSuccess:
 
@@ -136,8 +134,6 @@ class TestScreenResumeTaskRetry:
         # retries_left = 0 - 0 = 0 → 'failed'
         assert sample_resume.screening_status == 'failed'
 
-
-# ── batch_screen_resumes ──────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestBatchScreenResumes:

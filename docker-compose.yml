@@ -31,12 +31,9 @@ services:
       retries: 5
 
   web:
-    build: .
-    # gthread workers handle the I/O-bound (DB + render) request mix; collectstatic
-    # runs first so WhiteNoise can serve static.
-    # --reload: gunicorn watches source files and restarts workers on change, so
-    # edits show up without a manual `docker compose restart web`. Remove --reload
-    # for production (it adds a file-watch overhead and isn't needed there).
+    build:
+      context: .
+      target: app
     command:
       - sh
       - -c
@@ -56,23 +53,20 @@ services:
       - DB_HOST=db
       - DB_PORT=3306
       - DJANGO_SETTINGS_MODULE=config.settings.dev
-      # DEBUG off so query logs don't grow memory under load (dev.py reads this).
-      - DEBUG=False
+      - DEBUG=True
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Screening worker: LLM calls (I/O-bound). Higher concurrency = many CVs
-  # screened in parallel. Scale out with `--scale celery-screening=N` when the
-  # upload backlog grows. Uses the default prefork pool so the task
-  # soft_time_limit (120s) still fires on a hung run.
   celery-screening:
-    build: .
+    build:
+      context: .
+      target: app
     command: celery -A config worker -Q screening --concurrency=8 -n screening@%h -l info
     volumes:
       - .:/app
@@ -97,10 +91,10 @@ services:
       retries: 3
       start_period: 30s
 
-  # Verification worker: Playwright/Chromium (CPU+RAM-heavy). Low concurrency
-  # so a burst of link checks doesn't spawn enough headless browsers to OOM.
   celery-verification:
-    build: .
+    build:
+      context: .
+      target: verification
     command: celery -A config worker -Q verification --concurrency=2 -n verification@%h -l info
     volumes:
       - .:/app
@@ -124,6 +118,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  celery-beat:
+    build:
+      context: .
+      target: app
+    command: celery -A config beat -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - DEBUG=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
 
   phpmyadmin:
     image: phpmyadmin:5

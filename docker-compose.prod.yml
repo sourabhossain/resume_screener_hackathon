@@ -1,3 +1,5 @@
+# Production stack: needs an external MySQL DB and a populated .env (prod.py lists required vars).
+
 services:
   redis:
     image: redis:7-alpine
@@ -11,12 +13,14 @@ services:
       retries: 5
 
   web:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     command:
       - sh
       - -c
-      - "python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 4 --worker-class gthread --timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"
+      - "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 4 --worker-class gthread --timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"
     ports:
       - "4060:8000"
     env_file:
@@ -33,14 +37,16 @@ services:
       - media_data:/app/media
       - logs_data:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
   celery-screening:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     command: celery -A config worker -Q screening --concurrency=8 -n screening@%h -l info
     env_file:
@@ -64,7 +70,9 @@ services:
       start_period: 30s
 
   celery-verification:
-    build: .
+    build:
+      context: .
+      target: verification
     restart: unless-stopped
     command: celery -A config worker -Q verification --concurrency=2 -n verification@%h -l info
     env_file:
@@ -86,6 +94,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # Single replica only - periodic tasks must not be dispatched twice.
+  celery-beat:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - DEBUG=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - logs_data:/app/logs
 
 volumes:
   redis_data:

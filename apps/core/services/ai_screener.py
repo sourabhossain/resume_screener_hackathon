@@ -1,19 +1,23 @@
-import datetime
 import logging
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 from typing import TypedDict, List, Dict, Any, Optional
 
 from django.conf import settings
 from langgraph.graph import StateGraph, END
 
 from .llm_client import llm_client
-from .prompt_loader import get_reasoning_prompt
+from .prompt_loader import (
+    build_detector_prompt,
+    build_extraction_prompt,
+    build_matching_prompt,
+    get_reasoning_prompt,
+)
+from .experience import compute_experience_years
+from .job_families import VALID_JOB_TYPES, FALLBACK_ROLE
+from .schemas import ExtractionResult, MatchingResult, DetectorResult, parse_llm_json
 
 logger = logging.getLogger(__name__)
-
-PROMPTS_DIR = Path(__file__).parent.parent / 'prompts'
 
 # Appended to every system prompt. Resume/job text is attacker-controlled
 # (anyone can submit a resume via the public careers page), so instruct the
@@ -26,28 +30,19 @@ _INJECTION_GUARD = (
 )
 
 
+# Defensive vector if a family is ever unmapped in FAMILY_WEIGHTS (sums to 1.0).
+_GENERIC_WEIGHTS = {
+    'skill': 0.30, 'experience': 0.25, 'education': 0.15,
+    'certification': 0.10, 'achievement': 0.20,
+}
+
+
 def _clamp(value, lo: float = 0.0, hi: float = 100.0) -> float:
     """Coerce an LLM-provided number into a safe bounded float."""
     try:
         return max(lo, min(hi, float(value)))
     except (TypeError, ValueError):
         return lo
-
-
-@lru_cache(maxsize=32)
-def _load_prompt_cached(path: Path) -> str:
-    return Path(path).read_text(encoding='utf-8')
-
-VALID_JOB_TYPES = {
-    'tech',
-    'sales_marketing',
-    'hr_recruitment',
-    'finance_admin',
-    'design_creative',
-    'operations_support',
-    'project_management',
-    'product_management',
-}
 
 
 class Tier(str, Enum):
@@ -72,6 +67,7 @@ class ResumeScreeningState(TypedDict):
     candidate_email: str
     candidate_phone: str
     skills: List[str]
+    work_history: List[Dict[str, str]]
     experience_years: float
     education: List[str]
     certifications: List[str]
@@ -97,60 +93,103 @@ class ResumeScreeningState(TypedDict):
     error: Optional[str]
 
 
-def detect_job_type(job_description: str) -> str:
+def detect_job_type_with_reason(job_description: str) -> tuple[Optional[str], str]:
+    """Detect the job family and explain the verdict.
+
+    Returns (job_type, reason). job_type is a valid family, or None when the role
+    is uncertain / low-confidence / detection failed. When None, `reason` is a
+    short recruiter-facing explanation of WHY it was flagged for manual review,
+    so it can be stored on the resume and shown in the UI (not just logged).
+    On a confident detection, reason is ''.
+    """
     try:
         config = settings.AI_SCREENING_CONFIG
         job_desc = job_description[:config['MAX_JOB_DESC_CHARS']]
-        detector_path = PROMPTS_DIR / 'job_type_detector.txt'
-        template = detector_path.read_text(encoding='utf-8')
-        prompt = template.format(job_description=job_desc)
+        prompt = build_detector_prompt(job_desc)
         response = llm_client.invoke_json(prompt, "You are a job classification expert." + _INJECTION_GUARD)
-        job_type = response.get('job_type', 'tech')
-        if job_type not in VALID_JOB_TYPES:
+        detected = parse_llm_json(DetectorResult, response, context="detector")
+        job_type = detected.job_type or 'uncertain'
+        runner_up = detected.runner_up
+        signals = detected.signals
+
+        # Explicit "uncertain" verdict, or any label without a downstream
+        # fragment, is flagged for manual review (None) rather than guessed.
+        if job_type == 'uncertain' or job_type not in VALID_JOB_TYPES:
             logger.info(
-                "Unknown job_type %r from detector, falling back to 'tech'",
-                job_type,
+                "Detector returned job_type=%r (runner_up=%r, signals=%r); "
+                "flagging for manual review",
+                job_type, runner_up, signals,
             )
-            return 'tech'
-        logger.info(f"Detected job_type='{job_type}' (confidence={response.get('confidence', '?')})")
-        return job_type
+            reason = (
+                "The description is too vague or split across families. "
+                "Narrow it to a single role so screening can continue."
+            )
+            return None, reason
+
+        # A valid but low-confidence label is a misroute risk, so flag it for
+        # manual review instead of trusting a guess. (confidence is already
+        # coerced and clamped to [0,1] by the schema.)
+        confidence = detected.confidence
+        threshold = config.get('JOB_TYPE_CONFIDENCE_THRESHOLD', 0.4)
+        if confidence < threshold:
+            logger.info(
+                "Low-confidence detection (%s < %s) for job_type=%r, flagging for manual review",
+                confidence, threshold, job_type,
+            )
+            if runner_up:
+                reason = (
+                    f"The description spans {job_type.replace('_', ' ')} and "
+                    f"{runner_up.replace('_', ' ')} roles. Narrow it to a single role "
+                    "so screening can continue."
+                )
+            else:
+                reason = (
+                    f"Low confidence in '{job_type.replace('_', ' ')}' ({confidence:.0%}). "
+                    "Narrow the description to a single role so screening can continue."
+                )
+            return None, reason
+
+        logger.info(
+            "Detected job_type=%r (confidence=%s, runner_up=%r, signals=%r)",
+            job_type, confidence, runner_up, signals,
+        )
+        return job_type, ''
     except Exception as e:
-        logger.info("Job type detection failed (%s). Falling back to 'tech'", e)
-        return 'tech'
+        logger.info("Job type detection failed (%s). Flagging for manual review", e)
+        return None, f"Automatic job-type detection failed ({e}). Re-run screening to try again."
 
 
-def get_prompt_path(job_type: str, prompt_name: str) -> Path:
-    role_path = PROMPTS_DIR / job_type / f"{prompt_name}.txt"
-    if role_path.exists():
-        return role_path
-    fallback = PROMPTS_DIR / 'tech' / f"{prompt_name}.txt"
-    if not fallback.exists():
-        raise FileNotFoundError(f"Prompt not found: {role_path} and fallback {fallback} missing")
-    logger.info("No %s prompt for role %r, using tech/ fallback", prompt_name, job_type)
-    return fallback
+def detect_job_type(job_description: str) -> Optional[str]:
+    """Return a valid job family, or None when uncertain/low-confidence/failed.
+    Thin wrapper over detect_job_type_with_reason for callers that only need the label."""
+    return detect_job_type_with_reason(job_description)[0]
 
 
 def extract_node(state: ResumeScreeningState) -> ResumeScreeningState:
     try:
         config = settings.AI_SCREENING_CONFIG
         resume_text = state['resume_text'][:config['MAX_RESUME_CHARS']]
-        job_type = state.get('job_type', 'tech')
-        current_year = datetime.date.today().year
+        job_type = state.get('job_type', FALLBACK_ROLE)
 
-        prompt_path = get_prompt_path(job_type, 'extraction')
-        template = _load_prompt_cached(prompt_path)
-        prompt = template.format(resume_text=resume_text, current_year=current_year)
+        prompt = build_extraction_prompt(job_type, resume_text)
 
         response = llm_client.invoke_json(prompt, "You are an expert resume parser." + _INJECTION_GUARD)
+        parsed = parse_llm_json(
+            ExtractionResult, response, context=f"extraction[resume {state.get('resume_id')}]"
+        )
 
-        state['candidate_name'] = response.get('candidate_name', 'Unknown')
-        state['candidate_email'] = str(response.get('candidate_email', '') or '').strip()
-        state['candidate_phone'] = str(response.get('candidate_phone', '') or '').strip()
-        state['skills'] = response.get('skills', [])
-        state['experience_years'] = float(response.get('experience_years', 0))
-        state['education'] = response.get('education', [])
-        state['certifications'] = response.get('certifications', [])
-        state['achievements'] = response.get('achievements', [])
+        state['candidate_name'] = parsed.candidate_name or 'Unknown'
+        state['candidate_email'] = parsed.candidate_email
+        state['candidate_phone'] = parsed.candidate_phone
+        state['skills'] = parsed.skills
+        # Experience is computed deterministically from raw spans in code; the
+        # model never does date math (its arithmetic is unreliable).
+        work_history = [w.model_dump() for w in parsed.work_history]
+        state['work_history'] = work_history
+        state['experience_years'] = compute_experience_years(work_history)
+        state['education'] = parsed.education
+        state['certifications'] = parsed.certifications
+        state['achievements'] = parsed.achievements
 
         logger.info(
             f"[Resume {state.get('resume_id')}] Extracted candidate profile (role={job_type})"
@@ -170,40 +209,32 @@ def match_node(state: ResumeScreeningState) -> ResumeScreeningState:
     try:
         config = settings.AI_SCREENING_CONFIG
         job_desc = state['job_description'][:config['MAX_JOB_DESC_CHARS']]
-        job_type = state.get('job_type', 'tech')
+        job_type = state.get('job_type', FALLBACK_ROLE)
 
-        prompt_path = get_prompt_path(job_type, 'matching')
-        template = _load_prompt_cached(prompt_path)
-
-        achievements_str = "; ".join(state.get('achievements', []))
-        prompt = template.format(
-            job_description=job_desc,
-            candidate_name=state['candidate_name'],
-            skills=", ".join(state['skills']),
-            experience_years=state['experience_years'],
-            education=", ".join(state['education']),
-            certifications=", ".join(state['certifications']),
-            achievements=achievements_str,
-        )
+        profile = {
+            'candidate_name': state['candidate_name'],
+            'skills': state['skills'],
+            'experience_years': state['experience_years'],
+            'education': state['education'],
+            'certifications': state['certifications'],
+            'achievements': state['achievements'],
+        }
+        prompt = build_matching_prompt(job_type, job_desc, profile)
 
         response = llm_client.invoke_json(prompt, "You are an expert HR analyst." + _INJECTION_GUARD)
+        # Schema validation coerces types, clamps every score to [0,100] (so a
+        # prompt-injected resume cannot push its ranking out of range), and logs
+        # any missing/renamed key instead of silently defaulting it.
+        matched = parse_llm_json(MatchingResult, response, context=f"matching[resume {state.get('resume_id')}]")
 
-        state['matched_skills'] = response.get('matched_skills', [])
-        state['missing_skills'] = response.get('missing_skills', [])
-        # Clamp every model-provided score to [0,100] so a prompt-injected
-        # resume cannot push its own ranking out of range.
-        state['experience_match_score'] = _clamp(response.get('experience_match_score', 0))
-        state['education_match_score'] = _clamp(response.get('education_match_score', 0))
-        state['achievement_score'] = _clamp(response.get('achievement_score', 0))
-
-        raw_cert = response.get('certification_match_score')
-        if raw_cert is not None:
-            try:
-                state['certification_match_score'] = _clamp(raw_cert)
-            except (TypeError, ValueError):
-                state['certification_match_score'] = None
-        else:
-            state['certification_match_score'] = None
+        state['matched_skills'] = matched.matched_skills
+        state['missing_skills'] = matched.missing_skills
+        state['experience_match_score'] = matched.experience_match_score
+        state['education_match_score'] = matched.education_match_score
+        state['achievement_score'] = matched.achievement_score
+        # None means the model did not score certifications -> code falls back to
+        # a certification-count heuristic in score_node.
+        state['certification_match_score'] = matched.certification_match_score
 
         logger.info(
             f"[Resume {state.get('resume_id')}] Matched {len(state['matched_skills'])} skills"
@@ -222,7 +253,7 @@ def score_node(state: ResumeScreeningState) -> ResumeScreeningState:
 
     try:
         config = settings.AI_SCREENING_CONFIG
-        job_type = state.get('job_type', 'tech')
+        job_type = state.get('job_type', FALLBACK_ROLE)
 
         total_skills = len(state['matched_skills']) + len(state['missing_skills'])
         state['skill_score'] = (len(state['matched_skills']) / total_skills) * 100 if total_skills > 0 else 0
@@ -239,23 +270,18 @@ def score_node(state: ResumeScreeningState) -> ResumeScreeningState:
         else:
             state['certification_score'] = min(len(state['certifications']) * 25, 100)
 
-        if job_type == 'tech':
-            state['final_score'] = _clamp(
-                state['skill_score'] * config['SKILL_WEIGHT'] +
-                state['experience_score'] * config['EXPERIENCE_WEIGHT'] +
-                state['education_score'] * config['EDUCATION_WEIGHT'] +
-                state['certification_score'] * config['CERTIFICATION_WEIGHT']
-            )
-        else:
-            # 'or 0.0' guards against None if match_node failed and was recovered
-            achievement_score = state.get('achievement_score') or 0.0
-            state['final_score'] = _clamp(
-                state['skill_score'] * config['NON_TECH_SKILL_WEIGHT'] +
-                state['experience_score'] * config['NON_TECH_EXPERIENCE_WEIGHT'] +
-                state['education_score'] * config['NON_TECH_EDUCATION_WEIGHT'] +
-                state['certification_score'] * config['NON_TECH_CERTIFICATION_WEIGHT'] +
-                achievement_score * config['NON_TECH_ACHIEVEMENT_WEIGHT']
-            )
+        # Per-family weight vector (every routable family has one). Fall back to
+        # an equal-ish generic vector only if a family is somehow unmapped.
+        weights = settings.FAMILY_WEIGHTS.get(job_type, _GENERIC_WEIGHTS)
+        # 'or 0.0' guards against None if match_node failed and was recovered
+        achievement_score = state.get('achievement_score') or 0.0
+        state['final_score'] = _clamp(
+            state['skill_score'] * weights['skill'] +
+            state['experience_score'] * weights['experience'] +
+            state['education_score'] * weights['education'] +
+            state['certification_score'] * weights['certification'] +
+            achievement_score * weights['achievement']
+        )
 
         logger.info(
             f"[Resume {state.get('resume_id')}] Scored "
@@ -293,7 +319,10 @@ def rank_node(state: ResumeScreeningState) -> ResumeScreeningState:
             tier=state['tier'],
             matched_skills=", ".join(state['matched_skills'][:5]),
             missing_skills=", ".join(state['missing_skills'][:3]),
-            experience_years=state['experience_years']
+            experience_years=state['experience_years'],
+            education=", ".join(state.get('education', [])),
+            certifications=", ".join(state.get('certifications', [])),
+            achievements="; ".join(state.get('achievements', [])[:3]),
         )
 
         state['reasoning'] = llm_client.invoke_text(prompt, "You are a hiring manager." + _INJECTION_GUARD)
@@ -342,7 +371,23 @@ def screen_resume(
             'recommendation': Recommendation.REJECT.value
         }
 
-    resolved_job_type = job_type.strip() or detect_job_type(job_description)
+    resolved_job_type = job_type.strip()
+    review_reason = ''
+    if not resolved_job_type:
+        resolved_job_type, review_reason = detect_job_type_with_reason(job_description)
+
+    # No confident family -> flag for manual review instead of guessing. The
+    # per-candidate reason is carried so it can be stored and shown in the UI.
+    if not resolved_job_type:
+        return {
+            'needs_review': True,
+            'job_type': '',
+            'final_score': None,
+            'tier': '',
+            'recommendation': '',
+            'reasoning': review_reason,
+            'error': None,
+        }
 
     initial_state: ResumeScreeningState = {
         'resume_text': resume_text,
@@ -353,6 +398,7 @@ def screen_resume(
         'candidate_email': '',
         'candidate_phone': '',
         'skills': [],
+        'work_history': [],
         'experience_years': 0.0,
         'education': [],
         'certifications': [],

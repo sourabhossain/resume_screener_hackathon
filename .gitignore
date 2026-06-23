@@ -27,3 +27,9 @@ mysql_data/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Node / Tailwind
+node_modules/
+
+# Celery
+celerybeat-schedule

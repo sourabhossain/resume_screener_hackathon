@@ -9,7 +9,7 @@
 </div>
 
 <div class="mb-6">
-    <form method="get" class="relative w-full max-w-md">
+    <form method="get" action="{% url 'core:talent_pool' %}" class="relative w-full max-w-md">
         <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
              fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -46,8 +46,8 @@
                 <td class="px-5 py-3">
                     {% if resume.final_score is not None %}
                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold
-                        {% if resume.final_score >= 75 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                        {% elif resume.final_score >= 50 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                        {% if resume.final_score >= 80 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                        {% elif resume.final_score >= 60 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
                         {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% endif %}">
                         {{ resume.final_score }}
                     </span>
@@ -97,7 +97,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
               d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
     </svg>
-    <p class="text-sm font-semibold text-zinc-400 dark:text-zinc-500">No talent pool candidates yet</p>
+    <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No talent pool candidates yet</p>
     <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-600">Mark a candidate's recommendation as "Talent Pool" to add them here.</p>
 </div>
 {% endif %}

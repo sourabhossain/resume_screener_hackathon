@@ -25,6 +25,15 @@ if os.environ.get('DEBUG', '').lower() in ('true', '1', 'yes'):
 DEBUG = False
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+
+# Django 4.0+ checks the Origin header against this list for CSRF on HTTPS.
+# Must include every public hostname (and port if non-standard) the app serves.
+# Override via CSRF_TRUSTED_ORIGINS env var to avoid baking hostnames into code.
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+] or [f'https://{h}' for h in ALLOWED_HOSTS if h]
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'

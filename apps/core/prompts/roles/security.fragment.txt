@@ -1,0 +1,16 @@
+@@ ROLE_TITLE
+Security
+
+@@ ROLE_SKILL_TAXONOMY
+   - Application security: threat modeling, secure code review, SAST/DAST, OWASP Top 10, pen testing
+   - Infrastructure/SecOps: SIEM, IDS/IPS, vulnerability management, incident response, network security
+   - Identity/crypto: IAM, encryption, key management, zero trust
+   - GRC: risk assessment, audits, compliance frameworks (SOC 2, ISO 27001, NIST, GDPR, PCI-DSS)
+   - Tooling/scripting: Python, Bash, Burp Suite, Metasploit, cloud security
+   - Soft skills: rigor, communication of risk, attention to detail
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: protecting systems and data (AppSec, InfoSec, SecOps, or GRC); general IT/ops with incidental security is partial fit.
+- Relevant education: Computer Science, Cybersecurity, or related; strong security experience can substitute.
+- Relevant certifications: CISSP, CEH, OSCP, Security+, CISM, CISA, cloud security credentials.
+- Strong achievements: vulnerabilities remediated, audits/certifications passed, incidents contained, or risk measurably reduced. Vague "handled security" claims are weak.

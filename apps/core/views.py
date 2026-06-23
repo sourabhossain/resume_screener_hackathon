@@ -3,6 +3,7 @@ import os
 import re
 from datetime import timedelta
 
+from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,6 +16,7 @@ from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from .models import Job, Resume
 from .forms import JobForm, ResumeForm, ResumeEditForm
+from .form_utils import form_errors_to_messages, clean_person_text
 from .utils import candidate_initial, compute_file_hash
 
 User = get_user_model()
@@ -22,20 +24,19 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-def _form_errors_to_messages(request, form) -> None:
-    """Convert all form validation errors to Django messages so they appear as toasts."""
-    for field_name, error_list in form.errors.items():
-        if field_name == '__all__':
-            for err in error_list:
-                messages.error(request, str(err))
-        else:
-            label = (
-                form.fields[field_name].label
-                if field_name in form.fields and form.fields[field_name].label
-                else field_name.replace('_', ' ').title()
-            )
-            for err in error_list:
-                messages.error(request, f"{label}: {err}")
+def _validate_user_name_fields(request) -> bool:
+    """Validate optional first/last name on user create; surfaces toast errors."""
+    ok = True
+    for label, raw in (
+        ('First name', request.POST.get('first_name', '')),
+        ('Last name', request.POST.get('last_name', '')),
+    ):
+        try:
+            clean_person_text(raw)
+        except forms.ValidationError as exc:
+            messages.error(request, f'{label}: {exc.messages[0]}')
+            ok = False
+    return ok
 
 
 def _ordered_active_resumes_queryset(resume_qs):
@@ -88,13 +89,14 @@ def dashboard(request):
 
     resume_stats = Resume.objects.filter(job__is_deleted=False).aggregate(
         total=Count('id'),
-        avg_score=Avg('final_score', filter=Q(final_score__isnull=False)),
+        avg_score=Avg('final_score', filter=Q(final_score__isnull=False, screening_status='completed')),
         top_tier=Count('id', filter=Q(tier='top')),
         mid_tier=Count('id', filter=Q(tier='mid')),
         low_tier=Count('id', filter=Q(tier='low')),
         pending=Count('id', filter=Q(screening_status='pending')),
         processing=Count('id', filter=Q(screening_status='processing')),
         screening_failed=Count('id', filter=Q(screening_status='failed')),
+        needs_review=Count('id', filter=Q(screening_status='needs_review')),
         talent_pool_count=Count('id', filter=Q(recommendation='talent_pool')),
     )
 
@@ -124,6 +126,7 @@ def dashboard(request):
         'pending_screening': resume_stats['pending'],
         'processing_screening': resume_stats['processing'],
         'screening_failed': resume_stats['screening_failed'],
+        'needs_review_count': resume_stats['needs_review'],
         'talent_pool_count': resume_stats['talent_pool_count'],
         'expiring_evals': expiring_evals,
     }
@@ -186,7 +189,7 @@ def job_create(request):
             messages.success(request, 'Job created successfully!')
             return redirect('core:job_detail', slug=job.slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = JobForm()
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Post New Job'})
@@ -227,7 +230,7 @@ def job_edit(request, slug):
             messages.success(request, 'Job updated successfully!')
             return redirect('core:job_detail', slug=job.slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = JobForm(instance=job)
     return render(request, 'core/job_form.html', {'form': form, 'title': 'Edit Job', 'job': job})
@@ -310,11 +313,11 @@ def resume_create(request, job_slug):
 
             messages.success(
                 request,
-                'Resume added. AI screening is running in the background—the pipeline row will refresh automatically.',
+                'Resume added. AI screening is running in the background, the pipeline row will refresh automatically.',
             )
             return redirect('core:job_detail', slug=job_slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = ResumeForm()
     return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
@@ -341,9 +344,21 @@ def resume_edit(request, uuid):
                 instance.score_manually_edited = True
                 instance.score_edited_at = tz.now()
                 instance.score_edited_by = request.user
+                # Keep tier + recommendation consistent with the (edited) final score,
+                # using the same thresholds the AI screener applies (rank_node).
+                cfg = settings.AI_SCREENING_CONFIG
+                score = instance.final_score or 0
+                if score >= cfg['TOP_TIER_THRESHOLD']:
+                    instance.tier, instance.recommendation = 'top', 'interview'
+                elif score >= cfg['MID_TIER_THRESHOLD']:
+                    instance.tier, instance.recommendation = 'mid', 'talent_pool'
+                else:
+                    instance.tier, instance.recommendation = 'low', 'reject'
             instance.save()
             messages.success(request, 'Resume updated successfully!')
             return redirect('core:resume_detail', uuid=uuid)
+        else:
+            form_errors_to_messages(request, form)
     else:
         form = ResumeEditForm(instance=resume)
     return render(request, 'core/resume_edit_form.html', {'form': form, 'job': resume.job, 'title': 'Edit Resume', 'resume': resume})
@@ -370,25 +385,39 @@ def serve_protected_media(request, path):
         raise Http404
     if not os.path.exists(full_path):
         raise Http404
-    return FileResponse(open(full_path, 'rb'))
+    # as_attachment forces a download instead of letting the browser render the
+    # PII file inline (defence-in-depth alongside the upload magic-byte checks).
+    return FileResponse(open(full_path, 'rb'), as_attachment=True)
 
 
 @login_required
 def resume_status_fragment(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
-    return render(request, 'core/partials/resume_status.html', {'resume': resume})
+    # oob=True so the response also OOB-refreshes the header action button as
+    # screening transitions (e.g. processing -> completed/failed).
+    return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
 
 
 @login_required
 def resume_row_fragment(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    ordered = _ordered_active_resumes_queryset(resume.job.resumes)
     # Recompute pipeline stats so the polling response can OOB-refresh the
     # "pending screening" badge as rows finish (otherwise it goes stale).
-    pipeline_stats = _pipeline_stats(_ordered_active_resumes_queryset(resume.job.resumes))
+    pipeline_stats = _pipeline_stats(ordered)
+    # Recover this row's rank (its 1-based position in the same ordering the full
+    # table uses). The initial page render passes rank=forloop.counter; without
+    # recomputing it here, a polled row would lose its rank badge once screening
+    # completes and shows "—" until a full reload.
+    ordered_ids = list(ordered.values_list('id', flat=True))
+    try:
+        rank = ordered_ids.index(resume.id) + 1
+    except ValueError:
+        rank = None
     return render(
         request,
         'core/partials/resume_row.html',
-        {'resume': resume, 'pipeline_stats': pipeline_stats, 'is_fragment': True},
+        {'resume': resume, 'rank': rank, 'pipeline_stats': pipeline_stats, 'is_fragment': True},
     )
 
 
@@ -429,19 +458,19 @@ def resume_bulk_create(request, job_slug):
             _, raw_ext = os.path.splitext(file.name)
             ext = raw_ext.lstrip('.').lower()
             if ext not in ALLOWED:
-                skipped.append(f'"{file.name}" — only PDF or DOCX supported')
+                skipped.append(f'"{file.name}" - only PDF or DOCX supported')
                 continue
 
             file.seek(0)
             header = file.read(8)
             file.seek(0)
             if not header.startswith(MAGIC[ext]):
-                skipped.append(f'"{file.name}" — file content does not match {ext.upper()} format')
+                skipped.append(f'"{file.name}" - file content does not match {ext.upper()} format')
                 continue
 
             file_hash = compute_file_hash(file)
             if Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
-                skipped.append(f'"{file.name}" — already submitted for this job')
+                skipped.append(f'"{file.name}" - already submitted for this job')
                 continue
 
             safe_basename = os.path.basename(file.name)
@@ -471,29 +500,45 @@ def resume_bulk_create(request, job_slug):
 
 @login_required
 def resume_rescreen(request, uuid):
-    resume = get_object_or_404(Resume, uuid=uuid)
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
 
     if request.method != 'POST':
         return redirect('core:resume_detail', uuid=uuid)
 
     from apps.core.tasks import screen_resume_task
+
+    # When the button is clicked via HTMX (the app is hx-boosted) we swap the
+    # status region in place and DON'T redirect. A redirect back to this same
+    # detail URL would make HTMX push a duplicate history entry every click,
+    # forcing the user to press Back many times to reach the pipeline.
+    is_htmx = bool(request.headers.get('HX-Request'))
+
+    def _status_fragment():
+        resume.refresh_from_db()
+        return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
+
     # Atomic update prevents duplicate tasks from concurrent clicks
     updated = Resume.objects.filter(
-        uuid=uuid, screening_status__in=['pending', 'completed', 'failed']
+        uuid=uuid, screening_status__in=['pending', 'completed', 'failed', 'needs_review']
     ).update(screening_status='processing')
+
     if not updated:
+        if is_htmx:
+            # Already running — just reflect current state in place, no toast.
+            return _status_fragment()
         messages.info(request, 'Screening is already in progress. Please wait for it to complete.')
         return redirect('core:resume_detail', uuid=uuid)
 
     screen_resume_task.delay(resume.id)
+
+    if is_htmx:
+        return _status_fragment()
     messages.success(request, 'AI screening queued! Results will appear shortly.')
     return redirect('core:resume_detail', uuid=uuid)
 
 
-# ──────────────────────────────────────────────────────────────────────────
 # Public candidate (careers) pages — NO login required.
 # Candidates browse open jobs and submit their resume; they never see results.
-# ──────────────────────────────────────────────────────────────────────────
 
 def careers_list(request):
     """Public list of open (active) jobs candidates can apply to.
@@ -532,7 +577,7 @@ def careers_list(request):
     return render(request, 'careers/job_list.html', context)
 
 
-@ratelimit(key='ip', rate='60/h', method='POST', block=True)
+@ratelimit(key='ip', rate='10/h', method='POST', block=True)
 def careers_apply(request, slug):
     """Public job detail + resume submission form. Only active jobs accept applications."""
     job = get_object_or_404(Job, slug=slug, status='active')
@@ -597,7 +642,7 @@ def careers_apply(request, slug):
 
             return redirect('core:careers_thanks', slug=job.slug)
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = ResumeForm(require_contact=True)
 
@@ -609,8 +654,6 @@ def careers_thanks(request, slug):
     job = get_object_or_404(Job, slug=slug)
     return render(request, 'careers/thanks.html', {'job': job})
 
-
-# ── User Management (superuser only) ────────────────────────────────────────
 
 def _superuser_required(view_fn):
     """Decorator: must be logged in AND superuser."""
@@ -634,18 +677,19 @@ def user_list(request):
 def user_create(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
-        if form.is_valid():
+        names_ok = _validate_user_name_fields(request)
+        if form.is_valid() and names_ok:
             user = form.save(commit=False)
             user.is_staff = request.POST.get('is_staff') == 'on'
             user.is_superuser = request.POST.get('is_superuser') == 'on'
             user.email = request.POST.get('email', '')
-            user.first_name = request.POST.get('first_name', '')
-            user.last_name = request.POST.get('last_name', '')
+            user.first_name = clean_person_text(request.POST.get('first_name', ''))
+            user.last_name = clean_person_text(request.POST.get('last_name', ''))
             user.save()
             messages.success(request, f'User "{user.username}" created successfully.')
             return redirect('core:user_list')
-        else:
-            _form_errors_to_messages(request, form)
+        elif not form.is_valid():
+            form_errors_to_messages(request, form)
     else:
         form = UserCreationForm()
     return render(request, 'users/user_form.html', {'form': form, 'action': 'Create'})
@@ -661,7 +705,7 @@ def user_change_password(request, pk):
             messages.success(request, f'Password for "{target.username}" changed successfully.')
             return redirect('core:user_list')
         else:
-            _form_errors_to_messages(request, form)
+            form_errors_to_messages(request, form)
     else:
         form = SetPasswordForm(target)
     return render(request, 'users/user_password.html', {'form': form, 'target': target})
@@ -680,8 +724,6 @@ def user_toggle_active(request, pk):
             messages.success(request, f'User "{target.username}" has been {state}.')
     return redirect('core:user_list')
 
-
-# ── Resume Notes ────────────────────────────────────────────────────────────
 
 @login_required
 def resume_note_add(request, uuid):
@@ -708,8 +750,6 @@ def resume_note_delete(request, uuid, note_id):
     return redirect('core:resume_detail', uuid=uuid)
 
 
-# ── Recruiter Status Update ──────────────────────────────────────────────────
-
 @login_required
 def resume_status_update(request, uuid):
     resume = get_object_or_404(Resume, uuid=uuid)
@@ -724,8 +764,6 @@ def resume_status_update(request, uuid):
             messages.error(request, 'Invalid status.')
     return redirect('core:resume_detail', uuid=uuid)
 
-
-# ── Talent Pool ──────────────────────────────────────────────────────────────
 
 @login_required
 def talent_pool(request):
@@ -752,8 +790,6 @@ def talent_pool(request):
     })
 
 
-# ── Screening Failed ─────────────────────────────────────────────────────────
-
 def _failed_resumes_queryset():
     """Resumes whose AI screening did not complete (live jobs only)."""
     return (
@@ -762,6 +798,35 @@ def _failed_resumes_queryset():
         .select_related('job')
         .order_by('-created_at')
     )
+
+
+def _needs_review_resumes_queryset():
+    """Resumes the AI parked for a human because the job family was uncertain."""
+    return (
+        Resume.objects
+        .filter(screening_status='needs_review', is_deleted=False, job__is_deleted=False)
+        .select_related('job')
+        .order_by('-created_at')
+    )
+
+
+@login_required
+def needs_review_list(request):
+    from django.core.paginator import Paginator
+    resumes_qs = _needs_review_resumes_queryset()
+    search_q = request.GET.get('q', '').strip()
+    if search_q:
+        resumes_qs = resumes_qs.filter(
+            Q(candidate_name__icontains=search_q) |
+            Q(job__title__icontains=search_q) |
+            Q(email__icontains=search_q)
+        )
+    page_obj = Paginator(resumes_qs, 20).get_page(request.GET.get('page', 1))
+    return render(request, 'core/needs_review.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'total': resumes_qs.count(),
+    })
 
 
 @login_required
@@ -820,8 +885,6 @@ def screening_rescreen_bulk(request):
     return redirect('core:screening_failed')
 
 
-# ── CSV Export ───────────────────────────────────────────────────────────────
-
 @login_required
 def job_export_csv(request, slug):
     import csv
@@ -877,3 +940,17 @@ def job_export_csv(request, slug):
     safe_title = re.sub(r'[^\w\-]', '_', job.title)[:50]
     response['Content-Disposition'] = f'attachment; filename="{safe_title}_candidates.csv"'
     return response
+
+
+from django.contrib.auth import views as auth_views  # noqa: E402
+
+
+class ToastLoginView(auth_views.LoginView):
+    """Login form errors surface as toasts (consistent with the rest of the app)."""
+
+    template_name = 'auth/login.html'
+    redirect_authenticated_user = True
+
+    def form_invalid(self, form):
+        form_errors_to_messages(self.request, form)
+        return super().form_invalid(form)

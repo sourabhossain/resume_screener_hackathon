@@ -1,8 +1,9 @@
 from django import forms
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA
+from apps.core.form_utils import AriaInvalidMixin, clean_label_text, clean_person_text
 
 
-class InterviewCreateForm(forms.ModelForm):
+class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
     class Meta:
         model = Interview
         fields = ['phase', 'scheduled_date', 'notes']
@@ -22,7 +23,7 @@ class InterviewCreateForm(forms.ModelForm):
         }
 
 
-class InterviewerAddForm(forms.ModelForm):
+class InterviewerAddForm(AriaInvalidMixin, forms.ModelForm):
     """Add a new interviewer slot to an existing Interview."""
     class Meta:
         model = InterviewEvaluation
@@ -42,10 +43,19 @@ class InterviewerAddForm(forms.ModelForm):
             }),
         }
         labels = {
-            'interviewer_name': 'Interviewer Name',
+            'interviewer_name': 'Name',
             'interviewer_position': 'Position',
             'interviewer_department': 'Department',
         }
+
+    def clean_interviewer_name(self):
+        return clean_person_text(self.cleaned_data.get('interviewer_name'), required=True)
+
+    def clean_interviewer_position(self):
+        return clean_label_text(self.cleaned_data.get('interviewer_position'))
+
+    def clean_interviewer_department(self):
+        return clean_label_text(self.cleaned_data.get('interviewer_department'))
 
 
 SCORE_CHOICES = [(i, str(i)) for i in range(1, 6)]
@@ -65,7 +75,7 @@ class EvaluationSubmitForm(forms.Form):
 
         self.fields['recommendation'] = forms.ChoiceField(
             label='Recommendation',
-            choices=[('', '— Select —')] + list(InterviewEvaluation.RECOMMENDATION_CHOICES),
+            choices=[('', '- Select -')] + list(InterviewEvaluation.RECOMMENDATION_CHOICES),
             required=False,
             widget=forms.Select(attrs={
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200',

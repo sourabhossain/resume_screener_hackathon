@@ -1,9 +1,14 @@
 """
-Tests for role-based prompt routing: detect_job_type, get_prompt_path, score_node weights.
+Tests for role-based prompt routing: detect_job_type, prompt composition, score_node weights.
 """
 import pytest
 from unittest.mock import patch
-from apps.core.services.ai_screener import detect_job_type, get_prompt_path, score_node
+from apps.core.services.ai_screener import detect_job_type, score_node
+from apps.core.services.prompt_loader import (
+    build_extraction_prompt,
+    build_matching_prompt,
+    parse_fragment,
+)
 
 
 def build_test_state(job_type, skill_score=100, experience_match_score=0,
@@ -39,74 +44,156 @@ class TestJobTypeDetector:
 
     def test_detect_returns_valid_type(self):
         with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
-            mock_llm.invoke_json.return_value = {'job_type': 'sales_marketing', 'confidence': 0.9}
+            mock_llm.invoke_json.return_value = {'job_type': 'sales', 'confidence': 0.9}
             result = detect_job_type("We need a sales manager")
-        assert result == 'sales_marketing'
+        assert result == 'sales'
 
-    def test_detect_falls_back_on_unknown_type(self):
+    def test_detect_review_on_unknown_type(self):
         with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
             mock_llm.invoke_json.return_value = {'job_type': 'totally_unknown', 'confidence': 0.5}
             result = detect_job_type("some job")
-        assert result == 'tech'
+        assert result is None
 
-    def test_detect_falls_back_on_llm_exception(self):
+    def test_detect_review_on_retired_label(self):
+        # 'tech' was a family in the old taxonomy; it no longer exists.
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'tech', 'confidence': 0.9}
+            result = detect_job_type("some job")
+        assert result is None
+
+    def test_detect_review_on_llm_exception(self):
         with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
             mock_llm.invoke_json.side_effect = RuntimeError("LLM down")
             result = detect_job_type("some job")
-        assert result == 'tech'
+        assert result is None
 
-    def test_detect_falls_back_on_whitespace_input(self):
+    def test_detect_review_on_low_confidence(self):
         with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
-            mock_llm.invoke_json.return_value = {'job_type': 'tech', 'confidence': 0.9}
-            result = detect_job_type("   ")
-        assert result == 'tech'
+            mock_llm.invoke_json.return_value = {'job_type': 'sales', 'confidence': 0.1}
+            result = detect_job_type("vague generic role")
+        assert result is None
+
+    def test_detect_keeps_high_confidence_valid_type(self):
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'finance_admin', 'confidence': 0.92}
+            result = detect_job_type("Senior accountant, month-end close")
+        assert result == 'finance_admin'
+
+    def test_detect_review_on_uncertain(self):
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {
+                'job_type': 'uncertain', 'confidence': 0.9,
+                'runner_up': 'operations', 'signals': ['vague'],
+            }
+            result = detect_job_type("a generalist role")
+        assert result is None
+
+    def test_with_reason_explains_uncertain(self):
+        from apps.core.services.ai_screener import detect_job_type_with_reason
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'uncertain', 'confidence': 0.9}
+            jt, reason = detect_job_type_with_reason("a generalist role")
+        assert jt is None
+        assert reason and ('vague' in reason.lower() or 'classify' in reason.lower())
+
+    def test_with_reason_explains_low_confidence(self):
+        from apps.core.services.ai_screener import detect_job_type_with_reason
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'sales', 'confidence': 0.1, 'runner_up': 'marketing'}
+            jt, reason = detect_job_type_with_reason("vague role")
+        assert jt is None
+        # runner-up present -> names both families and the fix ("narrow")
+        assert 'sales' in reason and 'marketing' in reason and 'narrow' in reason.lower()
+
+    def test_with_reason_empty_on_confident(self):
+        from apps.core.services.ai_screener import detect_job_type_with_reason
+        with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
+            mock_llm.invoke_json.return_value = {'job_type': 'finance_admin', 'confidence': 0.95}
+            jt, reason = detect_job_type_with_reason("Senior accountant")
+        assert jt == 'finance_admin' and reason == ''
+
+    def test_detector_prompt_catalog_matches_valid_types(self):
+        from apps.core.services.prompt_loader import build_detector_prompt
+        from apps.core.services.job_families import VALID_JOB_TYPES
+        prompt = build_detector_prompt("some job description")
+        assert "some job description" in prompt
+        for label in VALID_JOB_TYPES:
+            assert label in prompt, f"catalog missing {label}"
+        assert '[[' not in prompt and ']]' not in prompt
+
+
+from apps.core.services.job_families import VALID_JOB_TYPES
+
+ALL_ROLES = sorted(VALID_JOB_TYPES)
 
 
 @pytest.mark.django_db
-class TestGetPromptPath:
+class TestPromptComposition:
 
-    def test_returns_role_specific_path(self):
-        path = get_prompt_path('sales_marketing', 'extraction')
-        assert 'sales_marketing' in str(path)
-        assert path.exists()
+    def test_every_role_has_a_fragment_with_required_sections(self):
+        for role in ALL_ROLES:
+            frag = parse_fragment(role)
+            assert frag.get('ROLE_TITLE'), f"{role} missing ROLE_TITLE"
+            assert frag.get('ROLE_SKILL_TAXONOMY'), f"{role} missing ROLE_SKILL_TAXONOMY"
+            assert frag.get('ROLE_MATCH_CRITERIA'), f"{role} missing ROLE_MATCH_CRITERIA"
 
-    def test_falls_back_to_tech_for_unknown_role(self):
-        path = get_prompt_path('nonexistent_role', 'extraction')
-        assert 'tech' in str(path)
-        assert path.exists()
+    def test_extraction_prompt_composes_with_no_leftover_sentinels(self):
+        prompt = build_extraction_prompt('design_creative', 'Jane Doe, designer')
+        assert 'Jane Doe, designer' in prompt
+        assert 'Design and Creative' in prompt
+        assert 'work_history' in prompt
+        # The model must not be asked to emit experience_years as a JSON key
+        # (it is computed in code from work_history).
+        assert '"experience_years"' not in prompt
+        assert '[[' not in prompt and ']]' not in prompt
 
-    def test_all_8_roles_have_both_prompt_files(self):
-        roles = [
-            'tech', 'sales_marketing', 'hr_recruitment', 'finance_admin',
-            'design_creative', 'operations_support', 'project_management', 'product_management',
-        ]
-        for role in roles:
-            for prompt in ['extraction', 'matching']:
-                path = get_prompt_path(role, prompt)
-                assert path.exists(), f"Missing: {role}/{prompt}.txt"
+    def test_matching_prompt_composes_with_no_leftover_sentinels(self):
+        profile = {'candidate_name': 'Jane Doe', 'skills': ['Figma']}
+        prompt = build_matching_prompt('design_creative', 'UX role', profile)
+        assert 'UX role' in prompt
+        assert 'Jane Doe' in prompt
+        assert 'achievement_score' in prompt
+        assert '[[' not in prompt and ']]' not in prompt
+
+    def test_unknown_role_falls_back_to_default_fragment(self):
+        from apps.core.services.job_families import FALLBACK_ROLE
+        frag = parse_fragment('nonexistent_role')
+        assert frag.get('ROLE_TITLE') == parse_fragment(FALLBACK_ROLE).get('ROLE_TITLE')
 
 
 @pytest.mark.django_db
 class TestScoreNodeWeights:
 
-    def test_tech_role_uses_tech_weights(self):
+    def test_family_weights_applied(self):
+        from django.conf import settings
+        w = settings.FAMILY_WEIGHTS['software_engineering']
         state = build_test_state(
-            job_type='tech', skill_score=100, experience_match_score=100,
+            job_type='software_engineering', skill_score=100, experience_match_score=100,
             education_match_score=100, certification_score=0, achievement_score=0,
         )
         result = score_node(state)
-        expected = 100 * 0.40 + 100 * 0.30 + 100 * 0.20 + 0 * 0.10
+        expected = 100 * w['skill'] + 100 * w['experience'] + 100 * w['education'] + 0 * w['certification'] + 0 * w['achievement']
         assert abs(result['final_score'] - expected) < 0.1
 
-    def test_non_tech_role_uses_achievement_weight(self):
+    def test_achievement_weighted_family(self):
+        from django.conf import settings
+        w = settings.FAMILY_WEIGHTS['sales']
         state = build_test_state(
-            job_type='sales_marketing', skill_score=100,
+            job_type='sales', skill_score=100,
             experience_match_score=100, education_match_score=100,
             certification_score=0, achievement_score=100,
         )
         result = score_node(state)
-        expected = 100 * 0.30 + 100 * 0.25 + 100 * 0.15 + 0 * 0.10 + 100 * 0.20
+        expected = (100 * w['skill'] + 100 * w['experience'] + 100 * w['education']
+                    + 0 * w['certification'] + 100 * w['achievement'])
         assert abs(result['final_score'] - expected) < 0.1
+
+    def test_all_family_weight_vectors_sum_to_one(self):
+        from django.conf import settings
+        from apps.core.services.job_families import VALID_JOB_TYPES
+        for family in VALID_JOB_TYPES:
+            w = settings.FAMILY_WEIGHTS[family]
+            assert abs(sum(w.values()) - 1.0) < 1e-9, f"{family} weights do not sum to 1.0"
 
     def test_missing_achievement_score_defaults_to_zero(self):
         state = build_test_state(

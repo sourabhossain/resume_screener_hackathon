@@ -70,6 +70,9 @@ class JobViewSet(viewsets.ModelViewSet):
             job = Job.objects.all_with_deleted().get(pk=pk)
         except Job.DoesNotExist:
             raise NotFound(f"Job {pk} not found.")
+        if job.owner_id and job.owner_id != request.user.pk and not request.user.is_superuser:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to restore this job.")
         job.restore()
         return Response({'status': 'restored'})
 

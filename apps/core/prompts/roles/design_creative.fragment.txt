@@ -1,0 +1,17 @@
+@@ ROLE_TITLE
+Design and Creative
+
+@@ ROLE_SKILL_TAXONOMY
+   - UX/UI: UX research, user interviews, personas, journey mapping, wireframing, prototyping, usability testing, information architecture, interaction design
+   - Visual/Product: visual design, typography, layout, design systems, iconography, accessibility, responsive design
+   - Creative/Brand: branding, art direction, storytelling, copywriting, content strategy, brand voice, campaign design
+   - Media: motion design, animation, video production, photography, illustration
+   - Tools: Figma, Sketch, Adobe Photoshop, Illustrator, InDesign, After Effects, Premiere Pro, XD, InVision, Zeplin, Miro, Framer, Webflow, Canva, Blender, Cinema 4D
+   - Collaboration: design critique, presenting concepts, stakeholder communication, cross-functional collaboration, creative direction, iteration
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: hands-on design/creative work; adjacent creative domains (e.g. graphic design for a UX role) count as partial fit, with portfolio evidence raising the score.
+- Relevant education: Design, Fine Arts, HCI, or related creative degrees; bootcamps or self-taught paths backed by a portfolio count as partial fit.
+- Relevant certifications: Google UX Design, Interaction Design Foundation, Adobe Certified, and similar.
+- Strong achievements: measurable design outcomes such as conversion uplift, usability/task-completion improvement, design-system adoption, or industry awards. Purely qualitative claims ("improved UX") are weak.
+- Portfolio relevance: weigh how closely the profile's stated portfolio work, redesigns, launches, or design systems match this job's domain and seniority, and reflect that in experience_match_score and achievement_score (do not emit a separate portfolio score).

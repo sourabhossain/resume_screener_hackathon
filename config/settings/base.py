@@ -33,6 +33,12 @@ MIDDLEWARE = [
     # Serves collected static files directly from the app process so gunicorn
     # works with DEBUG=False without needing nginx in front for static.
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Attach a per-request correlation ID (X-Request-ID header) so web and
+    # Celery logs can be linked. Must come early so all downstream middleware
+    # and views can read request.request_id.
+    'config.middleware.RequestCorrelationMiddleware',
+    # Emit CSP on every response, including error pages.
+    'config.middleware.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -185,6 +191,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'apps.interviews': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }
 
@@ -276,19 +287,34 @@ OPENAI_MODEL = 'gpt-5-nano-2025-08-07'
 
 # AI Screening Configuration
 AI_SCREENING_CONFIG = {
-    # Tech role weights (sum = 1.0)
-    'SKILL_WEIGHT': 0.40,
-    'EXPERIENCE_WEIGHT': 0.30,
-    'EDUCATION_WEIGHT': 0.20,
-    'CERTIFICATION_WEIGHT': 0.10,
-    # Non-tech role weights — includes achievement_score (sum = 1.0)
-    'NON_TECH_SKILL_WEIGHT': 0.30,
-    'NON_TECH_EXPERIENCE_WEIGHT': 0.25,
-    'NON_TECH_EDUCATION_WEIGHT': 0.15,
-    'NON_TECH_CERTIFICATION_WEIGHT': 0.10,
-    'NON_TECH_ACHIEVEMENT_WEIGHT': 0.20,
     'TOP_TIER_THRESHOLD': 80,
     'MID_TIER_THRESHOLD': 60,
     'MAX_RESUME_CHARS': 4000,
     'MAX_JOB_DESC_CHARS': 3000,
+    # Detector results below this confidence are flagged for manual review
+    # rather than routed to a guessed family.
+    'JOB_TYPE_CONFIDENCE_THRESHOLD': 0.4,
+}
+
+# Per-family final-score weights. Each vector is
+# (skill, experience, education, certification, achievement) and MUST sum to 1.0.
+# Keys must match apps.core.services.job_families.JOB_FAMILIES.
+FAMILY_WEIGHTS = {
+    'software_engineering': {'skill': 0.40, 'experience': 0.25, 'education': 0.15, 'certification': 0.10, 'achievement': 0.10},
+    'devops_sre':          {'skill': 0.40, 'experience': 0.25, 'education': 0.10, 'certification': 0.15, 'achievement': 0.10},
+    'qa_test':             {'skill': 0.40, 'experience': 0.25, 'education': 0.15, 'certification': 0.10, 'achievement': 0.10},
+    'data_ai':             {'skill': 0.40, 'experience': 0.25, 'education': 0.15, 'certification': 0.10, 'achievement': 0.10},
+    'security':            {'skill': 0.35, 'experience': 0.25, 'education': 0.10, 'certification': 0.20, 'achievement': 0.10},
+    'product_management':  {'skill': 0.30, 'experience': 0.25, 'education': 0.15, 'certification': 0.05, 'achievement': 0.25},
+    'design_creative':     {'skill': 0.35, 'experience': 0.20, 'education': 0.10, 'certification': 0.05, 'achievement': 0.30},
+    'project_management':  {'skill': 0.30, 'experience': 0.30, 'education': 0.10, 'certification': 0.15, 'achievement': 0.15},
+    'sales':               {'skill': 0.25, 'experience': 0.25, 'education': 0.05, 'certification': 0.05, 'achievement': 0.40},
+    'marketing':           {'skill': 0.30, 'experience': 0.20, 'education': 0.10, 'certification': 0.10, 'achievement': 0.30},
+    'customer_success':    {'skill': 0.30, 'experience': 0.25, 'education': 0.10, 'certification': 0.10, 'achievement': 0.25},
+    'customer_support':    {'skill': 0.40, 'experience': 0.25, 'education': 0.10, 'certification': 0.10, 'achievement': 0.15},
+    'finance_admin':       {'skill': 0.30, 'experience': 0.25, 'education': 0.15, 'certification': 0.20, 'achievement': 0.10},
+    'hr_recruitment':      {'skill': 0.35, 'experience': 0.25, 'education': 0.15, 'certification': 0.10, 'achievement': 0.15},
+    'legal_compliance':    {'skill': 0.30, 'experience': 0.25, 'education': 0.20, 'certification': 0.15, 'achievement': 0.10},
+    'it_internal':         {'skill': 0.40, 'experience': 0.25, 'education': 0.10, 'certification': 0.15, 'achievement': 0.10},
+    'operations':          {'skill': 0.35, 'experience': 0.25, 'education': 0.10, 'certification': 0.10, 'achievement': 0.20},
 }

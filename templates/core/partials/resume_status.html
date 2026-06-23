@@ -1,5 +1,6 @@
 <div id="screening-status"
      class="space-y-8"
+     aria-live="polite"
      {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' %}
      hx-get="{% url 'core:resume_status_fragment' resume.uuid %}"
      hx-trigger="every 3s"
@@ -7,7 +8,26 @@
      hx-swap="outerHTML"
      {% endif %}>
 
-    {# ── Score cards ── #}
+    {% if resume.screening_status == 'needs_review' %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-950/30">
+        <p class="flex items-center gap-2 text-sm font-bold text-amber-800 dark:text-amber-300">
+            <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            Needs review — not scored yet
+        </p>
+        <p class="mt-1.5 text-sm text-amber-700 dark:text-amber-400">
+            {{ resume.reasoning|default:"The AI could not confidently assign a job family. Clarify the job description, then re-run screening." }}
+        </p>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+            <a href="{% url 'core:job_edit' resume.job.slug %}"
+               class="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-50 dark:border-amber-700 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-amber-950/30">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Edit job description
+            </a>
+            <span class="text-xs text-amber-700/80 dark:text-amber-400/80">then use “Run AI Screening” above to re-run</span>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-4 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark text-center sm:p-6">
             <p class="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Final Score</p>
@@ -50,7 +70,6 @@
         </div>
     </div>
 
-    {# ── Score breakdown ── #}
     <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
         <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
             <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -135,7 +154,6 @@
         {% endif %}
     </div>
 
-    {# ── Achievements ── #}
     {% if resume.achievements %}
     <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
         <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
@@ -152,7 +170,6 @@
     </div>
     {% endif %}
 
-    {# ── AI Reasoning ── #}
     {% if resume.reasoning %}
     <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
         <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
@@ -165,13 +182,12 @@
     </div>
     {% endif %}
 
-    {# ── Screening status banner ── #}
     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
     <div class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-6 border border-blue-200 dark:border-blue-800 flex items-center gap-4" role="alert">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 shrink-0"></div>
         <div>
             <p class="font-semibold text-blue-800 dark:text-blue-300">AI Screening in Progress</p>
-            <p class="text-sm text-blue-600 dark:text-blue-400">This page updates automatically — no need to refresh.</p>
+            <p class="text-sm text-blue-600 dark:text-blue-400">This page updates automatically, no need to refresh.</p>
         </div>
     </div>
     {% elif resume.screening_status == 'failed' %}
@@ -181,7 +197,6 @@
     </div>
     {% endif %}
 
-    {# ── Link Verification ── #}
     {% if resume.verification_status == 'pending' or resume.verification_status == 'processing' %}
     <div class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 border border-blue-200 dark:border-blue-800 flex items-center gap-3">
         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 shrink-0"></div>
@@ -205,8 +220,8 @@
             </h2>
             {% if resume.verification_score is not None %}
             <span class="w-fit shrink-0 px-3 py-1 text-sm font-bold rounded-full sm:ml-auto
-                {% if resume.verification_score >= 80 %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
-                {% elif resume.verification_score >= 50 %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
+                {% if resume.verification_score >= 70 %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400
+                {% elif resume.verification_score >= 40 %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400
                 {% else %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400{% endif %}">
                 {{ resume.verification_score }}%
             </span>
@@ -290,7 +305,6 @@
     </div>
     {% endif %}
 
-    {# ── Raw extracted text (collapsed by default) ── #}
     {% if resume.raw_text %}
     <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark"
          x-data="{ open: false }">
@@ -320,3 +334,11 @@
     {% endif %}
 
 </div>
+{% comment %}
+OOB-refresh the header action button as screening finishes (this fragment is
+polled every 3s); without this the "Screening in progress…" button would stay
+stale until a full page reload. Only emitted when served as the polling fragment
+(oob=True) — otherwise it would duplicate the header's #screening-action id on
+the full page render.
+{% endcomment %}
+{% if oob %}{% include 'core/partials/screening_action.html' with oob=True %}{% endif %}

@@ -1,0 +1,14 @@
+@@ ROLE_TITLE
+Finance and Administration
+
+@@ ROLE_SKILL_TAXONOMY
+   - Finance skills (financial modeling, forecasting, budgeting, variance analysis, FP&A)
+   - Accounting skills (AP/AR, general ledger, reconciliation, month-end close, audit)
+   - Tools and platforms (SAP, Oracle, QuickBooks, Excel, Tableau, NetSuite, Bloomberg, etc.)
+   - Soft skills (attention to detail, analytical thinking, compliance, stakeholder reporting)
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: finance/accounting work directly matching the job; related financial domains (e.g. FP&A for an accounting role) count as partial fit.
+- Relevant education: Accounting, Finance, or Economics degrees; a Business degree plus strong finance experience counts as partial fit.
+- Relevant certifications: CPA, CFA, CMA, ACCA, CIMA, FRM, CFP, and similar.
+- Strong achievements: quantified cost savings, efficiency gains, budget/portfolio scale managed, clean audit records, or revenue/error recovery. Qualitative claims are weak.

@@ -6,6 +6,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.interviews.forms import InterviewerAddForm
 from apps.interviews.models import (
     Interview,
     InterviewEvaluation,
@@ -13,8 +14,6 @@ from apps.interviews.models import (
     MAX_SCORE,
 )
 
-
-# ── Fixtures ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def interview(db, sample_resume):
@@ -32,8 +31,6 @@ def _full_scores(value=4):
     """A complete, valid evaluation POST payload (all criteria scored)."""
     return {f'score_{k}': str(value) for k in CRITERIA_KEYS}
 
-
-# ── Model tests ──────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestInterviewModels:
@@ -79,7 +76,53 @@ class TestInterviewModels:
         assert interview.avg_score() == e1.total_score
 
 
-# ── Recruiter view tests (login required) ─────────────────────────────────────
+@pytest.mark.django_db
+class TestInterviewerAddForm:
+    def test_accepts_bengali_and_english_names(self):
+        form = InterviewerAddForm({
+            'interviewer_name': 'আসাদ হোসেন',
+            'interviewer_position': 'Sr. Manager',
+            'interviewer_department': 'Human Resources',
+        })
+        assert form.is_valid(), form.errors
+
+    def test_accepts_hyphen_apostrophe_and_period(self):
+        form = InterviewerAddForm({
+            'interviewer_name': "Dr. O'Brien-Smith",
+            'interviewer_position': '',
+            'interviewer_department': '',
+        })
+        assert form.is_valid(), form.errors
+
+    def test_rejects_special_characters(self):
+        form = InterviewerAddForm({
+            'interviewer_name': "ঘজক্ল;'",
+            'interviewer_position': 'bad@title',
+            'interviewer_department': '',
+        })
+        assert not form.is_valid()
+        assert 'interviewer_name' in form.errors
+        assert 'interviewer_position' in form.errors
+
+    def test_rejects_name_without_letters(self):
+        form = InterviewerAddForm({
+            'interviewer_name': '12345',
+            'interviewer_position': '',
+            'interviewer_department': '',
+        })
+        assert not form.is_valid()
+        assert 'interviewer_name' in form.errors
+
+    def test_trims_whitespace(self):
+        form = InterviewerAddForm({
+            'interviewer_name': '  Carol  ',
+            'interviewer_position': '  Lead  ',
+            'interviewer_department': '',
+        })
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data['interviewer_name'] == 'Carol'
+        assert form.cleaned_data['interviewer_position'] == 'Lead'
+
 
 @pytest.mark.django_db
 class TestRecruiterViews:
@@ -105,6 +148,20 @@ class TestRecruiterViews:
         resp = authenticated_client.post(url, {'interviewer_name': 'Carol', 'interviewer_position': 'Lead'})
         assert resp.status_code == 302
         assert interview.evaluations.filter(interviewer_name='Carol').exists()
+
+    def test_detail_rejects_invalid_interviewer_input(self, authenticated_client, interview):
+        url = reverse('interviews:detail', kwargs={'pk': interview.pk})
+        before = interview.evaluations.count()
+        resp = authenticated_client.post(url, {
+            'interviewer_name': 'bad@name',
+            'interviewer_position': 'Lead',
+            'interviewer_department': '',
+        })
+        assert resp.status_code == 200
+        assert interview.evaluations.count() == before
+        assert b'dj-messages' in resp.content
+        assert b'invalid characters' in resp.content.lower()
+        assert b'ring-red-400/50' not in resp.content
 
     def test_delete_soft_deletes(self, authenticated_client, interview):
         url = reverse('interviews:delete', kwargs={'pk': interview.pk})
@@ -139,8 +196,6 @@ class TestRecruiterViews:
         resp = client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
         assert resp.status_code == 200
 
-
-# ── Public evaluation flow (no login) ─────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestPublicEvaluate:

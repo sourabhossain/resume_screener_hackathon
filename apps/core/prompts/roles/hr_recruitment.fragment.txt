@@ -1,0 +1,14 @@
+@@ ROLE_TITLE
+Human Resources and Recruitment
+
+@@ ROLE_SKILL_TAXONOMY
+   - Recruitment skills (sourcing, screening, interviewing, ATS systems, Boolean search)
+   - HR skills (performance management, employee relations, compensation, L&D, HRBP)
+   - Tools and platforms (Workday, SAP SuccessFactors, Greenhouse, Lever, BambooHR, etc.)
+   - Soft skills (communication, empathy, conflict resolution, stakeholder management)
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: HR/recruitment work matching the job; related HR functions (e.g. recruiter for an HRBP role) count as partial fit.
+- Relevant education: HR, Psychology, Organizational Behavior, or Business degrees; related fields plus strong HR experience count as partial fit.
+- Relevant certifications: SHRM-CP, SHRM-SCP, PHR, SPHR, CIPD, LinkedIn Recruiter, and similar.
+- Strong achievements: quantified hiring metrics (time-to-fill, roles filled), retention improvement, cost-per-hire reduction, or HR program reach. Qualitative claims are weak.

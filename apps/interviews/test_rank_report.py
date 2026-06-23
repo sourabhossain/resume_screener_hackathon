@@ -20,8 +20,6 @@ from apps.core.models import Job, Resume
 from apps.interviews.models import Interview, CRITERIA_KEYS
 
 
-# ── fixtures ──────────────────────────────────────────────────────────────────
-
 @pytest.fixture
 def job_with_interview(db, user):
     job = Job.objects.create(owner=user, title='Dev Role', status='active')
@@ -43,8 +41,6 @@ def _submit_eval(interview, scores_value=4):
     ev.save()
     return ev
 
-
-# ── access control ────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestRankReportAccess:
@@ -71,8 +67,6 @@ class TestRankReportAccess:
         assert resp.status_code == 200
         assert resp.context['candidates'] == []
 
-
-# ── composite score ───────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestRankReportCompositeScore:
@@ -121,8 +115,6 @@ class TestRankReportCompositeScore:
         # No submitted evals → no candidates in report
         assert resp.context['candidates'] == []
 
-
-# ── verdict logic ─────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestRankReportVerdict:
@@ -181,8 +173,6 @@ class TestRankReportVerdict:
         assert resp.context['candidates'][0]['verdict'] == 'review'
 
 
-# ── phase filter ──────────────────────────────────────────────────────────────
-
 @pytest.mark.django_db
 class TestRankReportPhaseFilter:
 
@@ -219,8 +209,6 @@ class TestRankReportPhaseFilter:
         assert 'Alpha' in names
         assert 'Beta' in names
 
-
-# ── ranking order ─────────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestRankReportOrder:

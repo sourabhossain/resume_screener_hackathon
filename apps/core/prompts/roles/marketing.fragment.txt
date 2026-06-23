@@ -1,0 +1,16 @@
+@@ ROLE_TITLE
+Marketing
+
+@@ ROLE_SKILL_TAXONOMY
+   - Demand gen/growth: SEO, SEM, paid media, email marketing, conversion/funnel optimization, lifecycle
+   - Content/brand: content marketing, copywriting, brand, social media, PR, positioning
+   - Product marketing: messaging, launches, competitive analysis, sales enablement
+   - Analytics: Google Analytics, attribution, campaign measurement, A/B testing
+   - Tools: HubSpot, Marketo, Pardot, Google Ads, Meta Ads, CMS platforms
+   - Soft skills: storytelling, creativity, data-driven decision making
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: driving demand, brand, or growth (campaigns, funnel, positioning); sales or pure design count only as partial fit.
+- Relevant education: Marketing, Business, Communications, or related; strong results can substitute.
+- Relevant certifications: Google Ads, HubSpot, Meta Blueprint, analytics credentials.
+- Strong achievements: measurable pipeline/lead growth, campaign ROI, traffic/conversion lift, or CAC reduction. Qualitative claims are weak.

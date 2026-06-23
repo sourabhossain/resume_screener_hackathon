@@ -7,6 +7,7 @@ from django.urls import path, re_path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from apps.core.views import ToastLoginView
 from django.core.cache import caches
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -44,7 +45,7 @@ def _auth_cache_required(view_fn):
 
 
 # Throttle login: two layers (per-username + per-IP); fail closed if cache unreachable.
-_login_view = auth_views.LoginView.as_view(template_name='auth/login.html', redirect_authenticated_user=True)
+_login_view = ToastLoginView.as_view()
 _login_view = ratelimit(key='post:username', rate='5/m', method='POST', block=True)(_login_view)
 _login_view = ratelimit(key='ip', rate='10/m', method='POST', block=True)(_login_view)
 _login_view = _auth_cache_required(_login_view)

@@ -84,6 +84,13 @@ class TestDashboardView:
         assert 'active_jobs' in response.context
         assert 'total_resumes' in response.context
 
+    def test_dashboard_counts_needs_review(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        Resume.objects.create(job=sample_job, candidate_name="Pat", screening_status="needs_review")
+        response = authenticated_client.get(reverse('core:dashboard'))
+        assert response.context['needs_review_count'] == 1
+        assert b'Needs review' in response.content  # surfaced in the attention panel
+
     def test_dashboard_stats_deleted_job_resumes(self, authenticated_client, sample_job, sample_resume):
         """Test dashboard counts exclude resumes from deleted jobs."""
         # Initial check
@@ -125,13 +132,13 @@ class TestJobViews:
         assert sample_job in response.context['jobs']
     
     def test_job_list_default_active(self, authenticated_client, sample_job):
-        """Test job list defaults to active status."""
+        """Bare /jobs/ defaults to the 'active' filter — only active jobs are shown."""
         # Create a draft job
         Job.objects.create(title='Draft Job', status='draft', owner=sample_job.owner)
-        
+
         response = authenticated_client.get(reverse('core:job_list'))
-        
-        # Should only contain active jobs (sample_job is active)
+
+        # Should only contain the active job (draft is filtered out by default)
         assert len(response.context['jobs']) == 1
         assert response.context['jobs'][0] == sample_job
         assert response.context['status_filter'] == 'active'
@@ -246,6 +253,47 @@ class TestResumeViews:
         assert response.status_code == 200
         assert response.context['resume'] == sample_resume
     
+    def test_needs_review_list_shows_only_needs_review(self, authenticated_client, sample_job, sample_resume):
+        from apps.core.models import Resume
+        nr = Resume.objects.create(job=sample_job, candidate_name="Uncertain Uma", screening_status="needs_review")
+        resp = authenticated_client.get(reverse('core:needs_review'))
+        assert resp.status_code == 200
+        names = [r.candidate_name for r in resp.context['page_obj']]
+        assert "Uncertain Uma" in names
+        assert sample_resume.candidate_name not in names  # completed one excluded
+
+    def test_pipeline_row_shows_needs_review_badge(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        nr = Resume.objects.create(job=sample_job, candidate_name="Uma", screening_status="needs_review")
+        body = authenticated_client.get(
+            reverse('core:resume_row_fragment', kwargs={'uuid': nr.uuid})
+        ).content.decode()
+        assert "Needs review" in body  # distinguishable from a plain unscored row
+
+    def test_detail_disables_screening_button_while_processing(self, authenticated_client, sample_resume):
+        """While screening is running, the action shows a disabled state and NO
+        rescreen form — so repeated clicks can't spam re-runs or pollute history."""
+        sample_resume.screening_status = 'processing'
+        sample_resume.save(update_fields=['screening_status'])
+        body = authenticated_client.get(
+            reverse('core:resume_detail', kwargs={'uuid': sample_resume.uuid})
+        ).content.decode()
+        assert 'Screening in progress' in body
+        assert reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid}) not in body
+        # The header action must appear exactly once (no duplicate id on full page).
+        assert body.count('id="screening-action"') == 1
+
+    def test_status_fragment_oob_refreshes_action_button(self, authenticated_client, sample_resume):
+        """The polling fragment carries an OOB swap of the action button so it
+        updates the moment screening finishes — no full reload needed."""
+        sample_resume.screening_status = 'processing'
+        sample_resume.save(update_fields=['screening_status'])
+        body = authenticated_client.get(
+            reverse('core:resume_status_fragment', kwargs={'uuid': sample_resume.uuid})
+        ).content.decode()
+        assert 'id="screening-action"' in body
+        assert 'hx-swap-oob="true"' in body
+
     def test_resume_delete(self, authenticated_client, sample_resume):
         """Test soft deleting a resume."""
         response = authenticated_client.post(
@@ -296,6 +344,43 @@ class TestResumeViews:
 
         assert response.status_code == 302
         mock_delay.assert_called_once_with(sample_resume.id)
+
+    def test_resume_rescreen_htmx_swaps_in_place_without_redirect(self, authenticated_client, sample_resume):
+        """An HTMX rescreen swaps the status region in place (200, no 302 redirect)
+        so it doesn't push a duplicate browser-history entry."""
+        from unittest.mock import patch
+
+        with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
+            response = authenticated_client.post(
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid}),
+                HTTP_HX_REQUEST='true',
+            )
+
+        assert response.status_code == 200  # fragment, not a 302 redirect
+        mock_delay.assert_called_once_with(sample_resume.id)
+        body = response.content.decode()
+        assert 'id="screening-status"' in body          # status region swapped in place
+        assert 'hx-swap-oob="true"' in body             # action button OOB-refreshed
+        sample_resume.refresh_from_db()
+        assert sample_resume.screening_status == 'processing'
+
+    def test_resume_rescreen_allowed_for_needs_review(self, authenticated_client, sample_resume):
+        """A needs_review resume shows the Run AI Screening button, so clicking it
+        must actually re-queue (not silently do nothing)."""
+        from unittest.mock import patch
+
+        sample_resume.screening_status = 'needs_review'
+        sample_resume.save(update_fields=['screening_status'])
+
+        with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
+            response = authenticated_client.post(
+                reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid})
+            )
+
+        assert response.status_code == 302
+        mock_delay.assert_called_once_with(sample_resume.id)
+        sample_resume.refresh_from_db()
+        assert sample_resume.screening_status == 'processing'
 
     def test_resume_rescreen_blocked_while_processing(self, authenticated_client, sample_resume):
         """Test re-screening is blocked when screening is already in progress."""

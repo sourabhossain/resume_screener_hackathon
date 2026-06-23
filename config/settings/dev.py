@@ -30,3 +30,12 @@ INTERNAL_IPS = ['127.0.0.1']
 
 # Email backend for development
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Force per-request template reloads in dev so .html edits show up without
+# restarting gunicorn. Without this, cached.Loader pins compiled templates in
+# worker memory until a restart (gunicorn --reload only watches .py files).
+TEMPLATES[0]['APP_DIRS'] = False
+TEMPLATES[0]['OPTIONS']['loaders'] = [
+    'django.template.loaders.filesystem.Loader',
+    'django.template.loaders.app_directories.Loader',
+]

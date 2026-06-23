@@ -8,14 +8,10 @@ Security tests for serve_protected_media:
 import pytest
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
-
 def _media_url(path):
     """Build the protected-media URL for a given relative path."""
     return f"/media/{path}"
 
-
-# ── authentication guard ──────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestProtectedMediaAuth:
@@ -45,8 +41,6 @@ class TestProtectedMediaAuth:
         resp = authenticated_client.get(_media_url("resumes/nonexistent.pdf"))
         assert resp.status_code == 404
 
-
-# ── path traversal guard ──────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestProtectedMediaPathTraversal:

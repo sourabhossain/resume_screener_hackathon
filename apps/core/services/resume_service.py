@@ -128,16 +128,28 @@ class ResumeService:
 
     @staticmethod
     def apply_screening_result(resume, result: ScreeningResult) -> None:
+        # The detector could not confidently assign a job family. Park the
+        # resume for a human to pick the family and re-screen, rather than
+        # scoring it against a guessed role.
+        if result.get('needs_review'):
+            from apps.core.models import Resume as ResumeModel
+            # Persist WHY it was flagged (from the detector) so the recruiter can
+            # see the specific reason in the UI, not just a generic message.
+            ResumeModel.objects.filter(pk=resume.pk).update(
+                screening_status='needs_review',
+                reasoning=result.get('reasoning', '') or '',
+            )
+            return
+
         with transaction.atomic():
             from apps.core.models import Resume as ResumeModel
             resume = ResumeModel.objects.select_for_update().get(pk=resume.pk)
 
             resume.candidate_name = result.get('candidate_name', resume.candidate_name)
-            # AI-extracted contact takes precedence over regex fallback but
-            # never overwrites what the user explicitly typed in the form.
-            # We detect "user typed" by checking if the value was already in DB
-            # before screening began — captured in the pre-fetch state above.
-            # Fill contact from AI only if still blank after regex extraction.
+            # Only fill contact details from the AI result when they are still
+            # blank — i.e. neither typed by the user in the form nor recovered by
+            # the earlier regex extraction (_fill_contact_info). This prevents AI
+            # output from overwriting recruiter- or candidate-provided values.
             if not resume.email and result.get('candidate_email'):
                 resume.email = result['candidate_email']
             if not resume.phone and result.get('candidate_phone'):
@@ -179,6 +191,15 @@ class ResumeService:
             # caller's `resume` is stale; refresh before logging/returning its fields.
             resume.refresh_from_db()
 
+            if resume.screening_status == 'needs_review':
+                logger.info(f"Resume {resume.id} flagged for manual review (job family uncertain)")
+                return {
+                    'success': True,
+                    'resume_id': resume.id,
+                    'needs_review': True,
+                    'screening_status': 'needs_review',
+                }
+
             logger.info(f"Completed processing resume {resume.id}: Score={resume.final_score}")
 
             return {
@@ -192,24 +213,31 @@ class ResumeService:
 
         except DocumentExtractionError as e:
             logger.error(f"Document extraction failed for resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(resume, f"Couldn't read the résumé file — {e}")
             return {'success': False, 'error': str(e), 'error_type': 'extraction'}
 
         except AIScreeningError as e:
             logger.error(f"AI screening failed for resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(resume, f"AI screening error — {e}")
             return {'success': False, 'error': str(e), 'error_type': 'screening'}
 
         except MissingJobDescriptionError as e:
             logger.error(f"Missing job description for resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(
+                resume,
+                "This job has no description, so the résumé couldn't be screened. "
+                "Add a job description, then re-run screening.",
+            )
             return {'success': False, 'error': str(e), 'error_type': 'job_description'}
 
         except Exception as e:
             logger.exception(f"Unexpected error processing resume {resume.id}: {e}")
-            resume.screening_status = 'failed'
-            resume.save(update_fields=['screening_status'])
+            cls._mark_failed(resume, f"Unexpected error during screening — {e}")
             return {'success': False, 'error': str(e), 'error_type': 'unknown'}
+
+    @staticmethod
+    def _mark_failed(resume, reason: str) -> None:
+        """Mark a résumé failed AND persist WHY (shown on the Screening Failed page)."""
+        resume.screening_status = 'failed'
+        resume.reasoning = reason
+        resume.save(update_fields=['screening_status', 'reasoning'])

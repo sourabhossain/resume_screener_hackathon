@@ -1,0 +1,15 @@
+@@ ROLE_TITLE
+Customer Success
+
+@@ ROLE_SKILL_TAXONOMY
+   - Account management: onboarding, adoption, QBRs, renewals, upsell/cross-sell, churn reduction
+   - Relationship: stakeholder management, executive relationships, customer advocacy
+   - Health/metrics: customer health scoring, NRR/GRR, success planning
+   - Tools: Gainsight, Totango, Salesforce, ChurnZero, support/CRM platforms
+   - Soft skills: empathy, communication, proactive problem-solving, commercial awareness
+
+@@ ROLE_MATCH_CRITERIA
+- Relevant experience: retaining and growing existing accounts (CSM, account manager, renewals); reactive issue resolution is customer_support, not this family.
+- Relevant education: any degree; Business relevant but track record matters more.
+- Relevant certifications: CS platform and methodology credentials.
+- Strong achievements: measurable retention/NRR improvement, churn reduction, expansion revenue, or adoption gains. Qualitative claims are weak.

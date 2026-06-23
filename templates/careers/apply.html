@@ -12,35 +12,12 @@
 {% block nav_action %}{% endblock %}
 
 {% block content %}
-<style>
-.job-description { color: #52525b; line-height: 1.75; font-size: 0.9375rem; }
-.dark .job-description { color: #d4d4d8; }
-.job-description h1, .job-description h2, .job-description h3, .job-description h4 {
-    font-weight: 700; color: #18181b; margin-top: 1.75rem; margin-bottom: 0.5rem; line-height: 1.3;
-}
-.dark .job-description h1, .dark .job-description h2,
-.dark .job-description h3, .dark .job-description h4 { color: #f4f4f5; }
-.job-description h1 { font-size: 1.25rem; }
-.job-description h2 { font-size: 1.1rem; border-bottom: 1px solid #f4f4f5; padding-bottom: 0.4rem; }
-.dark .job-description h2 { border-color: #3f3f46; }
-.job-description h3 { font-size: 0.975rem; color: #3f3f46; }
-.dark .job-description h3 { color: #a1a1aa; }
-.job-description p { margin-bottom: 0.75rem; }
-.job-description ul, .job-description ol { padding-left: 1.4rem; margin-bottom: 0.75rem; }
-.job-description ul { list-style-type: disc; }
-.job-description ol { list-style-type: decimal; }
-.job-description li { margin-bottom: 0.3rem; }
-.job-description strong { font-weight: 600; color: #27272a; }
-.dark .job-description strong { color: #e4e4e7; }
-.job-description > *:first-child { margin-top: 0; }
-</style>
 <div class="mx-auto max-w-4xl">
     <a href="{% url 'core:careers' %}" class="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition hover:text-primary-600 dark:text-zinc-400 dark:hover:text-primary-400">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
         All positions
     </a>
 
-    {# ── Job details ── #}
     <div class="rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark sm:p-10 lg:p-12">
         <h1 class="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">{{ job.title }}</h1>
 
@@ -72,25 +49,24 @@
         {% endif %}
     </div>
 
-    {# ── Application form ── #}
     <div class="mt-6 rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark sm:p-10">
         <h2 class="text-xl font-bold text-zinc-900 dark:text-white">Submit your application</h2>
         <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">Upload your resume (PDF or DOCX, max 5MB).</p>
 
-        <form method="post" enctype="multipart/form-data" class="mt-5 space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
+        <form method="post" enctype="multipart/form-data" hx-boost="false" class="mt-5 space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
 
-            <div class="{% if form.candidate_name.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+            <div>
                 <label for="{{ form.candidate_name.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Full name <span class="text-red-500">*</span></label>
                 {{ form.candidate_name }}
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
-                <div class="{% if form.email.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                <div>
                     <label for="{{ form.email.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Email address <span class="text-red-500">*</span></label>
                     {{ form.email }}
                 </div>
-                <div class="{% if form.phone.errors %}ring-2 ring-red-400/50 rounded-xl dark:ring-red-500/40{% endif %}">
+                <div>
                     <label for="{{ form.phone.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Phone number <span class="text-red-500">*</span></label>
                     {{ form.phone }}
                 </div>
@@ -98,14 +74,14 @@
 
             <div>
                 <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Resume file <span class="text-red-500">*</span></label>
-                {% include 'core/partials/file_dropzone.html' with file_error=form.file.errors %}
+                {% include 'core/partials/file_dropzone.html' %}
             </div>
 
             <button type="submit"
                     :disabled="submitting"
                     :class="{ 'opacity-50 cursor-not-allowed': submitting }"
                     class="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold text-white">
-                <svg x-show="submitting" class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg x-show="submitting" style="display:none" class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
@@ -115,7 +91,7 @@
                         Submit application
                     </span>
                 </template>
-                <span x-show="submitting">Submitting...</span>
+                <span x-show="submitting" style="display:none">Submitting...</span>
             </button>
         </form>
     </div>

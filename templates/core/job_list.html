@@ -9,45 +9,68 @@
     <p class="text-zinc-600 dark:text-zinc-400">Postings and applicant volume</p>
 </div>
 
+{% comment %}
+Tab bar + search stay STATIC (outside the swap) so they never flicker.
+Only #job-results swaps via HTMX; the active pill updates instantly via Alpine.
+Without JS, the links fall back to normal navigation.
+{% endcomment %}
+<div>
+
+
 <!-- Search and Filters -->
-<div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+<div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
+     x-data="{ status: '{{ status_filter|default:"active" }}' }"
+     hx-target="#job-results"
+     hx-select="#job-results"
+     hx-swap="outerHTML show:none"
+     hx-push-url="true">
     <!-- Search Bar -->
-    <form method="get" action="{% url 'core:job_list' %}" class="relative w-full max-w-md min-w-0 flex-1">
-        <input type="text" 
-               name="q" 
+    <form method="get" action="{% url 'core:job_list' %}" hx-get="{% url 'core:job_list' %}"
+          class="relative w-full max-w-md min-w-0 flex-1">
+        <input type="text"
+               id="job-search"
+               name="q"
                value="{{ search_query }}"
-               placeholder="Search jobs... (Press Enter)" 
+               placeholder="Search jobs... (Press Enter)"
                class="w-full rounded-lg border border-zinc-200 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
-        <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
         </svg>
-        {% if status_filter %}
-        <input type="hidden" name="status" value="{{ status_filter }}">
-        {% endif %}
+        <input type="hidden" name="status" :value="status" value="{{ status_filter }}">
     </form>
-    
+
     <!-- Status Filter Tabs -->
     <div class="w-full overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:w-auto sm:overflow-visible">
         <div class="inline-flex min-w-max rounded-lg border border-zinc-200 bg-zinc-100/80 p-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:min-w-0">
-        <a href="{% url 'core:job_list' %}?status=all{% if search_query %}&q={{ search_query }}{% endif %}" 
-           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'all' %}bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+        <a href="{% url 'core:job_list' %}?status=all{% if search_query %}&q={{ search_query }}{% endif %}"
+           hx-get="{% url 'core:job_list' %}?status=all" hx-include="#job-search" @click="status='all'"
+           :class="status==='all' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'"
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all">
             All
         </a>
-        <a href="{% url 'core:job_list' %}?status=active{% if search_query %}&q={{ search_query }}{% endif %}" 
-           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'active' %}bg-white text-emerald-700 shadow-sm dark:bg-zinc-800 dark:text-emerald-400{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+        <a href="{% url 'core:job_list' %}?status=active{% if search_query %}&q={{ search_query }}{% endif %}"
+           hx-get="{% url 'core:job_list' %}?status=active" hx-include="#job-search" @click="status='active'"
+           :class="status==='active' ? 'bg-white text-emerald-700 shadow-sm dark:bg-zinc-800 dark:text-emerald-400' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'"
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all">
             Active
         </a>
-        <a href="{% url 'core:job_list' %}?status=draft{% if search_query %}&q={{ search_query }}{% endif %}" 
-           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'draft' %}bg-white text-amber-800 shadow-sm dark:bg-zinc-800 dark:text-amber-300{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+        <a href="{% url 'core:job_list' %}?status=draft{% if search_query %}&q={{ search_query }}{% endif %}"
+           hx-get="{% url 'core:job_list' %}?status=draft" hx-include="#job-search" @click="status='draft'"
+           :class="status==='draft' ? 'bg-white text-amber-800 shadow-sm dark:bg-zinc-800 dark:text-amber-300' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'"
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all">
             Draft
         </a>
-        <a href="{% url 'core:job_list' %}?status=closed{% if search_query %}&q={{ search_query }}{% endif %}" 
-           class="rounded-md px-4 py-2 text-sm font-medium transition-all {% if status_filter == 'closed' %}bg-white text-zinc-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-300{% else %}text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white{% endif %}">
+        <a href="{% url 'core:job_list' %}?status=closed{% if search_query %}&q={{ search_query }}{% endif %}"
+           hx-get="{% url 'core:job_list' %}?status=closed" hx-include="#job-search" @click="status='closed'"
+           :class="status==='closed' ? 'bg-white text-zinc-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-300' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'"
+           class="rounded-md px-4 py-2 text-sm font-medium transition-all">
             Closed
         </a>
         </div>
     </div>
 </div>
+
+<div id="job-results" aria-live="polite">
 
 <!-- Results Summary -->
 {% if search_query or has_active_filter %}
@@ -171,10 +194,12 @@
 
 <!-- Pagination -->
 {% if page_obj.has_other_pages %}
-<div class="mt-10 flex flex-wrap items-center justify-center gap-2">
+<div class="mt-10 flex flex-wrap items-center justify-center gap-2"
+     hx-target="#job-results" hx-select="#job-results" hx-swap="outerHTML show:none" hx-push-url="true">
     <!-- Previous -->
     {% if page_obj.has_previous %}
     <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       hx-get="{% url 'core:job_list' %}?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
        class="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-600 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
@@ -190,6 +215,7 @@
             <span aria-current="page" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white">{{ num }}</span>
             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
             <a href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+               hx-get="{% url 'core:job_list' %}?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
                class="rounded-xl border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-600 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
                 {{ num }}
             </a>
@@ -200,6 +226,7 @@
     <!-- Next -->
     {% if page_obj.has_next %}
     <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       hx-get="{% url 'core:job_list' %}?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
        class="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-600 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
         Next
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,4 +242,8 @@
     ({{ page_obj.paginator.count }} total)
 </p>
 {% endif %}
+
+</div>{# /#job-results — HTMX swap region #}
+
+</div>{# /static filters + swap config wrapper #}
 {% endblock %}

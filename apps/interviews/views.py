@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.contrib import messages
 
+from apps.core.views import form_errors_to_messages
 from apps.core.models import Resume
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
 from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
@@ -17,28 +18,28 @@ def _can_access_interview(user, interview):
     return user.is_authenticated
 
 
-# ── Admin views (login required) ────────────────────────────────────────────
-
 @login_required
 def interview_create(request, resume_uuid):
     resume = get_object_or_404(Resume, uuid=resume_uuid)
     form = InterviewCreateForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        phase = form.cleaned_data['phase']
-        # Enforce sequential phase ordering: phase N requires phase N-1 to exist.
-        required_prior = {'2': '1', '3': '2'}
-        prior_phase = required_prior.get(phase)
-        if prior_phase and not Interview.objects.filter(
-            resume=resume, phase=prior_phase, is_deleted=False
-        ).exists():
-            phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
-            form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
-        else:
-            interview = form.save(commit=False)
-            interview.resume = resume
-            interview.save()
-            messages.success(request, 'Interview scheduled.')
-            return redirect('interviews:detail', pk=interview.pk)
+    if request.method == 'POST':
+        if form.is_valid():
+            phase = form.cleaned_data['phase']
+            required_prior = {'2': '1', '3': '2'}
+            prior_phase = required_prior.get(phase)
+            if prior_phase and not Interview.objects.filter(
+                resume=resume, phase=prior_phase, is_deleted=False
+            ).exists():
+                phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
+                form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
+            else:
+                interview = form.save(commit=False)
+                interview.resume = resume
+                interview.save()
+                messages.success(request, 'Interview scheduled.')
+                return redirect('interviews:detail', pk=interview.pk)
+        if form.errors:
+            form_errors_to_messages(request, form)
     return render(request, 'interviews/create.html', {'form': form, 'resume': resume})
 
 
@@ -56,6 +57,8 @@ def interview_detail(request, pk):
         ev.save()
         messages.success(request, f'Evaluation link created for {ev.interviewer_name}.')
         return redirect('interviews:detail', pk=pk)
+    elif request.method == 'POST':
+        form_errors_to_messages(request, add_form)
 
     evaluations = interview.evaluations.all()
     return render(request, 'interviews/detail.html', {
@@ -107,8 +110,6 @@ def evaluation_renew(request, token):
     return redirect('interviews:detail', pk=ev.interview_id)
 
 
-# ── Public evaluation form (no login) ───────────────────────────────────────
-
 def evaluate(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
 
@@ -147,9 +148,7 @@ def evaluate(request, token):
 
             return redirect('interviews:evaluate_done', token=token)
         else:
-            # Server-side safety net (e.g. JS disabled): surface what went wrong
-            # as toasts instead of silently re-rendering the form.
-            messages.error(request, 'Please rate every criterion before submitting.')
+            form_errors_to_messages(request, form)
 
     return render(request, 'interviews/evaluate.html', {
         'ev': ev,
@@ -163,8 +162,6 @@ def evaluate_done(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
 
-
-# ── Rank Report ─────────────────────────────────────────────────────────────
 
 @login_required
 def rank_report(request, job_slug):

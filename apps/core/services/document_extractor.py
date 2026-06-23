@@ -9,9 +9,9 @@ import docx
 
 # Fancy resume templates render icons/labels using symbol fonts, which PDF
 # extraction turns into decorative Unicode glyphs (e.g. ⌢ U+2322, bullets,
-# en/em dashes, smart quotes). The raw_text column is latin1, so any of these
-# raises MySQL error 1366. Map the common readable ones to ASCII, then drop the
-# rest — they carry no screening value but would otherwise fail the whole save.
+# en/em dashes, smart quotes). The raw_text column is utf8mb4 so these store
+# fine, but we still normalise the common readable ones to ASCII so the LLM
+# sees clean text rather than icon-font artefacts.
 _CHAR_REPLACEMENTS = {
     '–': '-', '—': '-', '−': '-',
     '•': '*', '·': '*', '●': '*', '○': '*',
@@ -58,12 +58,11 @@ class DocumentExtractor:
 
     @staticmethod
     def _sanitize(text: str) -> str:
-        """
-        Make extracted text safe to store in the latin1 raw_text column.
+        """Replace common typographic glyphs with ASCII equivalents.
 
-        Replaces common typographic glyphs with ASCII equivalents, then drops
-        any remaining characters that latin1 can't represent (symbol-font icons,
-        non-Latin scripts, etc.) so a single decorative glyph can't fail the save.
+        The DB column is utf8mb4 (inherits the table charset), so all Unicode
+        is stored correctly. We only normalise decorative symbols so the LLM
+        sees clean text rather than icon-font artefacts.
         """
         if not text:
             return text
@@ -71,8 +70,7 @@ class DocumentExtractor:
         for src, dst in _CHAR_REPLACEMENTS.items():
             text = text.replace(src, dst)
 
-        # Anything still outside latin1 (U+0000–U+00FF) is dropped.
-        return text.encode('latin-1', errors='ignore').decode('latin-1')
+        return text
     
     @staticmethod
     def _extract_from_pdf(file_path: str) -> str:

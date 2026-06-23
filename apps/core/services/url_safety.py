@@ -36,7 +36,28 @@ _GARBAGE_EXTRACTED_HOSTS = frozenset({
 })
 
 
+_NAT64_PREFIX = ipaddress.ip_network('64:ff9b::/96')
+
+
+def _effective_ip(ip):
+    """Unwrap IPv6 forms that embed an IPv4 so we judge the REAL destination.
+
+    Docker/IPv6 networks often resolve public hosts via NAT64 (64:ff9b::/96) or
+    IPv4-mapped (::ffff:0:0/96) addresses. The wrapper IPv6 looks "reserved" to
+    ipaddress and was wrongly blocking legitimate public hosts (e.g. github.com).
+    We extract the embedded IPv4 and judge that — so 64:ff9b::<public-v4> is
+    allowed while 64:ff9b::<private-v4> is still blocked.
+    """
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped:
+            return ip.ipv4_mapped
+        if ip in _NAT64_PREFIX:
+            return ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
+    return ip
+
+
 def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    ip = _effective_ip(ip)
     if ip == ipaddress.ip_address('169.254.169.254'):
         return True
     return bool(
