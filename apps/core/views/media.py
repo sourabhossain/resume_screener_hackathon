@@ -1,0 +1,22 @@
+"""Authenticated, rate-limited serving of protected media (resume/job files)."""
+import os
+
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.http import FileResponse, Http404
+from django_ratelimit.decorators import ratelimit
+
+
+@login_required
+@ratelimit(key='user', rate='60/m', block=True)
+def serve_protected_media(request, path):
+    full_path = os.path.join(settings.MEDIA_ROOT, path)
+    # os.sep prevents path traversal into sibling directories (e.g. /media/../secrets)
+    media_root = os.path.abspath(settings.MEDIA_ROOT) + os.sep
+    if not os.path.abspath(full_path).startswith(media_root):
+        raise Http404
+    if not os.path.exists(full_path):
+        raise Http404
+    # as_attachment forces a download instead of letting the browser render the
+    # PII file inline (defence-in-depth alongside the upload magic-byte checks).
+    return FileResponse(open(full_path, 'rb'), as_attachment=True)

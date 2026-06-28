@@ -22,23 +22,57 @@ class SoftDeleteManager(models.Manager):
 
 
 class SoftDeleteModel(models.Model):
-    """Abstract base model with soft delete functionality."""
-    
+    """Abstract base model with soft delete + declarative cascade.
+
+    `on_delete=CASCADE` only fires on a hard DELETE, so a soft delete would
+    orphan related rows (and leave their public links live). Instead of a
+    bespoke soft_delete() override per model, a model declares which reverse
+    relations to cascade into via SOFT_DELETE_CASCADE; the base walks them
+    recursively. A new related model only needs to (a) be a SoftDeleteModel and
+    (b) be listed by its parent — the cascade then "just works", which is what
+    keeps the soft-delete strategy consistent across the codebase.
+    """
+
     is_deleted = models.BooleanField(default=False, db_default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    
+
+    # Reverse-relation accessor names (related_name) to cascade soft-deletes into.
+    # Every listed relation MUST itself be a SoftDeleteModel.
+    SOFT_DELETE_CASCADE = ()
+
     objects = SoftDeleteManager()
     all_objects = models.Manager()
-    
+
     class Meta:
         abstract = True
-    
+
     def soft_delete(self):
+        if self.is_deleted:
+            return
         self.is_deleted = True
         self.deleted_at = timezone.now()
         self.save(update_fields=['is_deleted', 'deleted_at'])
-    
+        self._cascade_soft_delete()
+
+    def _cascade_soft_delete(self):
+        for accessor in self.SOFT_DELETE_CASCADE:
+            related = getattr(self, accessor, None)
+            if related is None:
+                continue
+            # all_with_deleted() so an already-deleted child isn't touched twice
+            # but the queryset still resolves regardless of the default manager.
+            qs = related.all_with_deleted() if hasattr(related, 'all_with_deleted') else related.all()
+            for obj in qs.filter(is_deleted=False):
+                obj.is_deleted = True
+                obj.deleted_at = self.deleted_at
+                obj.save(update_fields=['is_deleted', 'deleted_at'])
+                cascade = getattr(obj, '_cascade_soft_delete', None)
+                if cascade:
+                    cascade()
+
     def restore(self):
+        # Shallow restore by design: bringing back a parent does NOT auto-restore
+        # children (they may have been deleted independently earlier).
         self.is_deleted = False
         self.deleted_at = None
         self.save(update_fields=['is_deleted', 'deleted_at'])
@@ -136,7 +170,12 @@ class Job(SoftDeleteModel):
 
 class Resume(SoftDeleteModel):
     """Resume model - stores candidate resumes and their screening results."""
-    
+
+    # Soft-deleting a candidate cascades to their interviews (and, transitively,
+    # the interviews' evaluations) so deleted-candidate data and its public
+    # evaluation links disappear consistently. See SoftDeleteModel.
+    SOFT_DELETE_CASCADE = ('interviews',)
+
     TIER_CHOICES = [
         ('low', 'Low'),
         ('mid', 'Mid'),
@@ -292,31 +331,6 @@ class Resume(SoftDeleteModel):
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
         super().save(*args, **kwargs)
-
-    def soft_delete(self):
-        """Soft-delete the resume AND cascade to its interview data.
-
-        Interview.resume is on_delete=CASCADE, which only fires on a hard DELETE,
-        so a plain soft delete would orphan Interview rows and — worse — leave the
-        public InterviewEvaluation token links live for a candidate the recruiter
-        believes is gone. Cascade the soft delete and expire any outstanding
-        (unsubmitted) evaluation tokens so those links stop working immediately.
-        """
-        super().soft_delete()
-        # Imported lazily to avoid a circular import (interviews depends on core).
-        from apps.interviews.models import Interview, InterviewEvaluation
-        interview_ids = list(
-            Interview.all_objects.filter(resume_id=self.id).values_list('id', flat=True)
-        )
-        if not interview_ids:
-            return
-        Interview.all_objects.filter(id__in=interview_ids, is_deleted=False).update(
-            is_deleted=True, deleted_at=self.deleted_at
-        )
-        # Expire unsubmitted tokens (submitted evaluations are kept as records).
-        InterviewEvaluation.objects.filter(
-            interview_id__in=interview_ids, is_submitted=False
-        ).update(token_expires_at=self.deleted_at)
 
 
 class ResumeNote(models.Model):

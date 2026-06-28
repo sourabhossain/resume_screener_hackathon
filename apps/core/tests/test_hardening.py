@@ -35,7 +35,7 @@ class TestDeletedJobResumeGuard:
 
 @pytest.mark.django_db
 class TestSoftDeleteCascade:
-    def test_deleting_resume_soft_deletes_interviews_and_expires_tokens(self, sample_resume):
+    def test_deleting_resume_cascades_to_interviews_and_evaluations(self, sample_resume):
         from django.utils import timezone
         from apps.interviews.models import Interview, InterviewEvaluation
 
@@ -45,16 +45,15 @@ class TestSoftDeleteCascade:
         ev = InterviewEvaluation.objects.create(
             interview=interview, interviewer_name='Panelist One'
         )
-        assert ev.is_expired is False
 
         sample_resume.soft_delete()
 
-        # Interview is soft-deleted (hidden from the default manager)...
+        # The cascade soft-deletes interview AND its evaluations (hidden from the
+        # default managers), so the public evaluation link no longer resolves.
         assert not Interview.objects.filter(pk=interview.pk).exists()
         assert Interview.all_objects.filter(pk=interview.pk, is_deleted=True).exists()
-        # ...and the unsubmitted public token is expired.
-        ev.refresh_from_db()
-        assert ev.is_expired is True
+        assert not InterviewEvaluation.objects.filter(pk=ev.pk).exists()
+        assert InterviewEvaluation.all_objects.filter(pk=ev.pk, is_deleted=True).exists()
 
     def test_evaluate_link_404_after_resume_deleted(self, client, sample_resume):
         from django.utils import timezone

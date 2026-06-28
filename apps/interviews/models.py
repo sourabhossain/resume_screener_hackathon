@@ -36,6 +36,10 @@ class Interview(SoftDeleteModel):
     PHASE_CHOICES = [('1', 'Interview 1'), ('2', 'Interview 2'), ('3', 'Interview 3')]
     STATUS_CHOICES = [('scheduled', 'Scheduled'), ('completed', 'Completed'), ('cancelled', 'Cancelled')]
 
+    # Deleting an interview cascades to its evaluations, so their public token
+    # links stop resolving (the soft-delete manager hides them → 404).
+    SOFT_DELETE_CASCADE = ('evaluations',)
+
     resume = models.ForeignKey(
         'core.Resume', on_delete=models.CASCADE, related_name='interviews'
     )
@@ -50,17 +54,6 @@ class Interview(SoftDeleteModel):
 
     def __str__(self):
         return f"{self.resume.candidate_name} - Interview {self.phase} ({self.scheduled_date})"
-
-    def soft_delete(self):
-        """Soft-delete the interview and expire its outstanding evaluation links.
-
-        InterviewEvaluation is a plain model (no soft delete), and its public
-        token URL stays reachable until expiry — so deleting an interview must
-        also invalidate any unsubmitted evaluation tokens, or panelists could
-        still open a form for a removed interview.
-        """
-        super().soft_delete()
-        self.evaluations.filter(is_submitted=False).update(token_expires_at=self.deleted_at)
 
     @property
     def submitted_count(self):
@@ -78,7 +71,7 @@ class Interview(SoftDeleteModel):
         return round(sum(totals) / len(totals)) if totals else None
 
 
-class InterviewEvaluation(models.Model):
+class InterviewEvaluation(SoftDeleteModel):
     RECOMMENDATION_CHOICES = [
         ('yes', 'Yes - Hire'),
         ('no', 'No - Reject'),
