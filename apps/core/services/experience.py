@@ -57,13 +57,26 @@ def _parse_endpoint(raw: Optional[str], *, is_end: bool, today: datetime.date) -
             month = num
             break
     if month is None:
-        # Numeric month forms: "2020-03", "03/2020", "2020.03".
-        numeric = re.findall(r'\d{1,2}', re.sub(_YEAR_RE, ' ', text))
-        for token in numeric:
-            value = int(token)
+        # Numeric month forms. The numeric token ADJACENT to the year is the
+        # month, which disambiguates day/month order:
+        #   "2020-03" / "2020.03"      -> year first, month is the token after
+        #   "03/2020"                  -> month is the token before the year
+        #   "06/07/2018" (DD/MM/YYYY,  -> the token next to the year (07) is the
+        #     common in Bangladesh)       month, NOT the leading day (06)
+        year_start, year_end = year_match.span()
+        candidates = []  # (distance_to_year, value)
+        for m in re.finditer(r'\d{1,2}', text):
+            s, e = m.span()
+            # Skip the digits that belong to the matched 4-digit year.
+            if s >= year_start and e <= year_end:
+                continue
+            value = int(m.group(0))
             if 1 <= value <= 12:
-                month = value
-                break
+                distance = year_start - e if e <= year_start else s - year_end
+                candidates.append((distance, value))
+        if candidates:
+            candidates.sort(key=lambda c: c[0])
+            month = candidates[0][1]
     if month is None:
         month = 1  # year-only -> anchor to January
 

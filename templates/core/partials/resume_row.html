@@ -93,15 +93,31 @@
     <td data-label="Decision" class="px-4 py-4 align-middle">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
         <div class="h-6 w-20 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
-        {% elif resume.recommendation %}
-        <span class="inline-flex items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold leading-tight sm:px-3 sm:py-1.5
-            {% if resume.recommendation == 'interview' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-400
-            {% elif resume.recommendation == 'talent_pool' %}bg-sky-100 text-sky-800 dark:bg-sky-900/35 dark:text-sky-400
-            {% else %}bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-400{% endif %}">
-            {{ resume.get_recommendation_display }}
-        </span>
         {% else %}
-        <span class="text-zinc-400">—</span>
+        <div class="flex flex-col items-start gap-1.5">
+            {% if resume.recommendation %}
+            <span class="inline-flex items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold leading-tight sm:px-3 sm:py-1.5
+                {% if resume.recommendation == 'interview' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-400
+                {% elif resume.recommendation == 'talent_pool' %}bg-sky-100 text-sky-800 dark:bg-sky-900/35 dark:text-sky-400
+                {% else %}bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-400{% endif %}">
+                {{ resume.get_recommendation_display }}
+            </span>
+            {% else %}
+            <span class="text-zinc-400">—</span>
+            {% endif %}
+            {# Recruiter's manual outcome — only shown once it's moved past the default "New". #}
+            {% if resume.recruiter_status and resume.recruiter_status != 'new' %}
+            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold leading-tight
+                {% if resume.recruiter_status == 'hired' %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-400
+                {% elif resume.recruiter_status == 'rejected' or resume.recruiter_status == 'withdrawn' %}bg-rose-50 text-rose-700 dark:bg-rose-900/25 dark:text-rose-400
+                {% elif resume.recruiter_status == 'offer_extended' %}bg-violet-50 text-violet-700 dark:bg-violet-900/25 dark:text-violet-400
+                {% elif resume.recruiter_status == 'interviewing' %}bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-400
+                {% else %}bg-indigo-50 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-400{% endif %}">
+                <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70"></span>
+                {{ resume.get_recruiter_status_display }}
+            </span>
+            {% endif %}
+        </div>
         {% endif %}
     </td>
 

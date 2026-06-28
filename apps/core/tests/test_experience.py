@@ -39,6 +39,14 @@ def test_numeric_month_formats():
     assert years([{"start": "03/2020", "end": "03/2021"}]) == 1.0
 
 
+def test_day_month_year_order_uses_month_adjacent_to_year():
+    # DD/MM/YYYY (common in Bangladesh): the token next to the year is the month.
+    # 06/07/2018 -> Jul 2018; 06/01/2020 -> Jan 2020 = 18 months.
+    assert years([{"start": "06/07/2018", "end": "06/01/2020"}]) == round(18 / 12, 1)
+    # Leading day > 12 was already unambiguous; keep it correct (Jun 2018 -> Jun 2019).
+    assert years([{"start": "15/06/2018", "end": "15/06/2019"}]) == 1.0
+
+
 def test_ongoing_uses_today():
     # Jan 2024 -> present, today = Jun 2026 => 29 months.
     assert years([{"start": "Jan 2024", "end": "present"}]) == round(29 / 12, 1)
