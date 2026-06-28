@@ -135,9 +135,20 @@ class ResumeService:
             from apps.core.models import Resume as ResumeModel
             # Persist WHY it was flagged (from the detector) so the recruiter can
             # see the specific reason in the UI, not just a generic message.
+            # Also blank out any scores/tier/decision from a PRIOR completed run so
+            # a re-screened resume parked for review doesn't keep showing a stale
+            # score/recommendation (which also leaks into pipeline ranking).
             ResumeModel.objects.filter(pk=resume.pk).update(
                 screening_status='needs_review',
                 reasoning=result.get('reasoning', '') or '',
+                final_score=None,
+                tier='',
+                recommendation='',
+                skills_score=None,
+                experience_score=None,
+                education_score=None,
+                certification_score=None,
+                achievement_score=None,
             )
             return
 

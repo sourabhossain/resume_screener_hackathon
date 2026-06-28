@@ -28,6 +28,8 @@ class LLMClient:
     _llm_json = None
 
     CACHE_TIMEOUT = 3600
+    # Bump when prompts/scoring change so stale cached LLM outputs are not reused.
+    CACHE_VERSION = "v2"
 
     # Per-call ceiling so a hung OpenAI request can't pin a screening worker
     # forever. gpt-5-nano is a reasoning model and can take 30-50s on a large
@@ -44,37 +46,59 @@ class LLMClient:
             cls._instance = super().__new__(cls)
         return cls._instance
     
+    @staticmethod
+    def _is_reasoning_model(model: str) -> bool:
+        """
+        GPT-5 and the o-series are reasoning models that ONLY accept the default
+        sampling temperature (1.0). Sending temperature=0.0 to them returns a
+        hard 400 ("Unsupported value: temperature"), which would break every
+        screening call. For those models we must omit the temperature kwarg and
+        rely on structured output / seeds for determinism instead.
+        """
+        m = (model or "").lower()
+        return m.startswith("gpt-5") or m.startswith("o1") or m.startswith("o3") or m.startswith("o4")
+
     def __init__(self):
         if self._llm is None:
             api_key = settings.OPENAI_API_KEY
             model = getattr(settings, 'OPENAI_MODEL', 'gpt-5-nano-2025-08-07')
-            
+            self._model = model
+
             if not api_key:
                 logger.warning("OPENAI_API_KEY not configured")
                 return
-            
-            self._llm = ChatOpenAI(
+
+            # Reasoning models reject any non-default temperature, so only pass
+            # temperature=0.0 for classic chat models (gpt-4o, gpt-4.1, etc.).
+            common_kwargs = dict(
                 model=model,
-                temperature=0.0,
                 api_key=api_key,
                 timeout=self.REQUEST_TIMEOUT,
                 max_retries=self.MAX_RETRIES,
             )
+            if not self._is_reasoning_model(model):
+                common_kwargs["temperature"] = 0.0
+
+            self._llm = ChatOpenAI(**common_kwargs)
 
             self._llm_json = ChatOpenAI(
-                model=model,
-                temperature=0.0,
-                api_key=api_key,
-                timeout=self.REQUEST_TIMEOUT,
-                max_retries=self.MAX_RETRIES,
+                **common_kwargs,
                 model_kwargs={"response_format": {"type": "json_object"}}
             )
-            
-            logger.info(f"LLMClient initialized with model: {model}")
-    
+
+            logger.info(
+                "LLMClient initialized with model: %s (reasoning=%s)",
+                model, self._is_reasoning_model(model),
+            )
+
     def _get_cache_key(self, prompt: str) -> str:
-        """Generate cache key from prompt."""
-        return f"llm_cache_{hashlib.md5(prompt.encode()).hexdigest()}"
+        """
+        Generate cache key from prompt, scoped to the model id and a cache
+        version so a model swap or prompt change never serves stale outputs.
+        """
+        model = getattr(self, '_model', 'unknown')
+        digest = hashlib.md5(prompt.encode()).hexdigest()
+        return f"llm_cache_{self.CACHE_VERSION}_{model}_{digest}"
     
     # Transient OpenAI / network errors: backoff; reraise so logs show the real exception (not RetryError)
     # JSONDecodeError included because LLMs occasionally return malformed JSON despite json_object format

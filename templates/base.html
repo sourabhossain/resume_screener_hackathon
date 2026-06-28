@@ -255,6 +255,24 @@
         document.addEventListener('htmx:afterSettle', function () {
             document.documentElement.classList.remove('app-navigating');
         });
+
+        // Global HTMX failure feedback: any failed request (server 4xx/5xx or a
+        // network drop) on ANY hx-* element — pipeline live search, rescreen,
+        // status changes — surfaces a toast instead of silently leaving stale or
+        // frozen UI. Without this, only boosted navigations had any error path.
+        document.addEventListener('htmx:responseError', function (e) {
+            document.documentElement.classList.remove('app-navigating');
+            if (window.Toast) {
+                var code = e.detail && e.detail.xhr ? e.detail.xhr.status : '';
+                window.Toast.fire({ icon: 'error', title: 'Something went wrong' + (code ? ' (' + code + ')' : '') + '. Please try again.' });
+            }
+        });
+        document.addEventListener('htmx:sendError', function () {
+            document.documentElement.classList.remove('app-navigating');
+            if (window.Toast) {
+                window.Toast.fire({ icon: 'error', title: 'Network error — check your connection and try again.' });
+            }
+        });
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

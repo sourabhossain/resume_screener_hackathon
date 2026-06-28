@@ -156,7 +156,7 @@
 
                     {# AI Score #}
                     <td class="hidden px-4 py-4 md:table-cell print:table-cell">
-                        {% if r.final_score %}
+                        {% if r.final_score is not None %}
                         <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{{ r.final_score }}</span>
                         <span class="text-xs text-zinc-400">/100</span>
                         {% else %}

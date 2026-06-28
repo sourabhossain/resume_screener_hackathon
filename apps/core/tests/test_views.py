@@ -19,9 +19,12 @@ class TestErrorPages:
         assert b'404' in response.content
         assert b'Page not found' in response.content or b'page not found' in response.content.lower()
 
-    def test_404_page_has_dashboard_link(self, client):
+    def test_404_page_has_working_cta_for_anonymous(self, client):
+        # Anonymous visitors must not be dead-ended at a login-only dashboard:
+        # the CTA points to the public careers page instead.
         response = client.get('/404/')
-        assert b'Go to Dashboard' in response.content
+        assert b'Browse open positions' in response.content
+        assert b'/careers/' in response.content
 
     def test_404_page_has_go_back_link(self, client):
         response = client.get('/404/')
@@ -38,10 +41,13 @@ class TestErrorPages:
         assert b'500' in response.content
         assert b'Something went wrong' in response.content
 
-    def test_500_page_has_dashboard_link(self, rf):
+    def test_500_page_has_working_cta(self, rf):
+        # The 500 page renders without context processors (no `user`), so its CTA
+        # links to the public careers page, which works for anyone.
         from config.urls import custom_500
         response = custom_500(rf.get('/'))
-        assert b'Go to Dashboard' in response.content
+        assert b'/careers/' in response.content
+        assert b'Browse open positions' in response.content
 
     def test_500_page_has_notification_message(self, rf):
         from config.urls import custom_500

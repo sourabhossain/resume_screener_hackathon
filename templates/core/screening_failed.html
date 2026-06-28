@@ -3,7 +3,22 @@
 {% block title %}Screening Failed{% endblock %}
 
 {% block content %}
-<div x-data="{
+{# Inline light-mode page; dark-mode overrides (keyed on .nr-root) remap the
+   inline light colors/backgrounds so text stays visible and cards aren't
+   blinding white on the dark shell. #}
+<style>
+  .dark .nr-root [style*="color:#171717"] { color:#fafafa !important; }
+  .dark .nr-root [style*="color:#71717a"],
+  .dark .nr-root [style*="color:#52525b"],
+  .dark .nr-root [style*="color:#3f3f46"],
+  .dark .nr-root [style*="color:#a1a1aa"] { color:#a1a1aa !important; }
+  .dark .nr-root [style*="background:#fff"] { background:#18181b !important; }
+  .dark .nr-root [style*="#efeee9"],
+  .dark .nr-root [style*="#e7e5e0"],
+  .dark .nr-root [style*="#f1f0ec"] { border-color:#27272a !important; }
+  .dark .nr-root a[style*="color:#171717"] { color:#e0e7ff !important; }
+</style>
+<div class="nr-root" x-data="{
         selected: [],
         pageUuids: [{% for resume in page_obj %}'{{ resume.uuid }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
         total: {{ total }},

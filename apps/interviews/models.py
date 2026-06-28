@@ -51,6 +51,17 @@ class Interview(SoftDeleteModel):
     def __str__(self):
         return f"{self.resume.candidate_name} - Interview {self.phase} ({self.scheduled_date})"
 
+    def soft_delete(self):
+        """Soft-delete the interview and expire its outstanding evaluation links.
+
+        InterviewEvaluation is a plain model (no soft delete), and its public
+        token URL stays reachable until expiry — so deleting an interview must
+        also invalidate any unsubmitted evaluation tokens, or panelists could
+        still open a form for a removed interview.
+        """
+        super().soft_delete()
+        self.evaluations.filter(is_submitted=False).update(token_expires_at=self.deleted_at)
+
     @property
     def submitted_count(self):
         return self.evaluations.filter(is_submitted=True).count()
@@ -139,8 +150,16 @@ class InterviewEvaluation(models.Model):
 
     @property
     def percentage(self):
-        ts = self.total_score
-        return round((ts / MAX_SCORE) * 100) if ts is not None else None
+        if not self.scores:
+            return None
+        vals = [v for v in self.scores.values() if isinstance(v, int) and 1 <= v <= 5]
+        if not vals:
+            return None
+        # Scale against the number of criteria actually scored (not the fixed
+        # 100-point ceiling) so a partially-scored evaluation — e.g. one created
+        # via the admin or a data import rather than the strict public form —
+        # isn't silently dragged down by dividing a partial total by 100.
+        return round((sum(vals) / (len(vals) * 5)) * 100)
 
     @property
     def impression_label(self):

@@ -67,8 +67,11 @@ class Job(SoftDeleteModel):
         ('hybrid', 'Hybrid'),
     ]
 
-    # The recruiter who owns this job. All access is scoped to the owner so one
-    # recruiter/company cannot read or modify another's jobs or candidate PII.
+    # The recruiter who created this job (informational/audit). This is a
+    # single-company internal tool: every authenticated recruiter can see and
+    # act on all jobs and candidates, so access is intentionally NOT isolated
+    # per owner. `owner` records provenance and gates owner-only actions like
+    # API restore, not read access.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -146,8 +149,11 @@ class Resume(SoftDeleteModel):
         ('reject', 'Reject'),
     ]
     
-    # Opaque public identifier used in recruiter URLs instead of the numeric pk.
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, null=True)
+    # Opaque public identifier used in recruiter URLs and the REST API instead of
+    # the sequential numeric pk (prevents enumeration). Non-nullable: every row is
+    # backfilled (migration 0010) and new rows get a default, so the opaque-id
+    # guarantee is enforced at the DB level.
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     job = models.ForeignKey(
@@ -286,6 +292,31 @@ class Resume(SoftDeleteModel):
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
         super().save(*args, **kwargs)
+
+    def soft_delete(self):
+        """Soft-delete the resume AND cascade to its interview data.
+
+        Interview.resume is on_delete=CASCADE, which only fires on a hard DELETE,
+        so a plain soft delete would orphan Interview rows and — worse — leave the
+        public InterviewEvaluation token links live for a candidate the recruiter
+        believes is gone. Cascade the soft delete and expire any outstanding
+        (unsubmitted) evaluation tokens so those links stop working immediately.
+        """
+        super().soft_delete()
+        # Imported lazily to avoid a circular import (interviews depends on core).
+        from apps.interviews.models import Interview, InterviewEvaluation
+        interview_ids = list(
+            Interview.all_objects.filter(resume_id=self.id).values_list('id', flat=True)
+        )
+        if not interview_ids:
+            return
+        Interview.all_objects.filter(id__in=interview_ids, is_deleted=False).update(
+            is_deleted=True, deleted_at=self.deleted_at
+        )
+        # Expire unsubmitted tokens (submitted evaluations are kept as records).
+        InterviewEvaluation.objects.filter(
+            interview_id__in=interview_ids, is_submitted=False
+        ).update(token_expires_at=self.deleted_at)
 
 
 class ResumeNote(models.Model):

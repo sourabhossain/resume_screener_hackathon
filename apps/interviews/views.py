@@ -1,5 +1,7 @@
 import uuid
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.contrib import messages
@@ -111,7 +113,14 @@ def evaluation_renew(request, token):
 
 
 def evaluate(request, token):
-    ev = get_object_or_404(InterviewEvaluation, token=token)
+    ev = get_object_or_404(
+        InterviewEvaluation.objects.select_related('interview__resume__job'), token=token
+    )
+
+    # A soft-deleted interview / candidate / job must not be reachable via its
+    # public token link — treat it as gone.
+    if ev.interview.is_deleted or ev.interview.resume.is_deleted or ev.interview.resume.job.is_deleted:
+        raise Http404
 
     if ev.is_submitted:
         return render(request, 'interviews/already_submitted.html', {'ev': ev})
@@ -125,26 +134,33 @@ def evaluate(request, token):
         if form.is_valid():
             d = form.cleaned_data
 
-            # Collect scores
-            ev.scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
-            ev.additional_notes = d.get('additional_notes', '')
-            ev.another_phase_required = d.get('another_phase_required', False)
-            ev.hard_negotiation = d.get('hard_negotiation', False)
-            ev.suitable_other_dept = d.get('suitable_other_dept', False)
-            ev.suitable_higher_position = d.get('suitable_higher_position', False)
-            ev.suitable_junior_position = d.get('suitable_junior_position', False)
-
-            # Use manual recommendation if given, otherwise auto-calculate
+            scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
+            # Use manual recommendation if given, otherwise auto-calculate.
             manual_rec = d.get('recommendation', '')
             if manual_rec:
-                ev.recommendation = manual_rec
+                recommendation = manual_rec
             else:
-                total = sum(ev.scores.values())
-                pct = round((total / MAX_SCORE) * 100)
-                ev.recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
-            ev.is_submitted = True
-            ev.submitted_at = timezone.now()
-            ev.save()
+                pct = round((sum(scores.values()) / MAX_SCORE) * 100)
+                recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
+
+            # Commit under a row lock and re-check the guards inside the same
+            # transaction, so two concurrent submits (double-click / replayed
+            # POST) can't both pass is_submitted and clobber each other — this is
+            # what actually enforces the "each link can be used once" promise.
+            with transaction.atomic():
+                locked = InterviewEvaluation.objects.select_for_update().get(pk=ev.pk)
+                if not locked.is_submitted and not locked.is_expired:
+                    locked.scores = scores
+                    locked.additional_notes = d.get('additional_notes', '')
+                    locked.another_phase_required = d.get('another_phase_required', False)
+                    locked.hard_negotiation = d.get('hard_negotiation', False)
+                    locked.suitable_other_dept = d.get('suitable_other_dept', False)
+                    locked.suitable_higher_position = d.get('suitable_higher_position', False)
+                    locked.suitable_junior_position = d.get('suitable_junior_position', False)
+                    locked.recommendation = recommendation
+                    locked.is_submitted = True
+                    locked.submitted_at = timezone.now()
+                    locked.save()
 
             return redirect('interviews:evaluate_done', token=token)
         else:

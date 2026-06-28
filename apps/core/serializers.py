@@ -23,7 +23,7 @@ class ResumeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resume
         fields = [
-            'id', 'job', 'candidate_name', 'email', 'phone',
+            'id', 'uuid', 'job', 'candidate_name', 'email', 'phone',
             'file', 'file_name', 'file_type',
             'tier', 'tier_display', 'recommendation', 'recommendation_display',
             'screening_status', 'screening_status_display',

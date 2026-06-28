@@ -103,10 +103,12 @@ class TestScreenResumeTaskTimeout:
 @pytest.mark.django_db
 class TestScreenResumeTaskRetry:
 
-    def test_general_exception_sets_pending_status_before_retry(self, sample_resume):
-        """On first failure (retries_left > 0), status is set to 'pending' before the retry
-        so the UI shows the task as queued rather than failed while it retries.
-        In CELERY_TASK_ALWAYS_EAGER mode, self.retry() re-raises immediately without looping."""
+    def test_general_exception_keeps_processing_status_before_retry(self, sample_resume):
+        """On first failure (retries_left > 0), the row stays 'processing' (NOT 'pending')
+        while it retries. Resetting to 'pending' would let batch_screen_resumes — which
+        claims status='pending' rows — re-dispatch a duplicate task for the same resume
+        (double-screening race). In CELERY_TASK_ALWAYS_EAGER mode, self.retry() re-raises
+        immediately without looping."""
         from apps.core.tasks import screen_resume_task
 
         with patch('apps.core.services.resume_service.ResumeService.process_resume',
@@ -115,8 +117,8 @@ class TestScreenResumeTaskRetry:
                 screen_resume_task(sample_resume.id)
 
         sample_resume.refresh_from_db()
-        # retries_left = max_retries(3) - request.retries(0) = 3 > 0 → pending
-        assert sample_resume.screening_status == 'pending'
+        # retries_left = max_retries(3) - request.retries(0) = 3 > 0 → kept 'processing'
+        assert sample_resume.screening_status == 'processing'
 
     def test_max_retries_sets_failed_status(self, sample_resume):
         """When retries_left == 0 (max_retries=0), status is set to 'failed'.

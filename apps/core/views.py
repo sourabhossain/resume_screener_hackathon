@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
 from django.db.models import Avg, Case, Count, IntegerField, Prefetch, Q, Value, When
 from django.http import JsonResponse, FileResponse, Http404
-from django.db import connection
+from django.db import connection, IntegrityError
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from .models import Job, Resume
@@ -64,6 +64,37 @@ def _pipeline_stats(resume_qs):
         stats['total'] - stats['interview'] - stats['talent_pool'] - stats['reject']
     )
     return stats
+
+
+def _csv_safe(value):
+    """
+    Neutralize CSV/spreadsheet formula injection.
+
+    Candidate-supplied fields (name/email/phone) flow into the CSV export. A
+    value beginning with = + - @ (or a control char like tab/CR) is interpreted
+    as a formula by Excel/LibreOffice when the recruiter opens the file, enabling
+    data exfiltration or DDE command execution. Prefix such values with a single
+    quote so they render as literal text.
+    """
+    if isinstance(value, str) and value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + value
+    return value
+
+
+def _get_active_resume(uuid, *, select_job=True):
+    """
+    Fetch a non-deleted resume whose parent job is ALSO not deleted.
+
+    Soft-deleting a Job does not cascade to its resumes, and Resume.objects only
+    filters the resume's own is_deleted flag — so without the job__is_deleted
+    guard a 'deleted' job's candidates would stay viewable, editable and
+    re-screenable via their uuid URL. Every recruiter-facing resume lookup goes
+    through here to keep delete semantics consistent.
+    """
+    qs = Resume.objects.filter(job__is_deleted=False)
+    if select_job:
+        qs = qs.select_related('job')
+    return get_object_or_404(qs, uuid=uuid)
 
 
 def health_check(request):
@@ -306,7 +337,14 @@ def resume_create(request, job_slug):
             resume.job = job
             resume.file_hash = file_hash
             resume.screening_status = 'processing'
-            resume.save()
+            try:
+                resume.save()
+            except IntegrityError:
+                # Lost the race against a concurrent identical upload; the unique
+                # constraint (job, file_hash) fired. Show the same friendly
+                # message as the .exists() pre-check instead of a 500.
+                messages.error(request, 'This resume file has already been submitted for this job.')
+                return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
 
             from apps.core.tasks import screen_resume_task
             screen_resume_task.delay(resume.id)
@@ -325,13 +363,13 @@ def resume_create(request, job_slug):
 
 @login_required
 def resume_detail(request, uuid):
-    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    resume = _get_active_resume(uuid)
     return render(request, 'core/resume_detail.html', {'resume': resume})
 
 
 @login_required
 def resume_edit(request, uuid):
-    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    resume = _get_active_resume(uuid)
     SCORE_FIELDS = {'experience_score', 'education_score', 'skills_score',
                     'certification_score', 'achievement_score', 'final_score'}
     if request.method == 'POST':
@@ -366,7 +404,7 @@ def resume_edit(request, uuid):
 
 @login_required
 def resume_delete(request, uuid):
-    resume = get_object_or_404(Resume, uuid=uuid)
+    resume = _get_active_resume(uuid)
     job_slug = resume.job.slug
     if request.method == 'POST':
         resume.soft_delete()
@@ -392,7 +430,7 @@ def serve_protected_media(request, path):
 
 @login_required
 def resume_status_fragment(request, uuid):
-    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    resume = _get_active_resume(uuid)
     # oob=True so the response also OOB-refreshes the header action button as
     # screening transitions (e.g. processing -> completed/failed).
     return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
@@ -400,7 +438,7 @@ def resume_status_fragment(request, uuid):
 
 @login_required
 def resume_row_fragment(request, uuid):
-    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    resume = _get_active_resume(uuid)
     ordered = _ordered_active_resumes_queryset(resume.job.resumes)
     # Recompute pipeline stats so the polling response can OOB-refresh the
     # "pending screening" badge as rows finish (otherwise it goes stale).
@@ -474,7 +512,14 @@ def resume_bulk_create(request, job_slug):
                 continue
 
             safe_basename = os.path.basename(file.name)
-            candidate_name = os.path.splitext(safe_basename)[0].replace('_', ' ').replace('-', ' ').strip()[:255] or 'Unknown'
+            raw_name = os.path.splitext(safe_basename)[0].replace('_', ' ').replace('-', ' ').strip()[:255]
+            # Enforce the same character policy as the single-upload / careers form
+            # (clean_person_text) so bulk ingestion can't store names the rest of the
+            # app would reject (e.g. "<img src=x>"). Fall back to 'Unknown' on reject.
+            try:
+                candidate_name = clean_person_text(raw_name) or 'Unknown'
+            except forms.ValidationError:
+                candidate_name = 'Unknown'
 
             resume = Resume(
                 job=job,
@@ -484,7 +529,13 @@ def resume_bulk_create(request, job_slug):
                 file_hash=file_hash,
                 screening_status='processing',
             )
-            resume.file.save(safe_basename, file, save=True)
+            try:
+                resume.file.save(safe_basename, file, save=True)
+            except IntegrityError:
+                # Same file uploaded twice within one batch (or concurrently);
+                # the unique (job, file_hash) constraint fired. Skip gracefully.
+                skipped.append(f'"{file.name}" - already submitted for this job')
+                continue
             screen_resume_task.delay(resume.id)
             queued += 1
 
@@ -500,7 +551,7 @@ def resume_bulk_create(request, job_slug):
 
 @login_required
 def resume_rescreen(request, uuid):
-    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    resume = _get_active_resume(uuid)
 
     if request.method != 'POST':
         return redirect('core:resume_detail', uuid=uuid)
@@ -517,10 +568,19 @@ def resume_rescreen(request, uuid):
         resume.refresh_from_db()
         return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
 
-    # Atomic update prevents duplicate tasks from concurrent clicks
+    # Atomic update prevents duplicate tasks from concurrent clicks. Also reset
+    # the prior run's link-verification so the detail page doesn't show a stale
+    # "verified" panel beside the new "screening in progress" spinner; the new
+    # run re-queues verification on completion.
     updated = Resume.objects.filter(
         uuid=uuid, screening_status__in=['pending', 'completed', 'failed', 'needs_review']
-    ).update(screening_status='processing')
+    ).update(
+        screening_status='processing',
+        verification_status='pending',
+        verification_results={},
+        verification_score=None,
+        verified_at=None,
+    )
 
     if not updated:
         if is_htmx:
@@ -635,7 +695,13 @@ def careers_apply(request, slug):
             resume.job = job
             resume.file_hash = file_hash
             resume.screening_status = 'processing'
-            resume.save()
+            try:
+                resume.save()
+            except IntegrityError:
+                # Concurrent identical submission won the race; surface the same
+                # graceful duplicate message instead of a 500.
+                messages.error(request, 'This resume has already been submitted for this position.')
+                return render(request, 'careers/apply.html', {'job': job, 'form': form})
 
             from apps.core.tasks import screen_resume_task
             screen_resume_task.delay(resume.id)
@@ -727,7 +793,7 @@ def user_toggle_active(request, pk):
 
 @login_required
 def resume_note_add(request, uuid):
-    resume = get_object_or_404(Resume, uuid=uuid)
+    resume = _get_active_resume(uuid, select_job=False)
     if request.method == 'POST':
         text = request.POST.get('text', '').strip()
         if text:
@@ -741,7 +807,7 @@ def resume_note_add(request, uuid):
 
 @login_required
 def resume_note_delete(request, uuid, note_id):
-    resume = get_object_or_404(Resume, uuid=uuid)
+    resume = _get_active_resume(uuid, select_job=False)
     from .models import ResumeNote
     note = get_object_or_404(ResumeNote, pk=note_id, resume=resume)
     if request.method == 'POST':
@@ -752,7 +818,7 @@ def resume_note_delete(request, uuid, note_id):
 
 @login_required
 def resume_status_update(request, uuid):
-    resume = get_object_or_404(Resume, uuid=uuid)
+    resume = _get_active_resume(uuid, select_job=False)
     if request.method == 'POST':
         new_status = request.POST.get('recruiter_status', '').strip()
         valid = {c[0] for c in Resume.RECRUITER_STATUS_CHOICES}
@@ -770,7 +836,7 @@ def talent_pool(request):
     from django.core.paginator import Paginator
     resumes_qs = (
         Resume.objects
-        .filter(recommendation='talent_pool', is_deleted=False)
+        .filter(recommendation='talent_pool', is_deleted=False, job__is_deleted=False)
         .select_related('job')
         .order_by('-final_score', '-created_at')
     )
@@ -909,9 +975,9 @@ def job_export_csv(request, slug):
         yield header
         for r in resumes:
             yield [
-                r.candidate_name,
-                r.email,
-                r.phone,
+                _csv_safe(r.candidate_name),
+                _csv_safe(r.email),
+                _csv_safe(r.phone),
                 r.get_tier_display(),
                 r.get_recommendation_display() if r.recommendation else '',
                 r.get_recruiter_status_display() if r.recruiter_status else '',

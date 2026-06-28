@@ -148,17 +148,20 @@
         <span class="text-lg text-zinc-400">—</span>
         {% elif resume.verification_score is not None %}
             {% if resume.verification_score >= 70 %}
-            <svg class="mx-auto h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24" title="Verified: {{ resume.verification_score }}%">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-            </svg>
+            <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400" role="img" aria-label="Link verification Verified, {{ resume.verification_score|floatformat:0 }} percent">
+                <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                <span class="text-xs font-semibold">{{ resume.verification_score|floatformat:0 }}%</span>
+            </span>
             {% elif resume.verification_score >= 40 %}
-            <svg class="mx-auto h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24" title="Partial: {{ resume.verification_score }}%">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-            </svg>
+            <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" role="img" aria-label="Link verification Partial, {{ resume.verification_score|floatformat:0 }} percent">
+                <svg class="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                <span class="text-xs font-semibold">{{ resume.verification_score|floatformat:0 }}%</span>
+            </span>
             {% else %}
-            <svg class="mx-auto h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 24 24" title="Low score: {{ resume.verification_score }}%">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-            </svg>
+            <span class="inline-flex items-center gap-1 text-red-600 dark:text-red-400" role="img" aria-label="Link verification Low, {{ resume.verification_score|floatformat:0 }} percent">
+                <svg class="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                <span class="text-xs font-semibold">{{ resume.verification_score|floatformat:0 }}%</span>
+            </span>
             {% endif %}
         {% else %}
         <span class="text-lg text-zinc-400">—</span>

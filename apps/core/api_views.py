@@ -95,6 +95,9 @@ class ResumeViewSet(viewsets.ModelViewSet):
     queryset = Resume.objects.all()
     serializer_class = ResumeSerializer
     permission_classes = [IsAuthenticated]
+    # Address detail routes by the opaque uuid, not the sequential pk, so candidate
+    # PII can't be harvested by walking /api/resumes/1, /2, /3 ...
+    lookup_field = 'uuid'
 
     def perform_create(self, serializer):
         from apps.core.tasks import screen_resume_task
@@ -102,7 +105,9 @@ class ResumeViewSet(viewsets.ModelViewSet):
         screen_resume_task.delay(resume.id)
 
     def get_queryset(self):
-        queryset = Resume.objects.select_related('job')
+        # Exclude resumes whose parent job was soft-deleted, matching the web
+        # views (a "deleted" job's candidates must not surface anywhere).
+        queryset = Resume.objects.select_related('job').filter(job__is_deleted=False)
         job_id = self.request.query_params.get('job', None)
         if job_id:
             queryset = queryset.filter(job_id=job_id)

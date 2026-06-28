@@ -195,8 +195,11 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
 
     def clean(self):
         data = super().clean()
-        if self.fields['email'].required and not (data.get('email') or '').strip():
-            self.add_error('email', 'This field is required.')
+        # NOTE: email's required-ness is enforced by field-level validation
+        # (EmailField + required flag set in __init__), so we must NOT re-check it
+        # here — doing so surfaced the "Email: This field is required." error
+        # twice on an empty submission. Only the phone normalization needs to
+        # happen at the form level.
         phone_required = self.fields['phone'].required
         try:
             data['phone'] = clean_phone_text(data.get('phone'), required=phone_required)

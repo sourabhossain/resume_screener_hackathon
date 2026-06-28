@@ -4,10 +4,14 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Require a password. REDIS_PASSWORD comes from .env (never commit the real
+    # value). Redis carries candidate PII (Celery task payloads + LLM cache), so
+    # it must not be reachable unauthenticated by anything on the Docker network.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,8 +35,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.prod
       - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -57,8 +61,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.prod
       - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -83,8 +87,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.prod
       - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -110,8 +114,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.prod
       - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
     volumes:
       - logs_data:/app/logs
 

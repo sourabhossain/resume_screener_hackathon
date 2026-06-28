@@ -13,6 +13,17 @@ def screen_resume_task(self, resume_id: int):
 
     try:
         resume = Resume.objects.select_related('job').get(id=resume_id)
+
+        # Idempotency guard for acks_late redelivery: if a prior run already
+        # completed this resume (e.g. the worker was killed after committing but
+        # before acking), don't screen it again — that would duplicate paid LLM
+        # calls and clobber the result. A legitimate re-screen always flips the
+        # row back to 'processing' before re-queuing, so 'completed' here means a
+        # redelivery, not a fresh request.
+        if resume.screening_status == 'completed':
+            logger.info(f"Resume {resume_id} already completed — skipping duplicate screening")
+            return {'success': True, 'resume_id': resume_id, 'skipped': 'already_completed'}
+
         logger.info(f"Starting screening for resume {resume_id}")
 
         result = ResumeService.process_resume(resume)
@@ -45,11 +56,14 @@ def screen_resume_task(self, resume_id: int):
 
         retries_left = self.max_retries - self.request.retries
         if retries_left > 0:
-            # Keep as pending so UI shows it queued, not failed, while retrying
+            # Keep the row in 'processing' (NOT 'pending') while retrying. Resetting
+            # to 'pending' here would let batch_screen_resumes — which claims
+            # status='pending' rows — re-dispatch a SECOND task for the same resume
+            # while this retry is still queued, causing a double screening race.
             try:
-                Resume.objects.filter(id=resume_id).update(screening_status='pending')
+                Resume.objects.filter(id=resume_id).update(screening_status='processing')
             except Exception as update_err:
-                logger.warning(f"Could not reset status to pending for resume {resume_id}: {update_err}")
+                logger.warning(f"Could not keep status processing for resume {resume_id}: {update_err}")
         else:
             try:
                 Resume.objects.filter(id=resume_id).update(
@@ -111,11 +125,17 @@ def verify_resume_links_task(self, resume_id: int):
         return {'error': 'timeout'}
     except Exception as e:
         logger.exception(f"Link verification failed for resume {resume_id}: {e}")
+        retries_left = self.max_retries - self.request.retries
+        if retries_left > 0:
+            # Leave the row in 'processing' while retrying — don't flicker it to
+            # 'failed' between attempts (a reader mid-cycle would see a misleading
+            # terminal state). Only mark 'failed' once retries are exhausted.
+            raise self.retry(exc=e, countdown=30)
         try:
             Resume.objects.filter(id=resume_id).update(verification_status='failed', verified_at=None)
         except Exception as update_err:
             logger.warning(f"Could not update verification status: {update_err}")
-        raise self.retry(exc=e, countdown=30)
+        return {'error': str(e), 'resume_id': resume_id}
 
 
 @shared_task

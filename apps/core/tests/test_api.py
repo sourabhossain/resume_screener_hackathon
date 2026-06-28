@@ -117,14 +117,19 @@ class TestResumeAPI:
         assert len(results) >= 1
     
     def test_retrieve_resume(self, authenticated_client, sample_resume):
-        """Test retrieving single resume."""
-        response = authenticated_client.get(f'/api/resumes/{sample_resume.pk}/')
+        """Test retrieving single resume by its opaque uuid (not the sequential pk)."""
+        response = authenticated_client.get(f'/api/resumes/{sample_resume.uuid}/')
         assert response.status_code == status.HTTP_200_OK
         assert response.json()['candidate_name'] == sample_resume.candidate_name
-    
+
+    def test_retrieve_resume_by_pk_is_404(self, authenticated_client, sample_resume):
+        """Sequential-id enumeration is closed: detail routes are uuid-only."""
+        response = authenticated_client.get(f'/api/resumes/{sample_resume.pk}/')
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
     def test_delete_resume_soft_deletes(self, authenticated_client, sample_resume):
-        """Test that DELETE performs soft delete."""
-        response = authenticated_client.delete(f'/api/resumes/{sample_resume.pk}/')
+        """Test that DELETE performs soft delete (addressed by uuid)."""
+        response = authenticated_client.delete(f'/api/resumes/{sample_resume.uuid}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert Resume.objects.filter(pk=sample_resume.pk).count() == 0
         assert Resume.objects.all_with_deleted().filter(pk=sample_resume.pk).count() == 1

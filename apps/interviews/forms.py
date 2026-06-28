@@ -22,6 +22,14 @@ class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
             }),
         }
 
+    def clean_scheduled_date(self):
+        """Reject interviews scheduled in the past (today is allowed)."""
+        from django.utils import timezone
+        date = self.cleaned_data.get('scheduled_date')
+        if date and date < timezone.now().date():
+            raise forms.ValidationError('Interview date cannot be in the past.')
+        return date
+
 
 class InterviewerAddForm(AriaInvalidMixin, forms.ModelForm):
     """Add a new interviewer slot to an existing Interview."""

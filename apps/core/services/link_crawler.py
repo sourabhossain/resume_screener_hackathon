@@ -9,13 +9,17 @@ from urllib.parse import urljoin
 
 import httpx
 
-from apps.core.services.url_safety import is_safe_public_http_url
+from apps.core.services.url_safety import is_safe_public_http_url, validate_and_pin
 
 logger = logging.getLogger(__name__)
 
 # Timeout for all requests
 REQUEST_TIMEOUT = 15  # seconds
 MAX_CONTENT_LENGTH = 50_000  # chars
+# Hard byte ceiling on the response body. Applied while streaming so a malicious
+# URL can't stream gigabytes into a worker's memory before we truncate to
+# MAX_CONTENT_LENGTH chars. ~2 MB comfortably covers any real HTML page.
+MAX_CONTENT_BYTES = 2 * 1024 * 1024
 MAX_REDIRECTS = 5
 
 
@@ -85,8 +89,10 @@ class LinkCrawler:
     async def _crawl_with_httpx(cls, url: str) -> CrawlResult:
         # SSRF hardening: do NOT let httpx auto-follow redirects. A validated
         # public URL can 3xx-redirect to an internal/metadata address; following
-        # blindly would bypass the guard. Instead follow manually and re-run the
-        # SSRF check (which re-resolves DNS) on every hop before each request.
+        # blindly would bypass the guard. We follow manually and, on every hop,
+        # resolve the hostname ONCE and connect to that pinned IP (sending the
+        # real Host header + TLS SNI) so DNS can't rebind between the safety check
+        # and the connection.
         async with httpx.AsyncClient(
             headers=cls.HEADERS,
             timeout=REQUEST_TIMEOUT,
@@ -95,27 +101,46 @@ class LinkCrawler:
         ) as client:
             current = url
             for _ in range(MAX_REDIRECTS + 1):
-                safe, reason = is_safe_public_http_url(current)
+                safe, reason, pinned_ip, host, port = validate_and_pin(current)
                 if not safe:
                     logger.info('Blocked crawl hop (SSRF guard): %s — %s', current, reason)
                     return CrawlResult(url=url, success=False, error=f'blocked: {reason}')
 
-                response = await client.get(current)
+                # Connect to the validated IP literal, but preserve the original
+                # hostname for the Host header and TLS SNI / cert verification.
+                parsed = httpx.URL(current)
+                connect_url = parsed.copy_with(host=pinned_ip)
+                host_header = host if port in (80, 443) else f'{host}:{port}'
 
-                if response.is_redirect and response.headers.get('location'):
-                    nxt = response.next_request
-                    current = str(nxt.url) if nxt is not None else urljoin(current, response.headers['location'])
-                    continue
+                async with client.stream(
+                    'GET', connect_url,
+                    headers={'Host': host_header},
+                    extensions={'sni_hostname': host},
+                ) as response:
+                    if response.is_redirect and response.headers.get('location'):
+                        # Resolve the next hop against the ORIGINAL hostname URL.
+                        current = urljoin(current, response.headers['location'])
+                        continue
 
-                content = response.text[:MAX_CONTENT_LENGTH]
-                title = cls._extract_title(content)
-                return CrawlResult(
-                    url=url,
-                    success=response.status_code < 400,
-                    content=content,
-                    title=title,
-                    status_code=response.status_code
-                )
+                    # Stream with a hard byte cap so an oversized/endless body
+                    # can't exhaust worker memory before we truncate.
+                    chunks, total = [], 0
+                    async for chunk in response.aiter_bytes():
+                        chunks.append(chunk)
+                        total += len(chunk)
+                        if total >= MAX_CONTENT_BYTES:
+                            break
+                    raw = b''.join(chunks)
+                    text = raw.decode(response.encoding or 'utf-8', errors='ignore')
+                    content = text[:MAX_CONTENT_LENGTH]
+                    title = cls._extract_title(content)
+                    return CrawlResult(
+                        url=url,
+                        success=response.status_code < 400,
+                        content=content,
+                        title=title,
+                        status_code=response.status_code
+                    )
 
             return CrawlResult(url=url, success=False, error='too many redirects')
 

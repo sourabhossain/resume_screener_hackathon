@@ -24,7 +24,15 @@ if os.environ.get('DEBUG', '').lower() in ('true', '1', 'yes'):
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+# Filter out empties so a missing/empty ALLOWED_HOSTS becomes [] (not ['']),
+# then fail fast — mirroring the SECRET_KEY/DEBUG guards above. Otherwise the app
+# boots and silently 400s every request, inviting an operator to "fix" it with '*'.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
+if not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "The ALLOWED_HOSTS environment variable must be set in production "
+        "(comma-separated hostnames, e.g. 'careers.example.com')."
+    )
 
 # Django 4.0+ checks the Origin header against this list for CSRF on HTTPS.
 # Must include every public hostname (and port if non-standard) the app serves.

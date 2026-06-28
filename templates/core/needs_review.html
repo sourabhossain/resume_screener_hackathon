@@ -3,7 +3,23 @@
 {% block title %}Needs Review{% endblock %}
 
 {% block content %}
-<div style="font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#171717;">
+{# This page is built with inline light-mode styles. Rather than rewrite every
+   element, dark-mode overrides below remap the inline light colors/backgrounds
+   so headings/pager text stay visible and cards aren't blinding white on the
+   dark shell. Keyed on .nr-root so it can't leak to other pages. #}
+<style>
+  .dark .nr-root [style*="color:#171717"] { color:#fafafa !important; }
+  .dark .nr-root [style*="color:#71717a"],
+  .dark .nr-root [style*="color:#52525b"],
+  .dark .nr-root [style*="color:#3f3f46"],
+  .dark .nr-root [style*="color:#a1a1aa"] { color:#a1a1aa !important; }
+  .dark .nr-root [style*="background:#fff"] { background:#18181b !important; }
+  .dark .nr-root [style*="#efeee9"],
+  .dark .nr-root [style*="#e7e5e0"],
+  .dark .nr-root [style*="#f1f0ec"] { border-color:#27272a !important; }
+  .dark .nr-root a[style*="color:#171717"] { color:#e0e7ff !important; }
+</style>
+<div class="nr-root" style="font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#171717;">
 
     <!-- Header -->
     <div style="display:flex; align-items:center; gap:20px;">

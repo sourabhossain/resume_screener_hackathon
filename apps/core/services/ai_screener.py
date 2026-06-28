@@ -16,6 +16,7 @@ from .prompt_loader import (
 from .experience import compute_experience_years
 from .job_families import VALID_JOB_TYPES, FALLBACK_ROLE
 from .schemas import ExtractionResult, MatchingResult, DetectorResult, parse_llm_json
+from .golden_checks import _token_present
 
 logger = logging.getLogger(__name__)
 
@@ -255,8 +256,46 @@ def score_node(state: ResumeScreeningState) -> ResumeScreeningState:
         config = settings.AI_SCREENING_CONFIG
         job_type = state.get('job_type', FALLBACK_ROLE)
 
-        total_skills = len(state['matched_skills']) + len(state['missing_skills'])
-        state['skill_score'] = (len(state['matched_skills']) / total_skills) * 100 if total_skills > 0 else 0
+        # Defend skill_score against an adversarial/prompt-injected resume that
+        # coaxes the model into returning fabricated matched_skills (or listing a
+        # skill as BOTH matched and missing, which inflates the denominator).
+        # Enforce the same subset invariant the golden checks assert offline:
+        # a matched skill must actually be in the extracted profile, and no skill
+        # may count as both matched and missing.
+        profile_skills = {str(s).strip().lower() for s in (state.get('skills') or []) if str(s).strip()}
+        profile_blob = ' , '.join(profile_skills)
+
+        def _in_profile(skill: str) -> bool:
+            return skill.lower() in profile_skills or _token_present(skill, profile_blob)
+
+        matched_clean, seen = [], set()
+        for s in (str(x).strip() for x in state.get('matched_skills', [])):
+            key = s.lower()
+            if not s or key in seen:
+                continue
+            # Only drop as fabricated when we actually have a profile to check
+            # against — if extraction yielded no skills, keep the model's list
+            # rather than zeroing out a legitimate candidate.
+            if profile_skills and not _in_profile(s):
+                logger.info(f"[Resume {state.get('resume_id')}] Dropped fabricated matched_skill '{s}'")
+                continue
+            seen.add(key)
+            matched_clean.append(s)
+
+        matched_keys = {s.lower() for s in matched_clean}
+        missing_clean, seen_m = [], set()
+        for s in (str(x).strip() for x in state.get('missing_skills', [])):
+            key = s.lower()
+            if not s or key in seen_m or key in matched_keys:
+                continue
+            seen_m.add(key)
+            missing_clean.append(s)
+
+        state['matched_skills'] = matched_clean
+        state['missing_skills'] = missing_clean
+
+        total_skills = len(matched_clean) + len(missing_clean)
+        state['skill_score'] = (len(matched_clean) / total_skills) * 100 if total_skills > 0 else 0
 
         state['experience_score'] = state['experience_match_score']
         state['education_score'] = state['education_match_score']

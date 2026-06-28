@@ -212,6 +212,17 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Baseline throttling so every endpoint (including custom @action routes and
+    # any future ones) is rate-limited, not just the views with explicit
+    # @ratelimit decorators. Backed by the shared Redis cache.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '120/min',
+        'anon': '30/min',
+    },
 }
 
 
