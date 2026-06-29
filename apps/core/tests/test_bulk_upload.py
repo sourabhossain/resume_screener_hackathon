@@ -18,10 +18,8 @@ from django.urls import reverse
 
 from apps.core.models import Resume
 
-
-DOCX_MAGIC = b'PK\x03\x04'  # ZIP-based magic for DOCX
+DOCX_MAGIC = b'PK\x03\x04'
 PDF_MAGIC = b'%PDF'
-
 
 def _fake_file(name, content=None, size=None):
     if content is None:
@@ -30,17 +28,14 @@ def _fake_file(name, content=None, size=None):
     buf = io.BytesIO(content)
     buf.name = name
     if size is not None:
-        # Pad to desired size so len(file.read()) == size
         buf = io.BytesIO(content + b'\x00' * (size - len(content)))
         buf.name = name
     return buf
-
 
 def _bulk_post(client, job, files):
     url = reverse('core:resume_bulk_create', kwargs={'job_slug': job.slug})
     with patch('apps.core.tasks.screen_resume_task.delay'):
         return client.post(url, {'files': files})
-
 
 @pytest.mark.django_db
 class TestBulkUploadAccess:
@@ -73,23 +68,21 @@ class TestBulkUploadAccess:
         )
         assert resp.status_code == 200
 
-
 @pytest.mark.django_db
 class TestBulkUploadLimits:
 
     def test_empty_file_list_rejected(self, authenticated_client, sample_job):
         url = reverse('core:resume_bulk_create', kwargs={'job_slug': sample_job.slug})
         resp = authenticated_client.post(url, {})
-        assert resp.status_code == 200  # re-renders form with error
+        assert resp.status_code == 200
 
     def test_more_than_20_files_rejected(self, authenticated_client, sample_job):
         files = [_fake_file(f'cv{i}.pdf') for i in range(21)]
         url = reverse('core:resume_bulk_create', kwargs={'job_slug': sample_job.slug})
         with patch('apps.core.tasks.screen_resume_task.delay'):
             resp = authenticated_client.post(url, {'files': files})
-        assert resp.status_code == 200  # re-renders with error
+        assert resp.status_code == 200
         assert Resume.objects.filter(job=sample_job).count() == 0
-
 
 @pytest.mark.django_db
 class TestBulkUploadFileValidation:
@@ -127,7 +120,6 @@ class TestBulkUploadFileValidation:
         )
         dup_file = _fake_file('dup.pdf', content=content)
         _bulk_post(authenticated_client, sample_job, [dup_file])
-        # Still only one resume
         assert Resume.objects.filter(job=sample_job).count() == 1
 
     def test_valid_pdf_queued(self, authenticated_client, sample_job):
@@ -149,15 +141,14 @@ class TestBulkUploadFileValidation:
     def test_mixed_batch_valid_and_invalid(self, authenticated_client, sample_job):
         """Valid files are created; invalid ones produce warnings but don't abort."""
         files = [
-            _fake_file('valid.pdf', content=PDF_MAGIC + b'-1.4 content-A'),   # valid
-            _fake_file('bad.txt', content=b'plain text'),                      # wrong ext
-            _fake_file('Jane_Smith.pdf', content=PDF_MAGIC + b'-1.4 content-B'),  # valid, different hash
+            _fake_file('valid.pdf', content=PDF_MAGIC + b'-1.4 content-A'),
+            _fake_file('bad.txt', content=b'plain text'),
+            _fake_file('Jane_Smith.pdf', content=PDF_MAGIC + b'-1.4 content-B'),
         ]
         with patch('apps.core.tasks.screen_resume_task.delay'):
             url = reverse('core:resume_bulk_create', kwargs={'job_slug': sample_job.slug})
             resp = authenticated_client.post(url, {'files': files})
 
-        # Redirected after upload
         assert resp.status_code == 302
         assert Resume.objects.filter(job=sample_job).count() == 2
 

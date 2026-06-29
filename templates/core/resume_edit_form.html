@@ -16,7 +16,6 @@
         </svg>
         <span class="text-zinc-900 dark:text-white font-medium">{{ title }}</span>
     </nav>
-    
 
     <div class="overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
 
@@ -33,10 +32,10 @@
                 </div>
             </div>
         </div>
-        
+
         <form method="post" enctype="multipart/form-data" hx-boost="false" class="p-8" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
-            
+
             <div class="space-y-8">
 
                 <div>
@@ -150,7 +149,6 @@
                     </div>
                 </div>
 
-                <!-- Tier and recommendation derive from Final Score on save -->
                 <div class="border-t border-zinc-100 dark:border-zinc-800 pt-8">
                     <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
                         <svg class="h-5 w-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,7 +169,6 @@
                         {% endif %}
                     </div>
                 </div>
-                
 
                 <div class="border-t border-zinc-100 dark:border-zinc-800 pt-8">
                     <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
@@ -209,7 +206,6 @@
                     <p class="mt-4 text-xs text-zinc-500 dark:text-zinc-400">AI-generated scores can be manually adjusted if needed.</p>
                 </div>
             </div>
-            
 
             <div class="mt-10 flex justify-end gap-3 border-t border-zinc-100 pt-8 dark:border-zinc-800">
                 <a href="{% url 'core:resume_detail' resume.uuid %}" class="rounded-lg border border-zinc-200 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">

@@ -14,23 +14,19 @@ from apps.interviews.models import (
     MAX_SCORE,
 )
 
-
 @pytest.fixture
 def interview(db, sample_resume):
     return Interview.objects.create(
         resume=sample_resume, phase='1', scheduled_date=date.today()
     )
 
-
 @pytest.fixture
 def evaluation(db, interview):
     return interview.evaluations.create(interviewer_name='Bob Reviewer')
 
-
 def _full_scores(value=4):
     """A complete, valid evaluation POST payload (all criteria scored)."""
     return {f'score_{k}': str(value) for k in CRITERIA_KEYS}
-
 
 @pytest.mark.django_db
 class TestInterviewModels:
@@ -46,15 +42,14 @@ class TestInterviewModels:
 
     def test_total_score_ignores_out_of_range_values(self, evaluation):
         evaluation.scores = {'educational_background': 9, 'enthusiasm': 3}
-        # only the in-range (1..5) value counts
         assert evaluation.total_score == 3
 
     def test_impression_label_bands(self, evaluation):
-        evaluation.scores = {k: 5 for k in CRITERIA_KEYS}   # 100%
+        evaluation.scores = {k: 5 for k in CRITERIA_KEYS}
         assert evaluation.impression_label == 'Good'
-        evaluation.scores = {k: 3 for k in CRITERIA_KEYS}   # 60%
+        evaluation.scores = {k: 3 for k in CRITERIA_KEYS}
         assert evaluation.impression_label == 'Satisfactory'
-        evaluation.scores = {k: 1 for k in CRITERIA_KEYS}   # 20%
+        evaluation.scores = {k: 1 for k in CRITERIA_KEYS}
         assert evaluation.impression_label == 'Unsatisfactory'
 
     def test_is_expired_logic(self, interview):
@@ -63,18 +58,16 @@ class TestInterviewModels:
         ev.token_expires_at = timezone.now() - timedelta(days=1)
         ev.save(update_fields=['token_expires_at'])
         assert ev.is_expired is True
-        # a submitted evaluation is never "expired"
         ev.is_submitted = True
         assert ev.is_expired is False
 
     def test_interview_avg_and_counts(self, interview):
         assert interview.avg_score() is None
         e1 = interview.evaluations.create(interviewer_name='A', scores={k: 4 for k in CRITERIA_KEYS}, is_submitted=True)
-        interview.evaluations.create(interviewer_name='B')  # pending
+        interview.evaluations.create(interviewer_name='B')
         assert interview.submitted_count == 1
         assert interview.pending_count == 1
         assert interview.avg_score() == e1.total_score
-
 
 @pytest.mark.django_db
 class TestInterviewerAddForm:
@@ -122,7 +115,6 @@ class TestInterviewerAddForm:
         assert form.is_valid(), form.errors
         assert form.cleaned_data['interviewer_name'] == 'Carol'
         assert form.cleaned_data['interviewer_position'] == 'Lead'
-
 
 @pytest.mark.django_db
 class TestRecruiterViews:
@@ -196,7 +188,6 @@ class TestRecruiterViews:
         resp = client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
         assert resp.status_code == 200
 
-
 @pytest.mark.django_db
 class TestPublicEvaluate:
     def test_evaluate_get_valid(self, client, evaluation):
@@ -210,7 +201,7 @@ class TestPublicEvaluate:
 
     def test_submit_auto_recommendation_yes(self, client, evaluation):
         url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
-        resp = client.post(url, _full_scores(4))  # 80% -> yes
+        resp = client.post(url, _full_scores(4))
         assert resp.status_code == 302
         evaluation.refresh_from_db()
         assert evaluation.is_submitted is True
@@ -219,18 +210,18 @@ class TestPublicEvaluate:
 
     def test_submit_auto_recommendation_maybe_and_no(self, client, interview):
         e_maybe = interview.evaluations.create(interviewer_name='M')
-        client.post(reverse('interviews:evaluate', kwargs={'token': e_maybe.token}), _full_scores(3))  # 60%
+        client.post(reverse('interviews:evaluate', kwargs={'token': e_maybe.token}), _full_scores(3))
         e_maybe.refresh_from_db()
         assert e_maybe.recommendation == 'maybe'
 
         e_no = interview.evaluations.create(interviewer_name='N')
-        client.post(reverse('interviews:evaluate', kwargs={'token': e_no.token}), _full_scores(1))  # 20%
+        client.post(reverse('interviews:evaluate', kwargs={'token': e_no.token}), _full_scores(1))
         e_no.refresh_from_db()
         assert e_no.recommendation == 'no'
 
     def test_manual_recommendation_overrides_score(self, client, evaluation):
         url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
-        data = _full_scores(1)  # would auto-calc 'no'
+        data = _full_scores(1)
         data['recommendation'] = 'yes'
         client.post(url, data)
         evaluation.refresh_from_db()
@@ -239,17 +230,15 @@ class TestPublicEvaluate:
     def test_resubmit_blocked(self, client, evaluation):
         url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
         client.post(url, _full_scores(4))
-        # second GET shows the already-submitted page, not the form
         resp = client.get(url)
         assert resp.status_code == 200
-        assert b'score-radio' not in resp.content  # form not rendered
+        assert b'score-radio' not in resp.content
 
     def test_expired_token_shows_expired_page(self, client, evaluation):
         evaluation.token_expires_at = timezone.now() - timedelta(days=1)
         evaluation.save(update_fields=['token_expires_at'])
         resp = client.get(reverse('interviews:evaluate', kwargs={'token': evaluation.token}))
         assert resp.status_code == 200
-        # the score form must not be served for an expired link
         assert b'score-radio' not in resp.content
 
     def test_evaluate_done_renders(self, client, evaluation):

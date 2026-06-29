@@ -14,7 +14,6 @@ from ..models import Resume
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-
 def _validate_user_name_fields(request) -> bool:
     """Validate optional first/last name on user create; surfaces toast errors."""
     ok = True
@@ -29,7 +28,6 @@ def _validate_user_name_fields(request) -> bool:
             ok = False
     return ok
 
-
 def _ordered_active_resumes_queryset(resume_qs):
     return resume_qs.filter(is_deleted=False).annotate(
         decision_rank=Case(
@@ -41,10 +39,7 @@ def _ordered_active_resumes_queryset(resume_qs):
         ),
     ).order_by('-decision_rank', '-final_score', '-created_at')
 
-
 def _pipeline_stats(resume_qs):
-    # order_by() clears any inherited ordering so it doesn't leak into the
-    # implicit GROUP BY; conditional Counts give exact per-decision totals.
     stats = resume_qs.order_by().aggregate(
         total=Count('id'),
         interview=Count('id', filter=Q(recommendation='interview')),
@@ -55,7 +50,6 @@ def _pipeline_stats(resume_qs):
         stats['total'] - stats['interview'] - stats['talent_pool'] - stats['reject']
     )
     return stats
-
 
 def _csv_safe(value):
     """
@@ -71,7 +65,6 @@ def _csv_safe(value):
         return "'" + value
     return value
 
-
 def _get_active_resume(uuid, *, select_job=True):
     """
     Fetch a non-deleted resume whose parent job is ALSO not deleted.
@@ -86,7 +79,6 @@ def _get_active_resume(uuid, *, select_job=True):
     if select_job:
         qs = qs.select_related('job')
     return get_object_or_404(qs, uuid=uuid)
-
 
 def _superuser_required(view_fn):
     """Decorator: must be logged in AND superuser."""

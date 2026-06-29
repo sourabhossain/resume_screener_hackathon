@@ -7,8 +7,6 @@ submodules below. Everything is re-exported here so `from . import views` +
 `views.<name>` in urls.py (and external imports like
 `from apps.core.views import form_errors_to_messages`) keep working unchanged.
 """
-# Re-exported for callers that historically imported it from this module
-# (e.g. apps.interviews.views).
 from ..form_utils import form_errors_to_messages  # noqa: F401
 
 from ._helpers import (  # noqa: F401

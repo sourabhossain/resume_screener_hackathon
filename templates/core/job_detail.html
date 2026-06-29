@@ -166,7 +166,6 @@
             {% endif %}
             </div>
 
-            {# Pipeline search — hx-disinherit goes on the hx-get elements below, not this wrapper #}
             <div class="relative" x-data="{
                     hasValue: '{{ search_q|escapejs }}' !== '',
                     clear() {
@@ -203,7 +202,7 @@
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                {# Suggestions: separate HTMX listener — never touches tbody #}
+
                 <div hx-get="{% url 'core:pipeline_suggestions' job.slug %}"
                      hx-trigger="input changed delay:200ms from:#pipeline-search-input, focusin delay:100ms from:#pipeline-search-input"
                      hx-target="#pipeline-suggestions"
@@ -230,7 +229,7 @@
                         <th scope="col" class="w-24 px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Actions</th>
                     </tr>
                 </thead>
-                {# disinherit so polling rows don't inherit the body's hx-select="#main-content" (which would blank them); candidate links inside use hx-boost="false" #}
+
                 <tbody id="pipeline-tbody" aria-live="polite" hx-disinherit="hx-target hx-select hx-swap hx-push-url" class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for resume in resumes %}
                 {% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter %}

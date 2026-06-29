@@ -6,19 +6,12 @@ from pathlib import Path
 from pypdf import PdfReader
 import docx
 
-
-# Fancy resume templates render icons/labels using symbol fonts, which PDF
-# extraction turns into decorative Unicode glyphs (e.g. ⌢ U+2322, bullets,
-# en/em dashes, smart quotes). The raw_text column is utf8mb4 so these store
-# fine, but we still normalise the common readable ones to ASCII so the LLM
-# sees clean text rather than icon-font artefacts.
 _CHAR_REPLACEMENTS = {
     '–': '-', '—': '-', '−': '-',
     '•': '*', '·': '*', '●': '*', '○': '*',
     '“': '"', '”': '"', '‘': "'", '’': "'",
     '…': '...', ' ': ' ',
 }
-
 
 class DocumentExtractor:
     """Extract text content from resume documents."""
@@ -91,12 +84,10 @@ class DocumentExtractor:
         """Extract text from DOCX file."""
         doc = docx.Document(file_path)
         text_parts = []
-        
 
         for para in doc.paragraphs:
             if para.text.strip():
                 text_parts.append(para.text)
-        
 
         for table in doc.tables:
             for row in table.rows:

@@ -4,7 +4,6 @@ Unit tests for Job and Resume models.
 import pytest
 from apps.core.models import Job, Resume
 
-
 @pytest.mark.django_db
 class TestJobModel:
     """Tests for Job model."""
@@ -31,9 +30,7 @@ class TestJobModel:
         job = Job.objects.create(title='Test Job')
         job.soft_delete()
         
-        # Should not appear in normal queries
         assert Job.objects.filter(pk=job.pk).count() == 0
-        # Should appear in all_with_deleted
         assert Job.objects.all_with_deleted().filter(pk=job.pk).count() == 1
     
     def test_job_restore(self):
@@ -51,7 +48,6 @@ class TestJobModel:
         
         sample_resume.soft_delete()
         assert sample_job.active_resumes.count() == 0
-
 
 @pytest.mark.django_db
 class TestResumeModel:

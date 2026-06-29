@@ -10,7 +10,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from apps.core.models import Resume
 
-
 @pytest.mark.django_db
 class TestScreenResumeTaskSuccess:
 
@@ -52,7 +51,6 @@ class TestScreenResumeTaskSuccess:
         assert result['success'] is False
         assert 'LLM error' in result['error']
 
-
 @pytest.mark.django_db
 class TestScreenResumeTaskNotFound:
 
@@ -67,14 +65,11 @@ class TestScreenResumeTaskNotFound:
         from apps.core.tasks import screen_resume_task
 
         sample_resume.soft_delete()
-        # all_objects reaches soft-deleted; using an ID that exists only in all_objects
         result = screen_resume_task(sample_resume.id)
         sample_resume.refresh_from_db()
-        # The task raises DoesNotExist for soft-deleted (SoftDeleteManager hides it)
         assert result['error'] == 'Resume not found'
         sample_resume_in_db = Resume.all_objects.get(pk=sample_resume.pk)
         assert sample_resume_in_db.screening_status == 'failed'
-
 
 @pytest.mark.django_db
 class TestScreenResumeTaskTimeout:
@@ -99,7 +94,6 @@ class TestScreenResumeTaskTimeout:
 
         assert result['resume_id'] == sample_resume.id
 
-
 @pytest.mark.django_db
 class TestScreenResumeTaskRetry:
 
@@ -117,7 +111,6 @@ class TestScreenResumeTaskRetry:
                 screen_resume_task(sample_resume.id)
 
         sample_resume.refresh_from_db()
-        # retries_left = max_retries(3) - request.retries(0) = 3 > 0 → kept 'processing'
         assert sample_resume.screening_status == 'processing'
 
     def test_max_retries_sets_failed_status(self, sample_resume):
@@ -133,9 +126,7 @@ class TestScreenResumeTaskRetry:
                     screen_resume_task(sample_resume.id)
 
         sample_resume.refresh_from_db()
-        # retries_left = 0 - 0 = 0 → 'failed'
         assert sample_resume.screening_status == 'failed'
-
 
 @pytest.mark.django_db
 class TestBatchScreenResumes:
@@ -146,7 +137,6 @@ class TestBatchScreenResumes:
 
         r1 = Resume.objects.create(job=sample_job, candidate_name='A', screening_status='pending')
         r2 = Resume.objects.create(job=sample_job, candidate_name='B', screening_status='pending')
-        # completed resume should not be re-queued
         Resume.objects.create(job=sample_job, candidate_name='C', screening_status='completed')
 
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:

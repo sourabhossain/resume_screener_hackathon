@@ -16,7 +16,7 @@
         </svg>
         <span class="text-zinc-900 dark:text-white font-medium">{{ resume.candidate_name|title }}</span>
     </nav>
-    
+
     <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
         <div class="flex items-start gap-5">
             <div class="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl bg-primary-600 text-2xl font-semibold text-white shadow-md">
@@ -160,13 +160,12 @@
     <div class="lg:col-span-2" hx-disinherit="hx-target hx-select hx-swap hx-push-url">
         {% include 'core/partials/resume_status.html' %}
     </div>
-    
 
     <div class="space-y-6">
 
         <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
             <h2 class="text-lg font-bold text-zinc-900 dark:text-white mb-4">Skills Analysis</h2>
-            
+
             {% if resume.matched_skills %}
             <div class="mb-5">
                 <h3 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
@@ -180,7 +179,7 @@
                 </div>
             </div>
             {% endif %}
-            
+
             {% if resume.missing_skills %}
             <div>
                 <h3 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
@@ -194,12 +193,11 @@
                 </div>
             </div>
             {% endif %}
-            
+
             {% if not resume.matched_skills and not resume.missing_skills %}
             <p class="text-zinc-400 text-sm text-center py-4">No skills analysis available</p>
             {% endif %}
         </div>
-        
 
         <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
             <h2 class="text-lg font-bold text-zinc-900 dark:text-white mb-4">Details</h2>
@@ -231,7 +229,6 @@
         {% with notes=resume.notes.all %}
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-6 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
 
-            {# Header #}
             <div class="flex items-center justify-between mb-4">
                 <h2 class="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-white">
                     <svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,7 +243,6 @@
                 </span>
             </div>
 
-        {# Textarea form #}
         <form method="post" action="{% url 'core:resume_note_add' resume.uuid %}" class="mb-5">
             {% csrf_token %}
             <textarea name="text" rows="3" required
@@ -263,7 +259,6 @@
             </div>
         </form>
 
-        {# Notes list — styled like link detail cards #}
         {% if notes %}
         <div class="space-y-3">
             {% for note in notes %}

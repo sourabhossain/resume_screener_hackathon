@@ -13,7 +13,6 @@ from apps.core.types import ScreeningResult
 
 logger = logging.getLogger(__name__)
 
-
 class ResumeService:
 
     @staticmethod
@@ -43,10 +42,9 @@ class ResumeService:
         except Exception as e:
             raise DocumentExtractionError(str(e), file_path=resume.file.path)
 
-    # Matches BD numbers (+8801x / 01x) and generic international numbers
     _PHONE_RE = re.compile(
-        r'(?:\+?880[\s \-]?|0)1[3-9][\d]{8}'      # BD: +880-1XXXXXXXXX or 01XXXXXXXXX
-        r'|\+\d[\d\s\(\)\-]{9,16}\d'                     # International: +X...
+        r'(?:\+?880[\s \-]?|0)1[3-9][\d]{8}'
+        r'|\+\d[\d\s\(\)\-]{9,16}\d'
     )
     _EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
 
@@ -56,7 +54,6 @@ class ResumeService:
         m = cls._EMAIL_RE.search(text)
         if m:
             return m.group(0), m.start()
-        # PDF artifact: letters with spurious spaces — clean window around each @
         for at_m in re.finditer(r'@', text):
             pos = at_m.start()
             window = text[max(0, pos - 60): pos + 60]
@@ -77,11 +74,8 @@ class ResumeService:
             return ''
         if len(matches) == 1:
             return matches[0][1]
-        # Prefer the phone nearest to the email (same contact block)
         if email_pos >= 0:
             return min(matches, key=lambda x: abs(x[0] - email_pos))[1]
-        # No email: take the last match (candidate's info often comes last in
-        # multi-column PDFs where the extractor reads columns sequentially)
         return matches[-1][1]
 
     @classmethod
@@ -96,7 +90,6 @@ class ResumeService:
                 resume.email = email
                 update_fields.append('email')
         else:
-            # Find position of existing email so phone search is anchor-correct
             m = re.search(re.escape(resume.email), text)
             email_pos = m.start() if m else -1
 
@@ -128,16 +121,8 @@ class ResumeService:
 
     @staticmethod
     def apply_screening_result(resume, result: ScreeningResult) -> None:
-        # The detector could not confidently assign a job family. Park the
-        # resume for a human to pick the family and re-screen, rather than
-        # scoring it against a guessed role.
         if result.get('needs_review'):
             from apps.core.models import Resume as ResumeModel
-            # Persist WHY it was flagged (from the detector) so the recruiter can
-            # see the specific reason in the UI, not just a generic message.
-            # Also blank out any scores/tier/decision from a PRIOR completed run so
-            # a re-screened resume parked for review doesn't keep showing a stale
-            # score/recommendation (which also leaks into pipeline ranking).
             ResumeModel.objects.filter(pk=resume.pk).update(
                 screening_status='needs_review',
                 reasoning=result.get('reasoning', '') or '',
@@ -157,10 +142,6 @@ class ResumeService:
             resume = ResumeModel.objects.select_for_update().get(pk=resume.pk)
 
             resume.candidate_name = result.get('candidate_name', resume.candidate_name)
-            # Only fill contact details from the AI result when they are still
-            # blank — i.e. neither typed by the user in the form nor recovered by
-            # the earlier regex extraction (_fill_contact_info). This prevents AI
-            # output from overwriting recruiter- or candidate-provided values.
             if not resume.email and result.get('candidate_email'):
                 resume.email = result['candidate_email']
             if not resume.phone and result.get('candidate_phone'):
@@ -182,8 +163,6 @@ class ResumeService:
             resume.screening_status = 'completed'
             resume.save()
 
-        # on_commit defers the task until the outermost transaction commits,
-        # so this is safe even when called inside a nested atomic block.
         from apps.core.tasks import verify_resume_links_task
         transaction.on_commit(lambda: verify_resume_links_task.delay(resume.id))
 
@@ -198,8 +177,6 @@ class ResumeService:
             result = cls.run_screening(resume)
             cls.apply_screening_result(resume, result)
 
-            # apply_screening_result saves a separately-fetched instance, so this
-            # caller's `resume` is stale; refresh before logging/returning its fields.
             resume.refresh_from_db()
 
             if resume.screening_status == 'needs_review':

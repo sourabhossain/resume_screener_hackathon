@@ -5,7 +5,6 @@ import pytest
 from rest_framework import status
 from apps.core.models import Job, Resume
 
-
 @pytest.mark.django_db
 class TestJobAPI:
     """Tests for Job ViewSet API."""
@@ -62,7 +61,6 @@ class TestJobAPI:
         """Test that DELETE performs soft delete."""
         response = authenticated_client.delete(f'/api/jobs/{sample_job.pk}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        # Should be soft deleted
         assert Job.objects.filter(pk=sample_job.pk).count() == 0
         assert Job.objects.all_with_deleted().filter(pk=sample_job.pk).count() == 1
     
@@ -82,7 +80,6 @@ class TestJobAPI:
         assert response.status_code == status.HTTP_200_OK
         results = response.json()['results']
         assert len(results) == 1
-
 
 @pytest.mark.django_db
 class TestResumeAPI:
@@ -164,7 +161,6 @@ class TestResumeAPI:
         response = authenticated_client.post('/api/resumes/', {'candidate_name': 'No Job'})
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'job' in response.json()
-
 
 @pytest.mark.django_db
 class TestAPIDocumentation:

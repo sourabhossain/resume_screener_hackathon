@@ -16,7 +16,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
 
-
 class LLMClient:
     """
     Singleton LLM client with caching and retry logic.
@@ -28,17 +27,9 @@ class LLMClient:
     _llm_json = None
 
     CACHE_TIMEOUT = 3600
-    # Bump when prompts/scoring change so stale cached LLM outputs are not reused.
     CACHE_VERSION = "v2"
 
-    # Per-call ceiling so a hung OpenAI request can't pin a screening worker
-    # forever. gpt-5-nano is a reasoning model and can take 30-50s on a large
-    # resume, so 30s was too tight and caused spurious timeout failures; 60s
-    # lets a slow-but-valid call finish. The Celery soft_time_limit (180s) covers
-    # the whole 3-4 call pipeline.
-    REQUEST_TIMEOUT = 60  # seconds
-    # We already retry transient errors ourselves via tenacity below; disable
-    # the SDK's own retries so we don't get retries-on-retries (timeout blowup).
+    REQUEST_TIMEOUT = 60
     MAX_RETRIES = 0
 
     def __new__(cls):
@@ -68,8 +59,6 @@ class LLMClient:
                 logger.warning("OPENAI_API_KEY not configured")
                 return
 
-            # Reasoning models reject any non-default temperature, so only pass
-            # temperature=0.0 for classic chat models (gpt-4o, gpt-4.1, etc.).
             common_kwargs = dict(
                 model=model,
                 api_key=api_key,
@@ -100,14 +89,10 @@ class LLMClient:
         digest = hashlib.md5(prompt.encode()).hexdigest()
         return f"llm_cache_{self.CACHE_VERSION}_{model}_{digest}"
     
-    # Transient OpenAI / network errors: backoff; reraise so logs show the real exception (not RetryError)
-    # JSONDecodeError included because LLMs occasionally return malformed JSON despite json_object format
     _llm_retry = retry(
         retry=retry_if_exception_type(
             (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError, JSONDecodeError)
         ),
-        # 2 attempts (was 3): with a 60s per-call timeout, 3 retries could exceed
-        # the pipeline's Celery budget; 2 still covers a transient blip.
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=4, max=30),
         reraise=True,
@@ -134,7 +119,6 @@ class LLMClient:
         if cached:
             logger.debug("LLM cache hit")
             return cached
-        
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -143,7 +127,6 @@ class LLMClient:
         
         response = self._llm_json.invoke(messages)
         result = json.loads(response.content)
-        
 
         cache.set(cache_key, result, self.CACHE_TIMEOUT)
         
@@ -178,12 +161,9 @@ class LLMClient:
         
         response = self._llm.invoke(messages)
         result = response.content
-        
 
         cache.set(cache_key, result, self.CACHE_TIMEOUT)
         
         return result
-
-
 
 llm_client = LLMClient()

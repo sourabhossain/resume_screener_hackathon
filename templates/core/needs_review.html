@@ -3,12 +3,7 @@
 {% block title %}Needs Review{% endblock %}
 
 {% block content %}
-{% comment %}
-This page is built with inline light-mode styles. Rather than rewrite every
-element, dark-mode overrides below remap the inline light colors/backgrounds
-so headings/pager text stay visible and cards aren't blinding white on the
-dark shell. Keyed on .nr-root so it can't leak to other pages.
-{% endcomment %}
+
 <style>
   .dark .nr-root [style*="color:#171717"] { color:#fafafa !important; }
   .dark .nr-root [style*="color:#71717a"],
@@ -23,7 +18,6 @@ dark shell. Keyed on .nr-root so it can't leak to other pages.
 </style>
 <div class="nr-root" style="font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#171717;">
 
-    <!-- Header -->
     <div style="display:flex; align-items:center; gap:20px;">
         <div style="width:58px; height:58px; flex:none; border-radius:16px; background:linear-gradient(150deg,#fcd34d,#f59e0b); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 22px -8px rgba(245,158,11,0.6), inset 0 1px 0 rgba(255,255,255,0.4);">
             <svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78A1.5 1.5 0 0 0 22.18 18L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
@@ -39,7 +33,6 @@ dark shell. Keyed on .nr-root so it can't leak to other pages.
         </div>
     </div>
 
-    <!-- Search -->
     {% if page_obj.object_list or search_q %}
     <form method="get" action="{% url 'core:needs_review' %}" style="position:relative; margin:34px 0 20px; max-width:500px;">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:18px; top:50%; transform:translateY(-50%);"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -47,13 +40,11 @@ dark shell. Keyed on .nr-root so it can't leak to other pages.
     </form>
     {% endif %}
 
-    <!-- Candidate list -->
     {% if page_obj.object_list %}
     <div style="display:flex; flex-direction:column; gap:16px;">
         {% for resume in page_obj %}
         <div style="background:#fff; border:1px solid #efeee9; border-radius:20px; box-shadow:0 1px 2px rgba(0,0,0,0.03),0 14px 36px -28px rgba(0,0,0,0.2); padding:24px 26px; display:flex; gap:26px; align-items:stretch;">
 
-            <!-- Left: identity + reason -->
             <div style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:16px;">
                 <div style="display:flex; align-items:center; gap:15px;">
                     <div style="width:50px; height:50px; flex:none; border-radius:50%; background:#18181b; color:#fff; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:700; box-shadow:0 4px 12px -4px rgba(0,0,0,0.35);">{{ resume.candidate_name|slice:":1"|upper }}</div>
@@ -80,7 +71,6 @@ dark shell. Keyed on .nr-root so it can't leak to other pages.
                 {% endif %}
             </div>
 
-            <!-- Right: meta + actions -->
             <div style="flex:none; width:212px; border-left:1px solid #f1f0ec; padding-left:26px; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; gap:16px;">
                 <div style="display:inline-flex; align-items:center; gap:7px; font-size:13.5px; color:#a1a1aa; white-space:nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>Added {{ resume.created_at|date:"M j, Y" }}</div>
                 <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
@@ -101,7 +91,7 @@ dark shell. Keyed on .nr-root so it can't leak to other pages.
     {% endif %}
 
     {% else %}
-    <!-- Empty state -->
+
     <div style="margin-top:34px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#fff; border:1px dashed #e7e5e0; border-radius:20px; padding:64px 24px; text-align:center;">
         <div style="width:56px; height:56px; border-radius:50%; background:#dcfce7; display:flex; align-items:center; justify-content:center; margin-bottom:16px;">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>

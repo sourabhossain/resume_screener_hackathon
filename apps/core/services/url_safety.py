@@ -19,7 +19,6 @@ _METADATA_AND_LOCAL_HOSTS = frozenset({
     '169.254.169.254',
 })
 
-# Hostnames that parsers often derive from bullets like "Node.js → https://node.js".
 _GARBAGE_EXTRACTED_HOSTS = frozenset({
     'node.js',
     'react.js',
@@ -35,9 +34,7 @@ _GARBAGE_EXTRACTED_HOSTS = frozenset({
     'typescript.js',
 })
 
-
 _NAT64_PREFIX = ipaddress.ip_network('64:ff9b::/96')
-
 
 def _effective_ip(ip):
     """Unwrap IPv6 forms that embed an IPv4 so we judge the REAL destination.
@@ -55,7 +52,6 @@ def _effective_ip(ip):
             return ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
     return ip
 
-
 def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     ip = _effective_ip(ip)
     if ip == ipaddress.ip_address('169.254.169.254'):
@@ -69,7 +65,6 @@ def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
         or ip.is_unspecified
     )
 
-
 def _resolved_ips(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
     out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
@@ -77,7 +72,6 @@ def _resolved_ips(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6A
         addr = info[4][0]
         out.append(ipaddress.ip_address(addr))
     return out
-
 
 def is_safe_public_http_url(url: str, *, resolve_dns: bool = True) -> tuple[bool, str]:
     """
@@ -135,7 +129,6 @@ def is_safe_public_http_url(url: str, *, resolve_dns: bool = True) -> tuple[bool
 
     return True, ''
 
-
 def validate_and_pin(url: str) -> tuple[bool, str, str | None, str | None, int | None]:
     """
     Validate a URL for outbound fetching AND return a single resolved IP to pin.
@@ -157,7 +150,6 @@ def validate_and_pin(url: str) -> tuple[bool, str, str | None, str | None, int |
     scheme = parsed.scheme
     port = parsed.port or (443 if scheme == 'https' else 80)
 
-    # Literal IP host: already validated by is_safe_public_http_url above.
     try:
         ipaddress.ip_address(host)
         return True, '', host, host, port

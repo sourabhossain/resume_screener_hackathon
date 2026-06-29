@@ -114,7 +114,6 @@
                 <h2 class="font-bold text-zinc-900 dark:text-white">Score Summary</h2>
             </div>
 
-            {# Three stat boxes #}
             <div class="grid grid-cols-3 divide-x divide-zinc-100 dark:divide-zinc-800">
                 <div class="flex flex-col items-center justify-center px-4 py-7">
                     <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Score</p>
@@ -152,7 +151,6 @@
                 </div>
             </div>
 
-            {# Progress bar #}
             <div class="px-6 pb-5">
                 <div class="flex items-center justify-between text-xs text-zinc-400 mb-2">
                     <span><span x-text="rated">0</span> of {{ criteria|length }} criteria rated</span>
@@ -169,17 +167,14 @@
                 </div>
             </div>
 
-            {# Divider #}
             <div class="border-t border-zinc-100 dark:border-zinc-800"></div>
 
-            {# Recommendation #}
             <div class="relative z-0 px-6 py-5">
                 <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Recommendation</label>
                 {% include 'core/partials/choice_field.html' with field=form.recommendation preset='recommendation' %}
                 <p class="mt-1.5 text-xs text-zinc-400">Leave blank to auto-calculate from score</p>
             </div>
 
-            {# Additional Notes #}
             <div class="border-t border-zinc-100 px-6 pb-6 pt-4 dark:border-zinc-800">
                 <label class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Additional Notes</label>
                 {{ form.additional_notes }}

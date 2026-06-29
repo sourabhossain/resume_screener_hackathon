@@ -334,11 +334,5 @@
     {% endif %}
 
 </div>
-{% comment %}
-OOB-refresh the header action button as screening finishes (this fragment is
-polled every 3s); without this the "Screening in progress…" button would stay
-stale until a full page reload. Only emitted when served as the polling fragment
-(oob=True) — otherwise it would duplicate the header's #screening-action id on
-the full page render.
-{% endcomment %}
+
 {% if oob %}{% include 'core/partials/screening_action.html' with oob=True %}{% endif %}

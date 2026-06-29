@@ -5,7 +5,6 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
-
 @shared_task(bind=True, max_retries=3, soft_time_limit=180, time_limit=210, acks_late=True)
 def screen_resume_task(self, resume_id: int):
     from apps.core.models import Resume
@@ -14,12 +13,6 @@ def screen_resume_task(self, resume_id: int):
     try:
         resume = Resume.objects.select_related('job').get(id=resume_id)
 
-        # Idempotency guard for acks_late redelivery: if a prior run already
-        # completed this resume (e.g. the worker was killed after committing but
-        # before acking), don't screen it again — that would duplicate paid LLM
-        # calls and clobber the result. A legitimate re-screen always flips the
-        # row back to 'processing' before re-queuing, so 'completed' here means a
-        # redelivery, not a fresh request.
         if resume.screening_status == 'completed':
             logger.info(f"Resume {resume_id} already completed — skipping duplicate screening")
             return {'success': True, 'resume_id': resume_id, 'skipped': 'already_completed'}
@@ -47,7 +40,6 @@ def screen_resume_task(self, resume_id: int):
 
     except Resume.DoesNotExist:
         logger.error(f"Resume {resume_id} not found — may have been deleted")
-        # all_objects reaches soft-deleted rows to prevent them staying 'processing'
         Resume.all_objects.filter(id=resume_id).update(screening_status='failed')
         return {'error': 'Resume not found'}
 
@@ -56,10 +48,6 @@ def screen_resume_task(self, resume_id: int):
 
         retries_left = self.max_retries - self.request.retries
         if retries_left > 0:
-            # Keep the row in 'processing' (NOT 'pending') while retrying. Resetting
-            # to 'pending' here would let batch_screen_resumes — which claims
-            # status='pending' rows — re-dispatch a SECOND task for the same resume
-            # while this retry is still queued, causing a double screening race.
             try:
                 Resume.objects.filter(id=resume_id).update(screening_status='processing')
             except Exception as update_err:
@@ -75,7 +63,6 @@ def screen_resume_task(self, resume_id: int):
             logger.error(f"Resume {resume_id} permanently failed after {self.max_retries} retries")
 
         raise self.retry(exc=e, countdown=60)
-
 
 @shared_task(bind=True, max_retries=2, soft_time_limit=180, time_limit=210, acks_late=True)
 def verify_resume_links_task(self, resume_id: int):
@@ -127,9 +114,6 @@ def verify_resume_links_task(self, resume_id: int):
         logger.exception(f"Link verification failed for resume {resume_id}: {e}")
         retries_left = self.max_retries - self.request.retries
         if retries_left > 0:
-            # Leave the row in 'processing' while retrying — don't flicker it to
-            # 'failed' between attempts (a reader mid-cycle would see a misleading
-            # terminal state). Only mark 'failed' once retries are exhausted.
             raise self.retry(exc=e, countdown=30)
         try:
             Resume.objects.filter(id=resume_id).update(verification_status='failed', verified_at=None)
@@ -137,12 +121,10 @@ def verify_resume_links_task(self, resume_id: int):
             logger.warning(f"Could not update verification status: {update_err}")
         return {'error': str(e), 'resume_id': resume_id}
 
-
 @shared_task
 def batch_screen_resumes(job_id: int):
     from apps.core.models import Resume
 
-    # skip_locked=True prevents concurrent calls from dispatching the same resumes twice
     with transaction.atomic():
         resume_ids = list(
             Resume.objects.select_for_update(skip_locked=True).filter(
@@ -161,7 +143,6 @@ def batch_screen_resumes(job_id: int):
         screen_resume_task.delay(resume_id)
 
     return {'queued': len(resume_ids)}
-
 
 @shared_task(ignore_result=True)
 def close_expired_jobs():

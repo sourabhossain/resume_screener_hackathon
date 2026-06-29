@@ -6,7 +6,6 @@ from django.shortcuts import redirect, render
 
 from ..models import Resume
 
-
 def _failed_resumes_queryset():
     """Resumes whose AI screening did not complete (live jobs only)."""
     return (
@@ -16,7 +15,6 @@ def _failed_resumes_queryset():
         .order_by('-created_at')
     )
 
-
 def _needs_review_resumes_queryset():
     """Resumes the AI parked for a human because the job family was uncertain."""
     return (
@@ -25,7 +23,6 @@ def _needs_review_resumes_queryset():
         .select_related('job')
         .order_by('-created_at')
     )
-
 
 @login_required
 def talent_pool(request):
@@ -51,7 +48,6 @@ def talent_pool(request):
         'total': resumes_qs.count(),
     })
 
-
 @login_required
 def needs_review_list(request):
     from django.core.paginator import Paginator
@@ -70,7 +66,6 @@ def needs_review_list(request):
         'total': resumes_qs.count(),
     })
 
-
 @login_required
 def screening_failed_list(request):
     from django.core.paginator import Paginator
@@ -88,7 +83,6 @@ def screening_failed_list(request):
         'search_q': search_q,
         'total': resumes_qs.count(),
     })
-
 
 @login_required
 def screening_rescreen_bulk(request):
@@ -113,8 +107,6 @@ def screening_rescreen_bulk(request):
         messages.info(request, 'Nothing to re-screen.')
         return redirect('core:screening_failed')
 
-    # Atomically claim only rows still 'failed' so concurrent clicks can't
-    # dispatch the same resume twice.
     Resume.objects.filter(id__in=ids, screening_status='failed').update(screening_status='processing')
     for rid in ids:
         screen_resume_task.delay(rid)

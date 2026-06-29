@@ -10,7 +10,6 @@ from apps.core.services.prompt_loader import (
     parse_fragment,
 )
 
-
 def build_test_state(job_type, skill_score=100, experience_match_score=0,
                      education_match_score=0, certification_score=0, achievement_score=0.0):
     if skill_score >= 100:
@@ -18,7 +17,6 @@ def build_test_state(job_type, skill_score=100, experience_match_score=0,
     elif skill_score <= 0:
         matched_skills, missing_skills = [], ['python']
     else:
-        # skill_score=80 → 4 matched, 1 missing (4/5*100=80)
         matched_skills = ['python', 'django', 'rest', 'sql'][:max(1, round(skill_score * 5 / 100))]
         missing_skills = ['docker'] if skill_score < 100 else []
     cert_count = min(int((certification_score or 0) / 25), 4)
@@ -38,7 +36,6 @@ def build_test_state(job_type, skill_score=100, experience_match_score=0,
         'tier': '', 'recommendation': '', 'reasoning': '', 'error': None,
     }
 
-
 @pytest.mark.django_db
 class TestJobTypeDetector:
 
@@ -55,7 +52,6 @@ class TestJobTypeDetector:
         assert result is None
 
     def test_detect_review_on_retired_label(self):
-        # 'tech' was a family in the old taxonomy; it no longer exists.
         with patch('apps.core.services.ai_screener.llm_client') as mock_llm:
             mock_llm.invoke_json.return_value = {'job_type': 'tech', 'confidence': 0.9}
             result = detect_job_type("some job")
@@ -102,7 +98,6 @@ class TestJobTypeDetector:
             mock_llm.invoke_json.return_value = {'job_type': 'sales', 'confidence': 0.1, 'runner_up': 'marketing'}
             jt, reason = detect_job_type_with_reason("vague role")
         assert jt is None
-        # runner-up present -> names both families and the fix ("narrow")
         assert 'sales' in reason and 'marketing' in reason and 'narrow' in reason.lower()
 
     def test_with_reason_empty_on_confident(self):
@@ -121,11 +116,9 @@ class TestJobTypeDetector:
             assert label in prompt, f"catalog missing {label}"
         assert '[[' not in prompt and ']]' not in prompt
 
-
 from apps.core.services.job_families import VALID_JOB_TYPES
 
 ALL_ROLES = sorted(VALID_JOB_TYPES)
-
 
 @pytest.mark.django_db
 class TestPromptComposition:
@@ -142,8 +135,6 @@ class TestPromptComposition:
         assert 'Jane Doe, designer' in prompt
         assert 'Design and Creative' in prompt
         assert 'work_history' in prompt
-        # The model must not be asked to emit experience_years as a JSON key
-        # (it is computed in code from work_history).
         assert '"experience_years"' not in prompt
         assert '[[' not in prompt and ']]' not in prompt
 
@@ -159,7 +150,6 @@ class TestPromptComposition:
         from apps.core.services.job_families import FALLBACK_ROLE
         frag = parse_fragment('nonexistent_role')
         assert frag.get('ROLE_TITLE') == parse_fragment(FALLBACK_ROLE).get('ROLE_TITLE')
-
 
 @pytest.mark.django_db
 class TestScoreNodeWeights:

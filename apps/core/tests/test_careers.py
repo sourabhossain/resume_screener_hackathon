@@ -12,12 +12,10 @@ from django.urls import reverse
 
 from apps.core.models import Job, Resume
 
-
 def _fake_pdf(name="resume.pdf"):
     buf = io.BytesIO(b"%PDF-1.4 fake content for test")
     buf.name = name
     return buf
-
 
 def _post_apply(client, job, extra=None):
     data = {
@@ -31,7 +29,6 @@ def _post_apply(client, job, extra=None):
     url = reverse("core:careers_apply", kwargs={"slug": job.slug})
     with patch("apps.core.tasks.screen_resume_task.delay"):
         return client.post(url, data)
-
 
 @pytest.mark.django_db
 class TestCareersList:
@@ -57,9 +54,7 @@ class TestCareersList:
             HTTP_HX_REQUEST="true",
         )
         assert resp.status_code == 200
-        # partial template — does not contain the outer page chrome
         assert b"<!DOCTYPE" not in resp.content
-
 
 @pytest.mark.django_db
 class TestCareersApplyGet:
@@ -77,7 +72,6 @@ class TestCareersApplyGet:
             reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
         )
         assert resp.status_code == 404
-
 
 @pytest.mark.django_db
 class TestCareersApplyPost:
@@ -108,7 +102,6 @@ class TestCareersApplyPost:
         resume = Resume.objects.get(job=sample_job, candidate_name="Ali Hassan")
         assert resume.screening_status == "processing"
 
-
 @pytest.mark.django_db
 class TestCareersApplyDuplicates:
     def test_duplicate_email_rejected(self, client, sample_job):
@@ -119,7 +112,6 @@ class TestCareersApplyDuplicates:
             screening_status="completed",
         )
         resp = _post_apply(client, sample_job)
-        # Should re-render the form, not redirect
         assert resp.status_code == 200
         assert Resume.objects.filter(job=sample_job, email="ali@example.com").count() == 1
 
@@ -180,7 +172,6 @@ class TestCareersApplyDuplicates:
         resp = _post_apply(client, sample_job)
         assert resp.status_code == 302
 
-
 @pytest.mark.django_db
 class TestCareersApplyExpired:
     def test_past_closing_date_blocks_submission(self, client, sample_job):
@@ -197,7 +188,6 @@ class TestCareersApplyExpired:
         assert resp.status_code == 302
         assert Resume.objects.filter(job=sample_job).count() == 1
 
-
 @pytest.mark.django_db
 class TestCareersApplyContactValidation:
     def test_missing_email_blocked(self, client, sample_job):
@@ -209,7 +199,6 @@ class TestCareersApplyContactValidation:
         resp = _post_apply(client, sample_job, extra={"phone": ""})
         assert resp.status_code == 200
         assert Resume.objects.filter(job=sample_job).count() == 0
-
 
 @pytest.mark.django_db
 class TestCareersThanks:

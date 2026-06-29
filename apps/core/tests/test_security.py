@@ -7,11 +7,9 @@ Security tests for serve_protected_media:
 """
 import pytest
 
-
 def _media_url(path):
     """Build the protected-media URL for a given relative path."""
     return f"/media/{path}"
-
 
 @pytest.mark.django_db
 class TestProtectedMediaAuth:
@@ -41,7 +39,6 @@ class TestProtectedMediaAuth:
         resp = authenticated_client.get(_media_url("resumes/nonexistent.pdf"))
         assert resp.status_code == 404
 
-
 @pytest.mark.django_db
 class TestProtectedMediaPathTraversal:
 
@@ -61,7 +58,6 @@ class TestProtectedMediaPathTraversal:
         """Path that resolves outside MEDIA_ROOT (sibling directory) is blocked."""
         settings.MEDIA_ROOT = str(tmp_path / "media")
         (tmp_path / "media").mkdir()
-        # Create a file in a sibling directory
         sibling = tmp_path / "secrets"
         sibling.mkdir()
         secret_file = sibling / "secret.txt"

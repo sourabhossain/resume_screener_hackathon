@@ -6,7 +6,6 @@ from .models import Job, Resume
 
 _SCORE_FIELD = dict(min_value=0, max_value=100, allow_null=True, required=False)
 
-
 class ResumeSerializer(serializers.ModelSerializer):
     """Serializer for Resume with computed display fields."""
     tier_display = serializers.CharField(source='get_tier_display', read_only=True)
@@ -46,11 +45,10 @@ class ResumeSerializer(serializers.ModelSerializer):
             'verification_status_display', 'verification_score', 'verified_at',
         ]
 
-
 class JobListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for job listings."""
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    resume_count = serializers.IntegerField(read_only=True)  # Expects annotation from viewset
+    resume_count = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Job
@@ -59,12 +57,11 @@ class JobListSerializer(serializers.ModelSerializer):
             'posted_date', 'closing_date', 'resume_count', 'created_at'
         ]
 
-
 class JobDetailSerializer(serializers.ModelSerializer):
     """Full serializer for job details with resumes."""
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     resumes = ResumeSerializer(many=True, read_only=True, source='_active_resumes')
-    resume_count = serializers.IntegerField(read_only=True)  # Uses annotation from viewset
+    resume_count = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Job

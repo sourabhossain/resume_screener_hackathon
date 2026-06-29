@@ -8,7 +8,6 @@ from typing import List
 
 from apps.core.services.url_safety import is_safe_public_http_url
 
-
 class LinkType(str, Enum):
     GITHUB = "github"
     LINKEDIN = "linkedin"
@@ -19,16 +18,13 @@ class LinkType(str, Enum):
     SCHOLAR = "scholar"
     OTHER = "other"
 
-
 @dataclass
 class ExtractedLink:
     url: str
     link_type: LinkType
-    raw_text: str  # surrounding text in CV for context
-
+    raw_text: str
 
 class LinkExtractor:
-    # Regex to find URLs in text
     URL_PATTERN = re.compile(
         r'(?:https?://)?'
         r'(?:www\.)?'
@@ -71,7 +67,6 @@ class LinkExtractor:
             seen_urls.add(url)
             link_type = cls._classify(url)
 
-            # Get surrounding context (50 chars before and after)
             start = max(0, match.start() - 50)
             end = min(len(text), match.end() + 50)
             context = text[start:end].strip()
@@ -82,7 +77,7 @@ class LinkExtractor:
                 raw_text=context
             ))
 
-        return links[:10]  # max 10 links per CV
+        return links[:10]
 
     @classmethod
     def _normalize_url(cls, url: str) -> str:

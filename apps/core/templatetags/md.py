@@ -11,10 +11,8 @@ _HEADER_RE = re.compile(
 )
 _BULLET_RE = re.compile(r'^[•·\-\*]\s+(.+)$')
 
-
 def _looks_like_markdown(text):
     return bool(re.search(r'^#{1,4} ', text, re.MULTILINE))
-
 
 def _plain_to_html(text):
     """Convert plain-text job descriptions (• bullets, standalone headers) to HTML."""
@@ -38,7 +36,6 @@ def _plain_to_html(text):
             if in_list:
                 html_parts.append('</ul>')
                 in_list = False
-            # strip trailing colon
             label = stripped.rstrip(':')
             html_parts.append(f'<h3>{escape(label)}</h3>')
 
@@ -57,46 +54,34 @@ def _plain_to_html(text):
     if in_list:
         html_parts.append('</ul>')
 
-    # collapse consecutive empty strings
     result = re.sub(r'(<p></p>|\n\s*\n)+', '', '\n'.join(html_parts))
     return result
 
-
-# Neutralise dangerous URL schemes that survive markdown link rendering, e.g.
-# [click](javascript:alert(1)) -> <a href="javascript:alert(1)">. Markdown text
-# is recruiter-authored but shown on PUBLIC careers pages, so it must be XSS-safe.
 _UNSAFE_LINK_RE = re.compile(
     r'(href|src)\s*=\s*(["\'])\s*(?:javascript|data|vbscript):[^"\']*\2',
     re.IGNORECASE,
 )
 
-
 def _strip_unsafe_links(html: str) -> str:
     return _UNSAFE_LINK_RE.sub(r'\1=\2#\2', html)
-
 
 @register.filter
 def markdown(value):
     if not value:
         return ''
     if _looks_like_markdown(value):
-        # Escape the input first so raw HTML (<script>…) cannot pass through the
-        # markdown renderer; markdown syntax (#, -, *, [](…)) needs no <,>,&.
         html = md_lib.markdown(escape(value), extensions=['nl2br', 'sane_lists'])
     else:
         html = _plain_to_html(value)
-    # Final guard: strip javascript:/data: hrefs from whichever branch produced links.
     html = _strip_unsafe_links(html)
     return mark_safe(html)
 
-
 _MD_SYNTAX_RE = re.compile(
-    r'^#{1,6}\s+'          # ATX headings
-    r'|^[\s>*+\-]+'        # leading bullets / blockquotes (line start)
-    r'|[*_`~]+'            # emphasis / code / strike markers
-    r'|\[(.*?)\]\(.*?\)',  # links → keep label only (handled below)
+    r'^#{1,6}\s+'
+    r'|^[\s>*+\-]+'
+    r'|[*_`~]+'
+    r'|\[(.*?)\]\(.*?\)',
 )
-
 
 @register.filter
 def plaintext(value):
@@ -104,13 +89,9 @@ def plaintext(value):
     if not value:
         return ''
     text = str(value)
-    # Replace markdown links [label](url) with just the label
     text = re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', text)
-    # Drop heading hashes and blockquote/bullet markers at line starts
     text = re.sub(r'(?m)^[\s>]*#{1,6}\s+', '', text)
     text = re.sub(r'(?m)^[\s]*[*+\-]\s+', '', text)
-    # Remove inline emphasis/code markers
     text = re.sub(r'[*_`~]+', '', text)
-    # Collapse whitespace to a clean single-paragraph preview
     text = re.sub(r'\s+', ' ', text).strip()
     return text

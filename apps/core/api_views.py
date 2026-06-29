@@ -14,7 +14,6 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Job, Resume
 from .serializers import JobListSerializer, JobDetailSerializer, ResumeSerializer
 
-
 @extend_schema_view(
     list=extend_schema(tags=['Jobs'], summary='List jobs', operation_id='job_list'),
     create=extend_schema(tags=['Jobs'], summary='Create job', operation_id='job_create'),
@@ -39,7 +38,6 @@ class JobViewSet(viewsets.ModelViewSet):
         return JobDetailSerializer
     
     def perform_create(self, serializer):
-        # Record the creator (informational); single-company tool shares all data.
         serializer.save(owner=self.request.user)
 
     def get_queryset(self):
@@ -76,7 +74,6 @@ class JobViewSet(viewsets.ModelViewSet):
         job.restore()
         return Response({'status': 'restored'})
 
-
 @extend_schema_view(
     list=extend_schema(tags=['Resumes'], summary='List resumes', operation_id='resume_list'),
     create=extend_schema(tags=['Resumes'], summary='Upload resume', operation_id='resume_create'),
@@ -95,8 +92,6 @@ class ResumeViewSet(viewsets.ModelViewSet):
     queryset = Resume.objects.all()
     serializer_class = ResumeSerializer
     permission_classes = [IsAuthenticated]
-    # Address detail routes by the opaque uuid, not the sequential pk, so candidate
-    # PII can't be harvested by walking /api/resumes/1, /2, /3 ...
     lookup_field = 'uuid'
 
     def perform_create(self, serializer):
@@ -105,8 +100,6 @@ class ResumeViewSet(viewsets.ModelViewSet):
         screen_resume_task.delay(resume.id)
 
     def get_queryset(self):
-        # Exclude resumes whose parent job was soft-deleted, matching the web
-        # views (a "deleted" job's candidates must not surface anywhere).
         queryset = Resume.objects.select_related('job').filter(job__is_deleted=False)
         job_id = self.request.query_params.get('job', None)
         if job_id:

@@ -11,14 +11,12 @@ from apps.core.models import Resume
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
 from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
 
-
 def _can_access_interview(user, interview):
     """Single-company internal tool: every authenticated recruiter can access all
     interviews, matching the unscoped access to jobs/resumes in apps.core.
     (Views are @login_required, so this is True for any logged-in user.)
     """
     return user.is_authenticated
-
 
 @login_required
 def interview_create(request, resume_uuid):
@@ -43,7 +41,6 @@ def interview_create(request, resume_uuid):
         if form.errors:
             form_errors_to_messages(request, form)
     return render(request, 'interviews/create.html', {'form': form, 'resume': resume})
-
 
 @login_required
 def interview_detail(request, pk):
@@ -70,7 +67,6 @@ def interview_detail(request, pk):
         'criteria': EVALUATION_CRITERIA,
     })
 
-
 @login_required
 def interview_delete(request, pk):
     interview = get_object_or_404(Interview.objects.select_related('resume__job__owner'), pk=pk)
@@ -83,7 +79,6 @@ def interview_delete(request, pk):
         messages.success(request, 'Interview deleted.')
     return redirect('core:resume_detail', uuid=resume_uuid)
 
-
 @login_required
 def evaluation_delete(request, token):
     ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview__resume__job__owner'), token=token)
@@ -95,7 +90,6 @@ def evaluation_delete(request, token):
         ev.delete()
         messages.success(request, 'Evaluation slot removed.')
     return redirect('interviews:detail', pk=interview_pk)
-
 
 @login_required
 def evaluation_renew(request, token):
@@ -111,14 +105,11 @@ def evaluation_renew(request, token):
         messages.success(request, f'New link generated for {ev.interviewer_name}.')
     return redirect('interviews:detail', pk=ev.interview_id)
 
-
 def evaluate(request, token):
     ev = get_object_or_404(
         InterviewEvaluation.objects.select_related('interview__resume__job'), token=token
     )
 
-    # A soft-deleted interview / candidate / job must not be reachable via its
-    # public token link — treat it as gone.
     if ev.interview.is_deleted or ev.interview.resume.is_deleted or ev.interview.resume.job.is_deleted:
         raise Http404
 
@@ -135,7 +126,6 @@ def evaluate(request, token):
             d = form.cleaned_data
 
             scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
-            # Use manual recommendation if given, otherwise auto-calculate.
             manual_rec = d.get('recommendation', '')
             if manual_rec:
                 recommendation = manual_rec
@@ -143,10 +133,6 @@ def evaluate(request, token):
                 pct = round((sum(scores.values()) / MAX_SCORE) * 100)
                 recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
 
-            # Commit under a row lock and re-check the guards inside the same
-            # transaction, so two concurrent submits (double-click / replayed
-            # POST) can't both pass is_submitted and clobber each other — this is
-            # what actually enforces the "each link can be used once" promise.
             with transaction.atomic():
                 locked = InterviewEvaluation.objects.select_for_update().get(pk=ev.pk)
                 if not locked.is_submitted and not locked.is_expired:
@@ -173,11 +159,9 @@ def evaluate(request, token):
         'score_range': range(1, 6),
     })
 
-
 def evaluate_done(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
-
 
 @login_required
 def rank_report(request, job_slug):
@@ -226,8 +210,6 @@ def rank_report(request, job_slug):
         ai = d['resume'].final_score
         iv_pct = d['interview_pct']
         v_score = d['resume'].verification_score
-        # Composite: interview 65%, AI score 25%, link-verification 10%.
-        # Gracefully degrades when verification is absent (skipped/failed).
         if iv_pct is not None and ai is not None and v_score is not None:
             d['composite'] = round(iv_pct * 0.65 + float(ai) * 0.25 + float(v_score) * 0.10)
         elif iv_pct is not None and ai is not None:
@@ -241,7 +223,6 @@ def rank_report(request, job_slug):
         if total_votes == 0:
             d['verdict'] = 'pending'
         elif d['yes'] > d['no'] and d['yes'] > d['maybe'] and d['yes'] > 0:
-            # Strict majority: tied votes go to 'review', not 'hire'
             d['verdict'] = 'hire'
         elif d['no'] > d['yes']:
             d['verdict'] = 'reject'
@@ -256,7 +237,6 @@ def rank_report(request, job_slug):
     for i, c in enumerate(candidates, 1):
         c['rank'] = i
 
-    # Available phases for filter tabs
     all_phases = (
         Interview.objects
         .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,

@@ -12,7 +12,6 @@ from ..models import Job, Resume
 
 logger = logging.getLogger(__name__)
 
-
 def health_check(request):
     try:
         with connection.cursor() as cursor:
@@ -22,10 +21,8 @@ def health_check(request):
         logger.error(f"Health check database connectivity failed: {e}")
         return JsonResponse({'status': 'unhealthy', 'database': 'disconnected'}, status=503)
 
-
 @login_required
 def dashboard(request):
-    # Single-company internal tool: every authenticated recruiter sees all data.
     from django.utils import timezone as tz
     from apps.interviews.models import InterviewEvaluation
 
@@ -47,7 +44,6 @@ def dashboard(request):
         talent_pool_count=Count('id', filter=Q(recommendation='talent_pool')),
     )
 
-    # Actionable alerts: evaluations expiring in <= 3 days, not yet submitted
     expiry_threshold = tz.now() + timedelta(days=3)
     expiring_evals = InterviewEvaluation.objects.filter(
         is_submitted=False,

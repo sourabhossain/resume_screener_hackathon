@@ -12,7 +12,6 @@ urlpatterns = [
 
     path('jobs/<slug:job_slug>/rank-report/', views.rank_report, name='rank_report'),
 
-    # Public — no login
     path('evaluate/<uuid:token>/', views.evaluate, name='evaluate'),
     path('evaluate/<uuid:token>/done/', views.evaluate_done, name='evaluate_done'),
 ]

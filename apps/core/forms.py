@@ -4,7 +4,6 @@ from django import forms
 from .form_utils import AriaInvalidMixin, clean_label_text, clean_person_text, clean_phone_text
 from .models import Job, Resume
 
-
 class FileValidationMixin:
     """
     Mixin for file upload validation (PDF, DOCX).
@@ -12,7 +11,7 @@ class FileValidationMixin:
     """
     
     ALLOWED_EXTENSIONS = ['pdf', 'docx']
-    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_FILE_SIZE = 5 * 1024 * 1024
     MAGIC_BYTES = {
         'pdf': b'%PDF',
         'docx': b'PK\x03\x04',
@@ -23,17 +22,14 @@ class FileValidationMixin:
         if not file:
             return file
         
-        # Check file size
         if file.size > self.MAX_FILE_SIZE:
             raise forms.ValidationError('File size must be under 5MB.')
         
-        # Check extension using os.path.splitext to handle multi-dot filenames safely
         _, raw_ext = os.path.splitext(file.name)
         ext = raw_ext.lstrip('.').lower()
         if ext not in self.ALLOWED_EXTENSIONS:
             raise forms.ValidationError('Invalid file type. Allowed: PDF or DOCX only.')
         
-        # Check magic bytes
         file.seek(0)
         header = file.read(8)
         file.seek(0)
@@ -45,7 +41,6 @@ class FileValidationMixin:
             )
         
         return file
-
 
 class FileSaveMixin:
     """Mixin to handle file metadata on save."""
@@ -61,7 +56,6 @@ class FileSaveMixin:
         if commit:
             instance.save()
         return instance
-
 
 class JobForm(AriaInvalidMixin, forms.ModelForm):
     """Form for creating and editing job descriptions."""
@@ -106,9 +100,6 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Title and description are mandatory — a job posting is meaningless
-        # without both. (The model leaves description blank=True for flexibility,
-        # so we enforce it at the form level.)
         self.fields['title'].required = True
         self.fields['title'].error_messages['required'] = 'Please enter a job title.'
         self.fields['description'].required = True
@@ -134,7 +125,6 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
 
     def clean_location(self):
         return clean_label_text(self.cleaned_data.get('location'))
-
 
 class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for creating and editing resumes - only name and file required, AI handles the rest."""
@@ -177,11 +167,7 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
         super().__init__(*args, **kwargs)
         self.fields['email'].required = False
         self.fields['phone'].required = False
-        # The model field is blank=True for flexibility, but a submitted
-        # application/resume must actually include a file.
         self.fields['file'].required = True
-        # On the public careers form every field is required so recruiters get
-        # complete, contactable applications.
         if require_contact:
             self.fields['email'].required = True
             self.fields['phone'].required = True
@@ -195,11 +181,6 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
 
     def clean(self):
         data = super().clean()
-        # NOTE: email's required-ness is enforced by field-level validation
-        # (EmailField + required flag set in __init__), so we must NOT re-check it
-        # here — doing so surfaced the "Email: This field is required." error
-        # twice on an empty submission. Only the phone normalization needs to
-        # happen at the form level.
         phone_required = self.fields['phone'].required
         try:
             data['phone'] = clean_phone_text(data.get('phone'), required=phone_required)
@@ -210,7 +191,6 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
     def save(self, commit=True):
         """Save with file metadata using mixin."""
         return self.save_with_file_metadata(commit)
-
 
 class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for editing resumes - includes AI-generated fields that can be manually adjusted."""

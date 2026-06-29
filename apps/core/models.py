@@ -7,7 +7,6 @@ from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
 
-
 class SoftDeleteManager(models.Manager):
     """Manager that filters out soft-deleted objects by default."""
     
@@ -20,24 +19,13 @@ class SoftDeleteManager(models.Manager):
     def deleted_only(self):
         return super().get_queryset().filter(is_deleted=True)
 
-
 class SoftDeleteModel(models.Model):
-    """Abstract base model with soft delete + declarative cascade.
-
-    `on_delete=CASCADE` only fires on a hard DELETE, so a soft delete would
-    orphan related rows (and leave their public links live). Instead of a
-    bespoke soft_delete() override per model, a model declares which reverse
-    relations to cascade into via SOFT_DELETE_CASCADE; the base walks them
-    recursively. A new related model only needs to (a) be a SoftDeleteModel and
-    (b) be listed by its parent — the cascade then "just works", which is what
-    keeps the soft-delete strategy consistent across the codebase.
-    """
+    """Abstract base with soft delete; subclasses list reverse relations to
+    cascade into via SOFT_DELETE_CASCADE (each must be a SoftDeleteModel)."""
 
     is_deleted = models.BooleanField(default=False, db_default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
-    # Reverse-relation accessor names (related_name) to cascade soft-deletes into.
-    # Every listed relation MUST itself be a SoftDeleteModel.
     SOFT_DELETE_CASCADE = ()
 
     objects = SoftDeleteManager()
@@ -59,8 +47,6 @@ class SoftDeleteModel(models.Model):
             related = getattr(self, accessor, None)
             if related is None:
                 continue
-            # all_with_deleted() so an already-deleted child isn't touched twice
-            # but the queryset still resolves regardless of the default manager.
             qs = related.all_with_deleted() if hasattr(related, 'all_with_deleted') else related.all()
             for obj in qs.filter(is_deleted=False):
                 obj.is_deleted = True
@@ -71,12 +57,9 @@ class SoftDeleteModel(models.Model):
                     cascade()
 
     def restore(self):
-        # Shallow restore by design: bringing back a parent does NOT auto-restore
-        # children (they may have been deleted independently earlier).
         self.is_deleted = False
         self.deleted_at = None
         self.save(update_fields=['is_deleted', 'deleted_at'])
-
 
 class Job(SoftDeleteModel):
     """Job Description model - stores job postings for resume screening."""
@@ -101,11 +84,6 @@ class Job(SoftDeleteModel):
         ('hybrid', 'Hybrid'),
     ]
 
-    # The recruiter who created this job (informational/audit). This is a
-    # single-company internal tool: every authenticated recruiter can see and
-    # act on all jobs and candidates, so access is intentionally NOT isolated
-    # per owner. `owner` records provenance and gates owner-only actions like
-    # API restore, not read access.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -115,7 +93,6 @@ class Job(SoftDeleteModel):
         db_index=True,
     )
     title = models.CharField(max_length=255)
-    # Public, URL-safe identifier for the careers pages (avoids exposing the numeric id).
     slug = models.SlugField(max_length=255, unique=True, blank=True, null=True)
     description = models.TextField(blank=True)
     file_name = models.CharField(max_length=255, blank=True)
@@ -129,7 +106,6 @@ class Job(SoftDeleteModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     file_type = models.CharField(max_length=50, blank=True)
-    
 
     required_skills = models.JSONField(default=list, blank=True, help_text="Required skills for matching")
     required_experience = models.FloatField(null=True, blank=True, help_text="Required years of experience")
@@ -151,14 +127,12 @@ class Job(SoftDeleteModel):
         base = slugify(self.title) or 'job'
         slug = base
         n = 2
-        # all_objects so a soft-deleted job's slug isn't silently reused
         while Job.all_objects.filter(slug=slug).exclude(pk=self.pk).exists():
             slug = f"{base}-{n}"
             n += 1
         return slug
 
     def save(self, *args, **kwargs):
-        # Generate the slug once at creation and keep it stable so public URLs don't break.
         if not self.slug:
             self.slug = self._generate_unique_slug()
         super().save(*args, **kwargs)
@@ -167,13 +141,9 @@ class Job(SoftDeleteModel):
     def active_resumes(self):
         return self.resumes.filter(is_deleted=False)
 
-
 class Resume(SoftDeleteModel):
     """Resume model - stores candidate resumes and their screening results."""
 
-    # Soft-deleting a candidate cascades to their interviews (and, transitively,
-    # the interviews' evaluations) so deleted-candidate data and its public
-    # evaluation links disappear consistently. See SoftDeleteModel.
     SOFT_DELETE_CASCADE = ('interviews',)
 
     TIER_CHOICES = [
@@ -188,10 +158,6 @@ class Resume(SoftDeleteModel):
         ('reject', 'Reject'),
     ]
     
-    # Opaque public identifier used in recruiter URLs and the REST API instead of
-    # the sequential numeric pk (prevents enumeration). Non-nullable: every row is
-    # backfilled (migration 0010) and new rows get a default, so the opaque-id
-    # guarantee is enforced at the DB level.
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -217,7 +183,6 @@ class Resume(SoftDeleteModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     file_type = models.CharField(max_length=50, blank=True)
-    
 
     skills = models.JSONField(default=list, blank=True, help_text="Extracted skills from resume")
     education = models.JSONField(default=list, blank=True, help_text="Extracted education")
@@ -241,17 +206,9 @@ class Resume(SoftDeleteModel):
         default='pending'
     )
 
-    # SHA-256 of the uploaded file — used to detect duplicate submissions for the same job.
     file_hash = models.CharField(max_length=64, blank=True, db_index=True)
-    # Portable dedup sentinel: equals file_hash ONLY while the row is active and
-    # has a real hash, otherwise NULL. A plain UNIQUE(job, dedup_key) then enforces
-    # "one active copy of a file per job" on MySQL too (MySQL silently drops
-    # *conditional* unique constraints — W036 — so we cannot use a partial one).
-    # NULLs are exempt from UNIQUE on both MySQL and SQLite, so soft-deleted rows
-    # and rows without a file never collide. Maintained in save(); never set by hand.
     dedup_key = models.CharField(max_length=64, null=True, blank=True, editable=False)
 
-    # Link Verification
     extracted_links = models.JSONField(default=list, blank=True)
     verification_results = models.JSONField(default=dict, blank=True)
     verification_status = models.CharField(
@@ -284,7 +241,6 @@ class Resume(SoftDeleteModel):
         default='new',
         blank=True,
     )
-    # Tracks whether a recruiter manually changed AI-generated scores.
     score_manually_edited = models.BooleanField(default=False)
     score_edited_at = models.DateTimeField(null=True, blank=True)
     score_edited_by = models.ForeignKey(
@@ -304,12 +260,6 @@ class Resume(SoftDeleteModel):
             models.Index(fields=['screening_status'], name='resume_status_idx'),
         ]
         constraints = [
-            # DB-level backstop against duplicate submissions: the same file can't
-            # be submitted twice for one active job row. Complements the app-level
-            # .exists() checks in the views, closing the check-then-save race.
-            # Unconditional (so MySQL actually creates it) over `dedup_key`, which
-            # is NULL for soft-deleted/hashless rows — those are exempt from UNIQUE
-            # and so remain unaffected, preserving re-upload-after-delete.
             models.UniqueConstraint(
                 fields=['job', 'dedup_key'],
                 name='uniq_active_resume_dedup',
@@ -337,20 +287,14 @@ class Resume(SoftDeleteModel):
 
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
-        # Keep the dedup sentinel in sync: active + real hash -> the hash itself
-        # (enforces the per-job uniqueness); deleted or hashless -> NULL (exempt).
         self.dedup_key = self.file_hash if (not self.is_deleted and self.file_hash) else None
         update_fields = kwargs.get('update_fields')
         if update_fields is not None:
             update_fields = set(update_fields)
-            # soft_delete()/restore() save only is_deleted; the cascade does too.
-            # dedup_key must be re-persisted alongside those toggles, else a
-            # soft-deleted file would keep occupying the unique slot.
             if {'is_deleted', 'file_hash'} & update_fields:
                 update_fields.add('dedup_key')
                 kwargs['update_fields'] = update_fields
         super().save(*args, **kwargs)
-
 
 class ResumeNote(models.Model):
     """Internal recruiter notes attached to a resume."""

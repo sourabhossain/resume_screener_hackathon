@@ -29,15 +29,12 @@ EVALUATION_CRITERIA = [
 ]
 
 CRITERIA_KEYS = [k for k, _ in EVALUATION_CRITERIA]
-MAX_SCORE = len(CRITERIA_KEYS) * 5  # 100
-
+MAX_SCORE = len(CRITERIA_KEYS) * 5
 
 class Interview(SoftDeleteModel):
     PHASE_CHOICES = [('1', 'Interview 1'), ('2', 'Interview 2'), ('3', 'Interview 3')]
     STATUS_CHOICES = [('scheduled', 'Scheduled'), ('completed', 'Completed'), ('cancelled', 'Cancelled')]
 
-    # Deleting an interview cascades to its evaluations, so their public token
-    # links stop resolving (the soft-delete manager hides them → 404).
     SOFT_DELETE_CASCADE = ('evaluations',)
 
     resume = models.ForeignKey(
@@ -70,7 +67,6 @@ class Interview(SoftDeleteModel):
         totals = [e.total_score for e in evals if e.total_score is not None]
         return round(sum(totals) / len(totals)) if totals else None
 
-
 class InterviewEvaluation(SoftDeleteModel):
     RECOMMENDATION_CHOICES = [
         ('yes', 'Yes - Hire'),
@@ -84,20 +80,16 @@ class InterviewEvaluation(SoftDeleteModel):
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
-    # Interviewer info
     interviewer_name = models.CharField(max_length=200)
     interviewer_position = models.CharField(max_length=200, blank=True)
     interviewer_department = models.CharField(max_length=200, blank=True)
 
-    # Scores: {"educational_background": 4, "job_related_knowledge": 3, ...}
     scores = models.JSONField(default=dict, blank=True)
 
-    # Summary
     impression = models.CharField(max_length=200, blank=True)
     recommendation = models.CharField(max_length=10, choices=RECOMMENDATION_CHOICES, blank=True)
     priority_rank = models.PositiveSmallIntegerField(null=True, blank=True)
 
-    # Suggestions (checkboxes)
     another_phase_required = models.BooleanField(default=False)
     hard_negotiation = models.BooleanField(default=False)
     suitable_other_dept = models.BooleanField(default=False)
@@ -148,10 +140,6 @@ class InterviewEvaluation(SoftDeleteModel):
         vals = [v for v in self.scores.values() if isinstance(v, int) and 1 <= v <= 5]
         if not vals:
             return None
-        # Scale against the number of criteria actually scored (not the fixed
-        # 100-point ceiling) so a partially-scored evaluation — e.g. one created
-        # via the admin or a data import rather than the strict public form —
-        # isn't silently dragged down by dividing a partial total by 100.
         return round((sum(vals) / (len(vals) * 5)) * 100)
 
     @property

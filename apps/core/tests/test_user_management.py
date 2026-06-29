@@ -12,30 +12,25 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-
 @pytest.fixture
 def superuser(db):
     return User.objects.create_superuser(
         username='admin', password='AdminPass1!', email='admin@example.com'
     )
 
-
 @pytest.fixture
 def superuser_client(client, superuser):
     client.force_login(superuser)
     return client
 
-
 @pytest.fixture
 def regular_user(db):
     return User.objects.create_user(username='recruiter', password='pass')
-
 
 @pytest.fixture
 def regular_client(client, regular_user):
     client.force_login(regular_user)
     return client
-
 
 @pytest.mark.django_db
 class TestUserManagementAccessControl:
@@ -63,10 +58,9 @@ class TestUserManagementAccessControl:
         resp = regular_client.post(
             reverse('core:user_toggle_active', kwargs={'pk': superuser.pk})
         )
-        # redirected away, not processed
         assert resp.status_code == 302
         superuser.refresh_from_db()
-        assert superuser.is_active is True  # unchanged
+        assert superuser.is_active is True
 
     def test_superuser_can_access_user_list(self, superuser_client):
         resp = superuser_client.get(reverse('core:user_list'))
@@ -75,7 +69,6 @@ class TestUserManagementAccessControl:
     def test_superuser_can_access_user_create(self, superuser_client):
         resp = superuser_client.get(reverse('core:user_create'))
         assert resp.status_code == 200
-
 
 @pytest.mark.django_db
 class TestUserCreate:
@@ -115,9 +108,8 @@ class TestUserCreate:
             'password1': 'StrongPass1!',
             'password2': 'DifferentPass1!',
         })
-        assert resp.status_code == 200  # re-renders form
+        assert resp.status_code == 200
         assert not User.objects.filter(username='baduser').exists()
-
 
 @pytest.mark.django_db
 class TestUserPasswordChange:
@@ -137,7 +129,6 @@ class TestUserPasswordChange:
         )
         assert resp.status_code == 200
         assert 'form' in resp.context
-
 
 @pytest.mark.django_db
 class TestUserToggleActive:
@@ -163,7 +154,7 @@ class TestUserToggleActive:
             reverse('core:user_toggle_active', kwargs={'pk': superuser.pk})
         )
         superuser.refresh_from_db()
-        assert superuser.is_active is True  # unchanged — guard prevents self-lockout
+        assert superuser.is_active is True
 
     def test_toggle_requires_post(self, superuser_client, regular_user):
         """GET to toggle endpoint does nothing (no side-effect on safe method)."""

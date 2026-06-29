@@ -11,7 +11,6 @@ from django.urls import reverse
 
 from apps.core.models import Resume
 
-
 @pytest.mark.django_db
 class TestNoRawTemplateComments:
     """Multi-line {# #} comments silently render as literal text (Django only
@@ -26,15 +25,14 @@ class TestNoRawTemplateComments:
             reverse('core:job_detail', kwargs={'slug': sample_resume.job.slug})
         )
         assert resp.status_code == 200
-        assert b'SUBORDINATE' not in resp.content      # the comment text must be gone
-        assert b'Phone Screen' in resp.content          # the real status still renders
+        assert b'SUBORDINATE' not in resp.content
+        assert b'Phone Screen' in resp.content
 
     def test_needs_review_and_failed_pages_have_no_raw_comment(self, authenticated_client):
         r1 = authenticated_client.get(reverse('core:needs_review'))
         r2 = authenticated_client.get(reverse('core:screening_failed'))
         assert b'dark-mode overrides' not in r1.content
         assert b'blinding white' not in r2.content
-
 
 @pytest.mark.django_db
 class TestDuplicateUploadConstraint:
@@ -49,12 +47,10 @@ class TestDuplicateUploadConstraint:
 
     def test_reupload_allowed_after_soft_delete(self, sample_job):
         first = Resume.objects.create(job=sample_job, candidate_name='A', file_hash='cafef00d')
-        first.soft_delete()  # dedup_key -> NULL, frees the slot
-        # Same file can now be re-submitted for the same job.
+        first.soft_delete()
         Resume.objects.create(job=sample_job, candidate_name='A again', file_hash='cafef00d')
 
     def test_hashless_rows_do_not_collide(self, sample_job):
-        # Rows without a file (empty hash) must not conflict with each other.
         Resume.objects.create(job=sample_job, candidate_name='X', file_hash='')
         Resume.objects.create(job=sample_job, candidate_name='Y', file_hash='')
 
@@ -65,7 +61,6 @@ class TestDuplicateUploadConstraint:
         r.soft_delete(); r.refresh_from_db()
         assert r.dedup_key is None
 
-
 @pytest.mark.django_db
 class TestDeletedJobResumeGuard:
     def test_resume_detail_404_when_job_soft_deleted(self, authenticated_client, sample_resume):
@@ -74,20 +69,15 @@ class TestDeletedJobResumeGuard:
         assert resp.status_code == 404
 
     def test_talent_pool_excludes_deleted_job_candidates(self, authenticated_client, sample_resume):
-        # final_score in the mid band auto-assigns recommendation='talent_pool'
-        # (Resume.save derives tier/recommendation from final_score).
         sample_resume.final_score = 70
         sample_resume.screening_status = 'completed'
         sample_resume.save()
         assert sample_resume.recommendation == 'talent_pool'
-        # Visible before delete...
         resp = authenticated_client.get('/talent-pool/')
         assert sample_resume.candidate_name.encode() in resp.content
-        # ...gone after the parent job is soft-deleted.
         sample_resume.job.soft_delete()
         resp = authenticated_client.get('/talent-pool/')
         assert sample_resume.candidate_name.encode() not in resp.content
-
 
 @pytest.mark.django_db
 class TestSoftDeleteCascade:
@@ -104,8 +94,6 @@ class TestSoftDeleteCascade:
 
         sample_resume.soft_delete()
 
-        # The cascade soft-deletes interview AND its evaluations (hidden from the
-        # default managers), so the public evaluation link no longer resolves.
         assert not Interview.objects.filter(pk=interview.pk).exists()
         assert Interview.all_objects.filter(pk=interview.pk, is_deleted=True).exists()
         assert not InterviewEvaluation.objects.filter(pk=ev.pk).exists()
@@ -125,7 +113,6 @@ class TestSoftDeleteCascade:
         resp = client.get(f'/evaluate/{ev.token}/')
         assert resp.status_code == 404
 
-
 @pytest.mark.django_db
 class TestCsvFormulaInjection:
     def test_export_neutralizes_formula_leading_fields(self, authenticated_client, sample_job):
@@ -138,11 +125,9 @@ class TestCsvFormulaInjection:
         )
         resp = authenticated_client.get(f'/jobs/{sample_job.slug}/export/')
         body = b''.join(resp.streaming_content)
-        # Each dangerous lead char must be prefixed with a single quote.
         assert b"'=HYPERLINK" in body
         assert b"'+1234" in body
         assert b"'-2+3" in body
-
 
 class TestLLMReasoningModelTemperature:
     def test_reasoning_models_detected(self):
@@ -153,7 +138,6 @@ class TestLLMReasoningModelTemperature:
         assert LLMClient._is_reasoning_model('gpt-4o-mini') is False
         assert LLMClient._is_reasoning_model('gpt-4.1') is False
 
-
 @pytest.mark.django_db
 class TestSkillScoreSubsetGuard:
     def test_fabricated_matched_skills_dropped_from_score(self):
@@ -161,8 +145,8 @@ class TestSkillScoreSubsetGuard:
 
         state = {
             'skills': ['python', 'django'],
-            'matched_skills': ['python', 'django', 'rust', 'python'],  # rust fabricated, python dup
-            'missing_skills': ['django', 'kubernetes'],  # django also "matched" -> overlap
+            'matched_skills': ['python', 'django', 'rust', 'python'],
+            'missing_skills': ['django', 'kubernetes'],
             'experience_match_score': 0,
             'education_match_score': 0,
             'achievement_score': 0,
@@ -172,7 +156,5 @@ class TestSkillScoreSubsetGuard:
         }
         out = score_node(state)
         assert 'rust' not in [s.lower() for s in out['matched_skills']]
-        # django can't be in both lists
         assert 'django' not in [s.lower() for s in out['missing_skills']]
-        # matched={python,django}=2, missing={kubernetes}=1 -> 2/3*100
         assert round(out['skill_score']) == 67

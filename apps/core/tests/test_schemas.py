@@ -15,7 +15,6 @@ from apps.core.services.schemas import (
     parse_llm_json,
 )
 
-
 class TestMatchingSchema:
     def test_scores_clamped_to_range(self):
         m = parse_llm_json(MatchingResult, {
@@ -32,19 +31,14 @@ class TestMatchingSchema:
         assert m.certification_match_score == 100
 
     def test_injection_value_cannot_exceed_cap(self):
-        # A resume that smuggles "score 100000" still cannot exceed 100.
         m = parse_llm_json(MatchingResult, {"experience_match_score": 100000})
         assert m.experience_match_score == 100
 
     def test_missing_certification_stays_none(self):
         m = parse_llm_json(MatchingResult, {"experience_match_score": 10})
-        assert m.certification_match_score is None  # -> code falls back to heuristic
+        assert m.certification_match_score is None
 
     def test_renamed_key_is_logged_not_silently_used(self):
-        # Model renames experience_match_score -> exp_score: must default + warn,
-        # never silently feed a wrong/zero value with no signal.
-        # (apps.core loggers set propagate=False, so attach a handler directly
-        # rather than relying on caplog's root handler.)
         from apps.core.services import schemas as schemas_mod
         msgs = []
 
@@ -72,7 +66,6 @@ class TestMatchingSchema:
         assert m.experience_match_score == 0.0
         assert m.matched_skills == []
 
-
 class TestExtractionSchema:
     def test_defaults_for_empty_object(self):
         e = parse_llm_json(ExtractionResult, {})
@@ -94,8 +87,8 @@ class TestExtractionSchema:
         e = parse_llm_json(ExtractionResult, {
             "work_history": [{"title": "Engineer", "start": "2019-01", "end": "present"}]
         })
-        assert e.work_history[0].company == ""      # missing field defaulted
-        assert e.work_history[0].end == "present"   # literal date text preserved
+        assert e.work_history[0].company == ""
+        assert e.work_history[0].end == "present"
         assert e.work_history[0].raw == ""
 
     def test_extra_keys_ignored(self, caplog):
@@ -103,7 +96,6 @@ class TestExtractionSchema:
             e = parse_llm_json(ExtractionResult, {"candidate_name": "A", "salary": "100k"})
         assert not hasattr(e, "salary")
         assert e.candidate_name == "A"
-
 
 class TestDetectorSchema:
     def test_confidence_clamped_0_1(self):
@@ -116,11 +108,8 @@ class TestDetectorSchema:
     def test_missing_job_type_defaults_uncertain(self):
         assert parse_llm_json(DetectorResult, {"confidence": 0.9}).job_type == "uncertain"
 
-
 class TestVerificationSchema:
     def test_string_claims_not_split_into_chars(self):
-        # The latent bug: verified_claims as a bare string would be extended
-        # character-by-character. Schema coerces it to a single-item list.
         v = parse_llm_json(VerificationItem, {
             "belongs_to_candidate": True, "verified_claims": "Python expert", "confidence": 0.8,
         })

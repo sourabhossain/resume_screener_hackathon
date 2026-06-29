@@ -13,15 +13,10 @@ from apps.core.services.url_safety import is_safe_public_http_url, validate_and_
 
 logger = logging.getLogger(__name__)
 
-# Timeout for all requests
-REQUEST_TIMEOUT = 15  # seconds
-MAX_CONTENT_LENGTH = 50_000  # chars
-# Hard byte ceiling on the response body. Applied while streaming so a malicious
-# URL can't stream gigabytes into a worker's memory before we truncate to
-# MAX_CONTENT_LENGTH chars. ~2 MB comfortably covers any real HTML page.
+REQUEST_TIMEOUT = 15
+MAX_CONTENT_LENGTH = 50_000
 MAX_CONTENT_BYTES = 2 * 1024 * 1024
 MAX_REDIRECTS = 5
-
 
 @dataclass
 class CrawlResult:
@@ -32,7 +27,6 @@ class CrawlResult:
     status_code: int = 0
     error: str = ""
 
-
 class LinkCrawler:
 
     HEADERS = {
@@ -42,7 +36,6 @@ class LinkCrawler:
         )
     }
 
-    # Sites that need JS rendering
     JS_REQUIRED_DOMAINS = {'github.com', 'linkedin.com'}
 
     @classmethod
@@ -80,19 +73,12 @@ class LinkCrawler:
                     results.append(CrawlResult(url=url, success=False, error=str(result)))
                 else:
                     results.append(result)
-            # Polite delay between batches to avoid hammering servers
             if idx < len(batches) - 1:
                 await asyncio.sleep(2)
         return results
 
     @classmethod
     async def _crawl_with_httpx(cls, url: str) -> CrawlResult:
-        # SSRF hardening: do NOT let httpx auto-follow redirects. A validated
-        # public URL can 3xx-redirect to an internal/metadata address; following
-        # blindly would bypass the guard. We follow manually and, on every hop,
-        # resolve the hostname ONCE and connect to that pinned IP (sending the
-        # real Host header + TLS SNI) so DNS can't rebind between the safety check
-        # and the connection.
         async with httpx.AsyncClient(
             headers=cls.HEADERS,
             timeout=REQUEST_TIMEOUT,
@@ -106,8 +92,6 @@ class LinkCrawler:
                     logger.info('Blocked crawl hop (SSRF guard): %s — %s', current, reason)
                     return CrawlResult(url=url, success=False, error=f'blocked: {reason}')
 
-                # Connect to the validated IP literal, but preserve the original
-                # hostname for the Host header and TLS SNI / cert verification.
                 parsed = httpx.URL(current)
                 connect_url = parsed.copy_with(host=pinned_ip)
                 host_header = host if port in (80, 443) else f'{host}:{port}'
@@ -118,12 +102,9 @@ class LinkCrawler:
                     extensions={'sni_hostname': host},
                 ) as response:
                     if response.is_redirect and response.headers.get('location'):
-                        # Resolve the next hop against the ORIGINAL hostname URL.
                         current = urljoin(current, response.headers['location'])
                         continue
 
-                    # Stream with a hard byte cap so an oversized/endless body
-                    # can't exhaust worker memory before we truncate.
                     chunks, total = [], 0
                     async for chunk in response.aiter_bytes():
                         chunks.append(chunk)
@@ -160,9 +141,6 @@ class LinkCrawler:
                         user_agent=cls.HEADERS['User-Agent']
                     )
 
-                    # Re-check SSRF on every navigation request so that
-                    # redirects (e.g. github.com → internal IP) can't bypass
-                    # the guard that was applied to the original URL in crawl().
                     async def _ssrf_guard(route, request):
                         if request.is_navigation_request():
                             safe, reason = is_safe_public_http_url(request.url)

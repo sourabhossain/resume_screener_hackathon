@@ -28,12 +28,12 @@
                 {{ display_name|slice:":1"|upper }}
             </a>
             <div class="min-w-0">
-                {# Name — single line #}
+
                 <a href="{% url 'core:resume_detail' resume.uuid %}" hx-boost="false"
                    class="block truncate font-semibold text-zinc-900 transition hover:text-primary-600 dark:text-white dark:hover:text-primary-400">
                     {{ display_name }}
                 </a>
-                {# Contact info #}
+
                 <div class="mt-0.5 flex flex-col gap-0.5">
                     {% if resume.email %}
                     <span class="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -48,7 +48,7 @@
                     </span>
                     {% endif %}
                 </div>
-                {# Interview badges — separate from the name link #}
+
                 {% with interviews=resume.interviews.all %}
                 {% if interviews %}
                 <div class="mt-1.5 flex flex-wrap gap-1">
@@ -105,12 +105,7 @@
             {% else %}
             <span class="text-zinc-400">—</span>
             {% endif %}
-            {% comment %}
-            Recruiter's manual stage — a SUBORDINATE muted line (no pill) under the
-            AI badge, with a person icon so it reads as "the human's status", a
-            separate dimension from the AI recommendation above. Only shown once
-            it has moved past the default "New".
-            {% endcomment %}
+
             {% if resume.recruiter_status and resume.recruiter_status != 'new' %}
             <span class="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium leading-tight
                 {% if resume.recruiter_status == 'hired' %}text-emerald-600 dark:text-emerald-400
@@ -223,12 +218,7 @@
         </div>
     </td>
 </tr>
-{% comment %}
-Only emitted when this row is served as a standalone polling fragment
-(is_fragment); piggybacks out-of-band updates of the pipeline snapshot
-cards and the pending-screening badge so they refresh as rows finish —
-no full reload needed.
-{% endcomment %}
+
 {% if is_fragment %}
 {% include 'core/partials/pipeline_stats_cards.html' with oob=True %}
 {% include 'core/partials/pipeline_badge.html' with oob=True %}

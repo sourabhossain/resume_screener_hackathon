@@ -15,7 +15,6 @@ from ..forms import ResumeForm
 from ..models import Job, Resume
 from ..utils import compute_file_hash
 
-
 def careers_list(request):
     """Public list of open (active) jobs candidates can apply to.
 
@@ -32,11 +31,8 @@ def careers_list(request):
             Q(title__icontains=search_query) | Q(description__icontains=search_query)
         )
 
-    # Typeahead suggestions (only while searching); same match as the grid.
     suggestions = list(jobs_qs[:6]) if search_query else []
 
-    # Paginate so a public, unauthenticated page never loads every active job
-    # (and its full description) into memory on each request.
     page_obj = Paginator(jobs_qs, 12).get_page(request.GET.get('page', 1))
 
     context = {
@@ -46,12 +42,10 @@ def careers_list(request):
         'suggestions': suggestions,
     }
 
-    # HTMX live-search request → return just the results + OOB suggestions.
     if request.headers.get('HX-Request'):
         return render(request, 'careers/_search_response.html', context)
 
     return render(request, 'careers/job_list.html', context)
-
 
 @ratelimit(key='ip', rate='10/h', method='POST', block=True)
 def careers_apply(request, slug):
@@ -64,22 +58,18 @@ def careers_apply(request, slug):
         return redirect('core:careers')
 
     if request.method == 'POST':
-        # require_contact: applicants must give an email so recruiters can reply.
         form = ResumeForm(request.POST, request.FILES, require_contact=True)
         if form.is_valid():
             email = form.cleaned_data.get('email', '').strip().lower()
-            # Strip all spaces, dashes, and parentheses so "+880 1711-123456" == "+8801711123456".
             phone = re.sub(r'[\s\-()]+', '', form.cleaned_data.get('phone', ''))
             uploaded_file = request.FILES.get('file')
             file_hash = compute_file_hash(uploaded_file) if uploaded_file else ''
 
-            # Block duplicate submissions: same email, phone, or file already on record for this job.
             if email and Resume.objects.filter(job=job, email__iexact=email, is_deleted=False).exists():
                 messages.error(request, 'An application with this email address already exists for this position.')
                 return render(request, 'careers/apply.html', {'job': job, 'form': form})
 
             if phone:
-                # Normalize DB values the same way before comparing so formatting differences don't bypass the check.
                 from django.db.models import F, Value as V
                 from django.db.models.functions import Replace
                 existing_phone = (
@@ -114,8 +104,6 @@ def careers_apply(request, slug):
             try:
                 resume.save()
             except IntegrityError:
-                # Concurrent identical submission won the race; surface the same
-                # graceful duplicate message instead of a 500.
                 messages.error(request, 'This resume has already been submitted for this position.')
                 return render(request, 'careers/apply.html', {'job': job, 'form': form})
 
@@ -129,7 +117,6 @@ def careers_apply(request, slug):
         form = ResumeForm(require_contact=True)
 
     return render(request, 'careers/apply.html', {'job': job, 'form': form})
-
 
 def careers_thanks(request, slug):
     """Confirmation shown after a candidate submits an application."""

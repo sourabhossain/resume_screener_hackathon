@@ -8,7 +8,6 @@
 {% block recruiter_logout %}{% endblock %}
 {% block mobile_recruiter_nav %}{% endblock %}
 
-{# Candidates aren't logged in — hide the recruiter "Post Job" action #}
 {% block nav_action %}{% endblock %}
 
 {% block content %}
@@ -19,7 +18,7 @@
     </div>
 
     <div class="mx-auto mb-8 max-w-xl">
-        {# hx-disinherit goes on the search input below, not this wrapper #}
+
         <div class="relative" x-data="{ open: false, q: '{{ search_query|escapejs }}' }" @click.outside="open = false">
             <svg class="pointer-events-none absolute left-3.5 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -39,13 +38,11 @@
                    hx-replace-url="true"
                    class="form-input pl-11 pr-11">
 
-            {# Loading spinner (HTMX toggles .htmx-request → visible) #}
             <svg id="search-spinner" class="htmx-indicator absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
 
-            {# Suggestions dropdown — visibility driven by Alpine, content by HTMX (OOB) #}
             <div x-show="open && q.trim().length > 0" x-cloak
                  x-transition:enter="transition ease-out duration-150"
                  x-transition:enter-start="opacity-0 -translate-y-1"
