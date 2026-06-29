@@ -3,7 +3,7 @@ import uuid
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -243,6 +243,13 @@ class Resume(SoftDeleteModel):
 
     # SHA-256 of the uploaded file — used to detect duplicate submissions for the same job.
     file_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    # Portable dedup sentinel: equals file_hash ONLY while the row is active and
+    # has a real hash, otherwise NULL. A plain UNIQUE(job, dedup_key) then enforces
+    # "one active copy of a file per job" on MySQL too (MySQL silently drops
+    # *conditional* unique constraints — W036 — so we cannot use a partial one).
+    # NULLs are exempt from UNIQUE on both MySQL and SQLite, so soft-deleted rows
+    # and rows without a file never collide. Maintained in save(); never set by hand.
+    dedup_key = models.CharField(max_length=64, null=True, blank=True, editable=False)
 
     # Link Verification
     extracted_links = models.JSONField(default=list, blank=True)
@@ -298,14 +305,14 @@ class Resume(SoftDeleteModel):
         ]
         constraints = [
             # DB-level backstop against duplicate submissions: the same file can't
-            # be submitted twice for one job. Complements the app-level .exists()
-            # checks in the views, closing the race window between check and save.
-            # Scoped to non-deleted rows with a real hash so re-uploads after a
-            # delete, and rows without a file, are unaffected.
+            # be submitted twice for one active job row. Complements the app-level
+            # .exists() checks in the views, closing the check-then-save race.
+            # Unconditional (so MySQL actually creates it) over `dedup_key`, which
+            # is NULL for soft-deleted/hashless rows — those are exempt from UNIQUE
+            # and so remain unaffected, preserving re-upload-after-delete.
             models.UniqueConstraint(
-                fields=['job', 'file_hash'],
-                condition=Q(is_deleted=False) & ~Q(file_hash=''),
-                name='uniq_active_resume_file_per_job',
+                fields=['job', 'dedup_key'],
+                name='uniq_active_resume_dedup',
             ),
         ]
     
@@ -330,6 +337,18 @@ class Resume(SoftDeleteModel):
 
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
+        # Keep the dedup sentinel in sync: active + real hash -> the hash itself
+        # (enforces the per-job uniqueness); deleted or hashless -> NULL (exempt).
+        self.dedup_key = self.file_hash if (not self.is_deleted and self.file_hash) else None
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            # soft_delete()/restore() save only is_deleted; the cascade does too.
+            # dedup_key must be re-persisted alongside those toggles, else a
+            # soft-deleted file would keep occupying the unique slot.
+            if {'is_deleted', 'file_hash'} & update_fields:
+                update_fields.add('dedup_key')
+                kwargs['update_fields'] = update_fields
         super().save(*args, **kwargs)
 
 

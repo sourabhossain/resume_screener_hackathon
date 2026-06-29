@@ -6,8 +6,39 @@ soft-delete cascade, deleted-job access guards, CSV formula-injection escaping,
 the LLM reasoning-model temperature fix, and the skill_score subset guard.
 """
 import pytest
+from django.db import IntegrityError, transaction
 
 from apps.core.models import Resume
+
+
+@pytest.mark.django_db
+class TestDuplicateUploadConstraint:
+    """The (job, dedup_key) unique constraint is portable (MySQL + SQLite) and
+    enforces 'one active copy of a file per job' as a race backstop."""
+
+    def test_duplicate_active_file_hash_rejected(self, sample_job):
+        Resume.objects.create(job=sample_job, candidate_name='A', file_hash='deadbeef')
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                Resume.objects.create(job=sample_job, candidate_name='B', file_hash='deadbeef')
+
+    def test_reupload_allowed_after_soft_delete(self, sample_job):
+        first = Resume.objects.create(job=sample_job, candidate_name='A', file_hash='cafef00d')
+        first.soft_delete()  # dedup_key -> NULL, frees the slot
+        # Same file can now be re-submitted for the same job.
+        Resume.objects.create(job=sample_job, candidate_name='A again', file_hash='cafef00d')
+
+    def test_hashless_rows_do_not_collide(self, sample_job):
+        # Rows without a file (empty hash) must not conflict with each other.
+        Resume.objects.create(job=sample_job, candidate_name='X', file_hash='')
+        Resume.objects.create(job=sample_job, candidate_name='Y', file_hash='')
+
+    def test_dedup_key_tracks_active_hashed_state(self, sample_job):
+        r = Resume.objects.create(job=sample_job, candidate_name='Z', file_hash='abc123')
+        r.refresh_from_db()
+        assert r.dedup_key == 'abc123'
+        r.soft_delete(); r.refresh_from_db()
+        assert r.dedup_key is None
 
 
 @pytest.mark.django_db
