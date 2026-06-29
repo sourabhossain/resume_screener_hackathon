@@ -3,10 +3,12 @@
 {% block title %}Needs Review{% endblock %}
 
 {% block content %}
-{# This page is built with inline light-mode styles. Rather than rewrite every
-   element, dark-mode overrides below remap the inline light colors/backgrounds
-   so headings/pager text stay visible and cards aren't blinding white on the
-   dark shell. Keyed on .nr-root so it can't leak to other pages. #}
+{% comment %}
+This page is built with inline light-mode styles. Rather than rewrite every
+element, dark-mode overrides below remap the inline light colors/backgrounds
+so headings/pager text stay visible and cards aren't blinding white on the
+dark shell. Keyed on .nr-root so it can't leak to other pages.
+{% endcomment %}
 <style>
   .dark .nr-root [style*="color:#171717"] { color:#fafafa !important; }
   .dark .nr-root [style*="color:#71717a"],

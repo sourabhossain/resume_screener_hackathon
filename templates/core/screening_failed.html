@@ -3,9 +3,11 @@
 {% block title %}Screening Failed{% endblock %}
 
 {% block content %}
-{# Inline light-mode page; dark-mode overrides (keyed on .nr-root) remap the
-   inline light colors/backgrounds so text stays visible and cards aren't
-   blinding white on the dark shell. #}
+{% comment %}
+Inline light-mode page; dark-mode overrides (keyed on .nr-root) remap the
+inline light colors/backgrounds so text stays visible and cards aren't
+blinding white on the dark shell.
+{% endcomment %}
 <style>
   .dark .nr-root [style*="color:#171717"] { color:#fafafa !important; }
   .dark .nr-root [style*="color:#71717a"],

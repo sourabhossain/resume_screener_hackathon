@@ -105,15 +105,21 @@
             {% else %}
             <span class="text-zinc-400">—</span>
             {% endif %}
-            {# Recruiter's manual outcome — only shown once it's moved past the default "New". #}
+            {% comment %}
+            Recruiter's manual stage — a SUBORDINATE muted line (no pill) under the
+            AI badge, with a person icon so it reads as "the human's status", a
+            separate dimension from the AI recommendation above. Only shown once
+            it has moved past the default "New".
+            {% endcomment %}
             {% if resume.recruiter_status and resume.recruiter_status != 'new' %}
-            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold leading-tight
-                {% if resume.recruiter_status == 'hired' %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-400
-                {% elif resume.recruiter_status == 'rejected' or resume.recruiter_status == 'withdrawn' %}bg-rose-50 text-rose-700 dark:bg-rose-900/25 dark:text-rose-400
-                {% elif resume.recruiter_status == 'offer_extended' %}bg-violet-50 text-violet-700 dark:bg-violet-900/25 dark:text-violet-400
-                {% elif resume.recruiter_status == 'interviewing' %}bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-400
-                {% else %}bg-indigo-50 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-400{% endif %}">
-                <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70"></span>
+            <span class="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium leading-tight
+                {% if resume.recruiter_status == 'hired' %}text-emerald-600 dark:text-emerald-400
+                {% elif resume.recruiter_status == 'rejected' or resume.recruiter_status == 'withdrawn' %}text-rose-500 dark:text-rose-400
+                {% else %}text-zinc-500 dark:text-zinc-400{% endif %}"
+                title="Recruiter status: {{ resume.get_recruiter_status_display }}">
+                <svg class="h-3 w-3 shrink-0 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.1a7.5 7.5 0 0115 0"/>
+                </svg>
                 {{ resume.get_recruiter_status_display }}
             </span>
             {% endif %}

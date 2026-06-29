@@ -7,8 +7,33 @@ the LLM reasoning-model temperature fix, and the skill_score subset guard.
 """
 import pytest
 from django.db import IntegrityError, transaction
+from django.urls import reverse
 
 from apps.core.models import Resume
+
+
+@pytest.mark.django_db
+class TestNoRawTemplateComments:
+    """Multi-line {# #} comments silently render as literal text (Django only
+    supports single-line {# #}; multi-line needs {% comment %}). These pin that
+    the explanatory comments don't leak onto the rendered page."""
+
+    def test_pipeline_row_has_no_raw_comment(self, authenticated_client, sample_resume):
+        sample_resume.screening_status = 'completed'
+        sample_resume.recruiter_status = 'phone_screen'
+        sample_resume.save()
+        resp = authenticated_client.get(
+            reverse('core:job_detail', kwargs={'slug': sample_resume.job.slug})
+        )
+        assert resp.status_code == 200
+        assert b'SUBORDINATE' not in resp.content      # the comment text must be gone
+        assert b'Phone Screen' in resp.content          # the real status still renders
+
+    def test_needs_review_and_failed_pages_have_no_raw_comment(self, authenticated_client):
+        r1 = authenticated_client.get(reverse('core:needs_review'))
+        r2 = authenticated_client.get(reverse('core:screening_failed'))
+        assert b'dark-mode overrides' not in r1.content
+        assert b'blinding white' not in r2.content
 
 
 @pytest.mark.django_db
