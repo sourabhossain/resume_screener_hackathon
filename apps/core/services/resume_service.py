@@ -112,7 +112,11 @@ class ResumeService:
         if not resume.raw_text:
             raise AIScreeningError("No resume text available", stage="extraction")
 
-        result = screen_resume(resume.raw_text, resume.job.description, resume_id=resume.id, job_type="")
+        result = screen_resume(
+            resume.raw_text, resume.job.description,
+            resume_id=resume.id, job_type="",
+            required_experience=resume.job.required_experience,
+        )
 
         if result.get('error'):
             raise AIScreeningError(result['error'], stage="screening")

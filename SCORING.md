@@ -40,14 +40,21 @@ an explicit default instead of silently corrupting the score.
 | Component | How it is computed | Source |
 |-----------|--------------------|--------|
 | `skill_score` | `matched / (matched + missing) * 100`, computed in code from the LLM's two skill lists. `0` if no skills found. | `score_node` |
-| `experience_score` | = the LLM's `experience_match_score` (clamped 0–100). | `match_node` |
+| `experience_score` | **code**: `min(experience_years / job.required_experience, 1) * 100` — derived from the deterministic years. Falls back to the LLM's `experience_match_score` only when the job sets no `required_experience`. | `score_node` |
 | `education_score` | = the LLM's `education_match_score` (clamped 0–100). | `match_node` |
 | `certification_score` | = the LLM's `certification_match_score` if given; otherwise fallback `min(cert_count * 25, 100)`. | `score_node` |
 | `achievement_score` | = the LLM's `achievement_score` (clamped 0–100). | `match_node` |
 
-`experience_years` is **not** scored by the model — it is computed
-deterministically from the raw work-history date spans (month-precise, overlaps
-merged once) in `compute_experience_years`. "present"/"current" → today.
+`experience_years` is computed deterministically from the raw work-history date
+spans (month-precise, overlaps merged once) in `compute_experience_years`
+("present"/"current" → today), and now **drives `experience_score` directly**
+when the job specifies `required_experience`.
+
+**Fairness:** before extraction, labeled protected attributes (gender, age,
+date of birth, nationality, marital status, religion, race, photo) are redacted
+(`redact_protected_attributes`). The matching/scoring step receives only the
+extracted profile (skills, experience, education, certs, achievements) — **not**
+the candidate's name or raw demographics — so they cannot bias the score.
 
 ---
 

@@ -1,4 +1,5 @@
 import logging
+import re
 from enum import Enum
 from functools import lru_cache
 from typing import TypedDict, List, Dict, Any, Optional
@@ -38,6 +39,27 @@ def _clamp(value, lo: float = 0.0, hi: float = 100.0) -> float:
     except (TypeError, ValueError):
         return lo
 
+_PROTECTED_PATTERNS = [
+    re.compile(
+        r'(?im)\b(gender|sex|date of birth|d\.?o\.?b\.?|age|nationality|'
+        r'marital status|civil status|religion|race|ethnicity)\s*[:\-]\s*[^,\n;|]*'
+    ),
+    re.compile(r'(?im)\b\d{1,2}\s+years?\s+old\b'),
+    re.compile(r'(?im)\b(photo(graph)?\s+attached|photograph)\b'),
+]
+
+def redact_protected_attributes(text: str) -> str:
+    """Best-effort removal of LABELED protected attributes before screening so
+    demographic data can't bias extraction or scoring. Conservative on purpose:
+    only labeled fields (Gender:/DOB:/Nationality:/...), an explicit age, and
+    photo references are stripped; bare words are left alone so real content
+    (e.g. a 'Spanish' language skill) is never clobbered."""
+    if not text:
+        return text
+    for pat in _PROTECTED_PATTERNS:
+        text = pat.sub(' ', text)
+    return text
+
 class Tier(str, Enum):
     TOP = "top"
     MID = "mid"
@@ -53,6 +75,7 @@ class ResumeScreeningState(TypedDict):
     job_description: str
     resume_id: int
     job_type: str
+    required_experience: Optional[float]
 
     candidate_name: str
     candidate_email: str
@@ -192,7 +215,6 @@ def match_node(state: ResumeScreeningState) -> ResumeScreeningState:
         job_type = state.get('job_type', FALLBACK_ROLE)
 
         profile = {
-            'candidate_name': state['candidate_name'],
             'skills': state['skills'],
             'experience_years': state['experience_years'],
             'education': state['education'],
@@ -261,7 +283,12 @@ def score_node(state: ResumeScreeningState) -> ResumeScreeningState:
         total_skills = len(matched_clean) + len(missing_clean)
         state['skill_score'] = (len(matched_clean) / total_skills) * 100 if total_skills > 0 else 0
 
-        state['experience_score'] = state['experience_match_score']
+        required = state.get('required_experience')
+        years = state.get('experience_years')
+        if required and required > 0 and years is not None:
+            state['experience_score'] = _clamp(min(years / required, 1.0) * 100)
+        else:
+            state['experience_score'] = state['experience_match_score']
         state['education_score'] = state['education_match_score']
 
         cm = state.get('certification_match_score')
@@ -359,6 +386,7 @@ def screen_resume(
     job_description: str,
     resume_id: int = 0,
     job_type: str = "",
+    required_experience: Optional[float] = None,
 ) -> Dict[str, Any]:
     if not resume_text or not job_description:
         return {
@@ -368,6 +396,7 @@ def screen_resume(
             'recommendation': Recommendation.REJECT.value
         }
 
+    resume_text = redact_protected_attributes(resume_text)
     resolved_job_type = job_type.strip()
     review_reason = ''
     if not resolved_job_type:
@@ -389,6 +418,7 @@ def screen_resume(
         'job_description': job_description,
         'resume_id': resume_id,
         'job_type': resolved_job_type,
+        'required_experience': required_experience,
         'candidate_name': '',
         'candidate_email': '',
         'candidate_phone': '',

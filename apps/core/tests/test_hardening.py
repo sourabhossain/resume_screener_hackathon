@@ -158,3 +158,54 @@ class TestSkillScoreSubsetGuard:
         assert 'rust' not in [s.lower() for s in out['matched_skills']]
         assert 'django' not in [s.lower() for s in out['missing_skills']]
         assert round(out['skill_score']) == 67
+
+
+class TestScoringFairnessAndExperience:
+    def test_redact_strips_labeled_fields_keeps_real_content(self):
+        from apps.core.services.ai_screener import redact_protected_attributes
+        text = ("Maria Gomez\nGender: Female\nDate of Birth: 12/03/1991\n"
+                "Nationality: Spanish\n34 years old. Photo attached.\n"
+                "Skills: Figma, Spanish, UX research")
+        out = redact_protected_attributes(text); low = out.lower()
+        assert 'female' not in low
+        assert '12/03/1991' not in out
+        assert 'years old' not in low
+        assert 'photo' not in low
+        assert 'maria gomez' in low          # name kept (extraction/display needs it)
+        assert 'figma' in low and 'ux research' in low
+        assert 'spanish' in low              # the language skill survives
+
+    def _base_state(self, **over):
+        s = dict(error=None, skills=['python'], matched_skills=['python'], missing_skills=[],
+                 education_match_score=0, achievement_score=0, certification_match_score=0,
+                 certifications=[], job_type='software_engineering', experience_match_score=42)
+        s.update(over)
+        return s
+
+    def test_experience_score_deterministic_from_required(self):
+        from apps.core.services.ai_screener import score_node
+        out = score_node(self._base_state(experience_years=3.0, required_experience=5.0))
+        assert out['experience_score'] == 60          # 3/5, not the LLM's 42
+        out = score_node(self._base_state(experience_years=8.0, required_experience=5.0))
+        assert out['experience_score'] == 100         # capped
+
+    def test_experience_score_falls_back_to_llm_when_no_required(self):
+        from apps.core.services.ai_screener import score_node
+        out = score_node(self._base_state(experience_years=3.0, required_experience=None))
+        assert out['experience_score'] == 42          # LLM value (no required set)
+
+    def test_matching_profile_excludes_candidate_name(self, monkeypatch):
+        import apps.core.services.ai_screener as ai
+        captured = {}
+        monkeypatch.setattr(ai, 'build_matching_prompt',
+                            lambda role, jd, profile: captured.setdefault('p', profile) or 'X')
+        monkeypatch.setattr(ai.llm_client, 'invoke_json', lambda *a, **k: {
+            'matched_skills': ['python'], 'missing_skills': [],
+            'experience_match_score': 50, 'education_match_score': 50,
+            'certification_match_score': 50, 'achievement_score': 50,
+        })
+        ai.match_node(dict(error=None, job_description='Need Python', job_type='software_engineering',
+                           candidate_name='Maria Gomez', skills=['python'], experience_years=3.0,
+                           education=[], certifications=[], achievements=[], resume_id=1))
+        assert 'candidate_name' not in captured['p']
+        assert 'skills' in captured['p']
