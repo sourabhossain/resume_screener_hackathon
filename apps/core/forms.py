@@ -60,12 +60,25 @@ class FileSaveMixin:
 class JobForm(AriaInvalidMixin, forms.ModelForm):
     """Form for creating and editing job descriptions."""
 
+    required_skills_text = forms.CharField(
+        required=False, label='Required skills',
+        help_text='Comma-separated must-have skills the AI screens against (e.g. Python, Django, MySQL).',
+        widget=forms.Textarea(attrs={'class': 'form-input', 'rows': 2,
+                                     'placeholder': 'Python, Django, REST APIs, MySQL'}),
+    )
+    required_education_text = forms.CharField(
+        required=False, label='Required education',
+        help_text='Comma-separated (e.g. Bachelor, Computer Science).',
+        widget=forms.TextInput(attrs={'class': 'form-input',
+                                      'placeholder': 'Bachelor, Computer Science'}),
+    )
+
     class Meta:
         model = Job
         fields = [
             'title', 'description', 'status',
             'employment_type', 'location_type', 'location',
-            'posted_date', 'closing_date',
+            'posted_date', 'closing_date', 'required_experience',
         ]
         widgets = {
             'title': forms.TextInput(attrs={
@@ -86,6 +99,8 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             }),
             'posted_date': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}),
             'closing_date': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}),
+            'required_experience': forms.NumberInput(attrs={'class': 'form-input', 'min': 0,
+                                                            'step': '0.5', 'placeholder': 'e.g. 5'}),
         }
         labels = {
             'title': 'Job Title',
@@ -96,6 +111,7 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             'location': 'Location',
             'posted_date': 'Posted Date',
             'closing_date': 'Application Deadline',
+            'required_experience': 'Required experience (years)',
         }
 
     def __init__(self, *args, **kwargs):
@@ -109,8 +125,16 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         self.fields['employment_type'].required = False
         self.fields['location_type'].required = False
         self.fields['location'].required = False
+        self.fields['required_experience'].required = False
         self.fields['employment_type'].choices = [('', 'Select employment type…')] + list(Job.EMPLOYMENT_TYPE_CHOICES)
         self.fields['location_type'].choices = [('', 'Select location type…')] + list(Job.LOCATION_TYPE_CHOICES)
+        if self.instance and self.instance.pk:
+            self.fields['required_skills_text'].initial = ', '.join(self.instance.required_skills or [])
+            self.fields['required_education_text'].initial = ', '.join(self.instance.required_education or [])
+
+    @staticmethod
+    def _split_csv(text):
+        return [s.strip() for s in (text or '').split(',') if s.strip()]
 
     def clean(self):
         data = super().clean()
@@ -125,6 +149,14 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
 
     def clean_location(self):
         return clean_label_text(self.cleaned_data.get('location'))
+
+    def save(self, commit=True):
+        job = super().save(commit=False)
+        job.required_skills = self._split_csv(self.cleaned_data.get('required_skills_text'))
+        job.required_education = self._split_csv(self.cleaned_data.get('required_education_text'))
+        if commit:
+            job.save()
+        return job
 
 class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for creating and editing resumes - only name and file required, AI handles the rest."""

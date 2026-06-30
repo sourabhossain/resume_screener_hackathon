@@ -209,3 +209,40 @@ class TestScoringFairnessAndExperience:
                            education=[], certifications=[], achievements=[], resume_id=1))
         assert 'candidate_name' not in captured['p']
         assert 'skills' in captured['p']
+
+    def test_skill_score_deterministic_from_required_skills(self):
+        from apps.core.services.ai_screener import score_node
+        out = score_node(self._base_state(
+            skills=['python', 'django', 'docker'],
+            required_skills=['Python', 'Django', 'Kubernetes', 'MySQL'],
+            matched_skills=['ignored'], missing_skills=['ignored'],
+            experience_years=0.0, required_experience=None,
+        ))
+        assert round(out['skill_score']) == 50          # 2 of 4 required matched
+        assert {s.lower() for s in out['matched_skills']} == {'python', 'django'}
+        assert {s.lower() for s in out['missing_skills']} == {'kubernetes', 'mysql'}
+
+    def test_skill_score_falls_back_to_llm_lists_without_required(self):
+        from apps.core.services.ai_screener import score_node
+        out = score_node(self._base_state(
+            skills=['python'], required_skills=[],
+            matched_skills=['python'], missing_skills=['go'],
+        ))
+        assert round(out['skill_score']) == 50          # 1 matched / (1+1) from LLM lists
+
+
+@pytest.mark.django_db
+class TestJobFormCapturesRequirements:
+    def test_required_fields_parsed_to_lists(self):
+        from apps.core.forms import JobForm
+        f = JobForm(data={
+            'title': 'Backend Dev', 'description': 'Build APIs', 'status': 'active',
+            'required_skills_text': 'Python, Django , MySQL',
+            'required_experience': '5',
+            'required_education_text': 'Bachelor, Computer Science',
+        })
+        assert f.is_valid(), f.errors
+        job = f.save(commit=False)
+        assert job.required_skills == ['Python', 'Django', 'MySQL']
+        assert job.required_education == ['Bachelor', 'Computer Science']
+        assert job.required_experience == 5

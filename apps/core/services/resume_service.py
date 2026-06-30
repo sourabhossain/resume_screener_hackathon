@@ -116,6 +116,7 @@ class ResumeService:
             resume.raw_text, resume.job.description,
             resume_id=resume.id, job_type="",
             required_experience=resume.job.required_experience,
+            required_skills=resume.job.required_skills,
         )
 
         if result.get('error'):

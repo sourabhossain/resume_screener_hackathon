@@ -76,6 +76,7 @@ class ResumeScreeningState(TypedDict):
     resume_id: int
     job_type: str
     required_experience: Optional[float]
+    required_skills: List[str]
 
     candidate_name: str
     candidate_email: str
@@ -254,34 +255,45 @@ def score_node(state: ResumeScreeningState) -> ResumeScreeningState:
         profile_skills = {str(s).strip().lower() for s in (state.get('skills') or []) if str(s).strip()}
         profile_blob = ' , '.join(profile_skills)
 
-        def _in_profile(skill: str) -> bool:
+        def _has(skill: str) -> bool:
             return skill.lower() in profile_skills or _token_present(skill, profile_blob)
 
-        matched_clean, seen = [], set()
-        for s in (str(x).strip() for x in state.get('matched_skills', [])):
-            key = s.lower()
-            if not s or key in seen:
-                continue
-            if profile_skills and not _in_profile(s):
-                logger.info(f"[Resume {state.get('resume_id')}] Dropped fabricated matched_skill '{s}'")
-                continue
-            seen.add(key)
-            matched_clean.append(s)
+        required_skills, seen_r = [], set()
+        for s in (str(x).strip() for x in (state.get('required_skills') or [])):
+            if s and s.lower() not in seen_r:
+                seen_r.add(s.lower())
+                required_skills.append(s)
 
-        matched_keys = {s.lower() for s in matched_clean}
-        missing_clean, seen_m = [], set()
-        for s in (str(x).strip() for x in state.get('missing_skills', [])):
-            key = s.lower()
-            if not s or key in seen_m or key in matched_keys:
-                continue
-            seen_m.add(key)
-            missing_clean.append(s)
+        if required_skills:
+            matched_clean = [r for r in required_skills if _has(r)]
+            missing_clean = [r for r in required_skills if not _has(r)]
+            state['skill_score'] = (len(matched_clean) / len(required_skills)) * 100
+        else:
+            matched_clean, seen = [], set()
+            for s in (str(x).strip() for x in state.get('matched_skills', [])):
+                key = s.lower()
+                if not s or key in seen:
+                    continue
+                if profile_skills and not _has(s):
+                    logger.info(f"[Resume {state.get('resume_id')}] Dropped fabricated matched_skill '{s}'")
+                    continue
+                seen.add(key)
+                matched_clean.append(s)
+
+            matched_keys = {s.lower() for s in matched_clean}
+            missing_clean, seen_m = [], set()
+            for s in (str(x).strip() for x in state.get('missing_skills', [])):
+                key = s.lower()
+                if not s or key in seen_m or key in matched_keys:
+                    continue
+                seen_m.add(key)
+                missing_clean.append(s)
+
+            total_skills = len(matched_clean) + len(missing_clean)
+            state['skill_score'] = (len(matched_clean) / total_skills) * 100 if total_skills > 0 else 0
 
         state['matched_skills'] = matched_clean
         state['missing_skills'] = missing_clean
-
-        total_skills = len(matched_clean) + len(missing_clean)
-        state['skill_score'] = (len(matched_clean) / total_skills) * 100 if total_skills > 0 else 0
 
         required = state.get('required_experience')
         years = state.get('experience_years')
@@ -387,6 +399,7 @@ def screen_resume(
     resume_id: int = 0,
     job_type: str = "",
     required_experience: Optional[float] = None,
+    required_skills: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     if not resume_text or not job_description:
         return {
@@ -419,6 +432,7 @@ def screen_resume(
         'resume_id': resume_id,
         'job_type': resolved_job_type,
         'required_experience': required_experience,
+        'required_skills': required_skills or [],
         'candidate_name': '',
         'candidate_email': '',
         'candidate_phone': '',

@@ -39,7 +39,7 @@ an explicit default instead of silently corrupting the score.
 
 | Component | How it is computed | Source |
 |-----------|--------------------|--------|
-| `skill_score` | `matched / (matched + missing) * 100`, computed in code from the LLM's two skill lists. `0` if no skills found. | `score_node` |
+| `skill_score` | **code**: when the job lists `required_skills`, each is matched (token-aware) against the candidate's extracted skills → `matched_required / total_required * 100` (deterministic, JD-anchored). Falls back to `matched / (matched + missing)` from the LLM's lists only when no `required_skills` are set. | `score_node` |
 | `experience_score` | **code**: `min(experience_years / job.required_experience, 1) * 100` — derived from the deterministic years. Falls back to the LLM's `experience_match_score` only when the job sets no `required_experience`. | `score_node` |
 | `education_score` | = the LLM's `education_match_score` (clamped 0–100). | `match_node` |
 | `certification_score` | = the LLM's `certification_match_score` if given; otherwise fallback `min(cert_count * 25, 100)`. | `score_node` |
