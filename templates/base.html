@@ -112,6 +112,7 @@
             const link = e.target.closest('a[data-confirm]');
             if (!link) return;
             e.preventDefault();
+            e.stopImmediatePropagation(); // stop hx-boost from navigating before the user confirms
             window.swalConfirm(djConfirmOpts(link)).then((res) => {
                 if (!res.isConfirmed) return;
                 if ((link.dataset.method || 'get').toLowerCase() === 'post') {
@@ -120,7 +121,7 @@
                     window.location.href = link.href;
                 }
             });
-        });
+        }, true);
 
         function djFieldLabel(field) {
             if (field.labels && field.labels.length) {
@@ -172,10 +173,11 @@
             if (form.matches('form[data-confirm]')) {
                 if (form.dataset.confirmed === '1') return; // already confirmed → let it submit
                 e.preventDefault();
+                e.stopImmediatePropagation(); // critical with hx-boost: stop HTMX from AJAX-submitting before the user confirms
                 window.swalConfirm(djConfirmOpts(form)).then((res) => {
                     if (res.isConfirmed) {
                         form.dataset.confirmed = '1';
-                        form.submit();
+                        form.submit(); // native POST (bypasses hx-boost) only AFTER confirmation
                     }
                 });
             }
