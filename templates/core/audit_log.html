@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize audit_extras %}
 
 {% block title %}Audit Trail{% endblock %}
 
@@ -49,18 +50,23 @@
     <table class="w-full text-sm">
         <thead>
             <tr class="border-b border-zinc-200 bg-zinc-50 text-left dark:border-zinc-800 dark:bg-zinc-800/60">
-                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Timestamp</th>
+                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">When</th>
                 <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Actor</th>
                 <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Action</th>
                 <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Entity</th>
                 <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Details</th>
-                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">ID</th>
+                <th class="px-5 py-3 text-right font-semibold text-zinc-400 dark:text-zinc-500">ID</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
             {% for row in page_obj %}
+            {% if row.date_group %}
+            <tr class="bg-zinc-50/80 dark:bg-zinc-800/40">
+                <td colspan="6" class="px-5 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{{ row.date_group }}</td>
+            </tr>
+            {% endif %}
             <tr class="align-top transition hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                <td class="whitespace-nowrap px-5 py-3 text-zinc-500 dark:text-zinc-400">{{ row.created_at|date:'Y-m-d H:i:s' }}</td>
+                <td class="whitespace-nowrap px-5 py-3 text-zinc-500 dark:text-zinc-400" title="{{ row.created_at|date:'Y-m-d H:i:s' }}">{{ row.created_at|naturaltime }}</td>
                 <td class="whitespace-nowrap px-5 py-3">
                     {% if row.actor %}
                     <span class="font-semibold text-zinc-900 dark:text-white">{{ row.actor.username }}</span>
@@ -69,22 +75,22 @@
                     {% endif %}
                 </td>
                 <td class="whitespace-nowrap px-5 py-3">
-                    <span class="inline-flex rounded-full bg-primary-50 px-2.5 py-1 font-mono text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">{{ row.action }}</span>
+                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ row.action|audit_badge }}" title="{{ row.action }}">{{ row.get_action_display }}</span>
                 </td>
                 <td class="px-5 py-3">
                     {% if row.entity_type %}
                         {% if row.entity_url %}
-                        <a href="{{ row.entity_url }}" class="font-semibold text-primary-600 hover:underline dark:text-primary-400">{{ row.get_entity_type_display }}</a>
+                        <a href="{{ row.entity_url }}" class="font-semibold text-primary-600 hover:underline dark:text-primary-400">{{ row.entity_label }}</a>
                         {% else %}
-                        <span class="text-zinc-600 dark:text-zinc-300">{{ row.get_entity_type_display }}</span>
+                        <span class="font-medium text-zinc-700 dark:text-zinc-200">{{ row.entity_label }}</span>
                         {% endif %}
-                        <span class="block max-w-[16rem] truncate font-mono text-xs text-zinc-400">{{ row.entity_id }}</span>
+                        <span class="block text-xs text-zinc-400">{{ row.get_entity_type_display }}</span>
                     {% else %}
                     <span class="text-zinc-400">--</span>
                     {% endif %}
                 </td>
-                <td class="px-5 py-3 text-zinc-600 dark:text-zinc-300"><span class="block max-w-md break-words">{{ row.details|default:'--' }}</span></td>
-                <td class="whitespace-nowrap px-5 py-3 text-zinc-400">#{{ row.pk }}</td>
+                <td class="px-5 py-3 text-zinc-600 dark:text-zinc-300"><span class="block max-w-md break-words">{{ row.details|audit_details|default:'--' }}</span></td>
+                <td class="whitespace-nowrap px-5 py-3 text-right align-middle text-xs text-zinc-300 dark:text-zinc-600">#{{ row.pk }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -110,7 +116,13 @@
     <svg class="mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
     </svg>
+    {% if filters.actor or filters.action or filters.from or filters.to or filters.q %}
     <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No audit entries match these filters</p>
+    <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-600">Try widening the date range or clearing the search.</p>
+    {% else %}
+    <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No activity recorded yet</p>
+    <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-600">Actions like posting a job, uploading a résumé or scheduling an interview will appear here.</p>
+    {% endif %}
 </div>
 {% endif %}
 

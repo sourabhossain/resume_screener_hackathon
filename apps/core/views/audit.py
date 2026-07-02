@@ -1,11 +1,14 @@
 """Superuser-only Audit Trail: paginated/filterable list + CSV export."""
 import csv
+from datetime import timedelta
 
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import StreamingHttpResponse
 from django.shortcuts import render
+from django.template.defaultfilters import date as date_filter
 from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from ..models import AuditLog, Job, Resume
@@ -64,13 +67,80 @@ def _entity_url(entity_type, entity_id):
     return None
 
 
+def _resolve_entities(rows):
+    """Batch-resolve (entity_type, entity_id) -> (human label, detail URL or None).
+
+    One query per entity type for the whole page (no per-row lookups). Uses
+    all_objects/all_with_deleted so soft-deleted names still resolve, but only
+    returns a URL when the object is live (mirroring _entity_url visibility).
+    """
+    from apps.interviews.models import Interview, InterviewEvaluation
+
+    ids = {'resume': set(), 'job': set(), 'user': set(),
+           'interview': set(), 'interview_evaluation': set()}
+    for r in rows:
+        if r.entity_type in ids and r.entity_id:
+            ids[r.entity_type].add(r.entity_id)
+
+    def _pks(values):
+        return [v for v in values if v.isdigit()]
+
+    resolved = {}
+
+    for res in Resume.all_objects.filter(uuid__in=ids['resume']).select_related('job'):
+        live = not res.is_deleted and not res.job.is_deleted
+        url = reverse('core:resume_detail', kwargs={'uuid': res.uuid}) if live else None
+        resolved[('resume', str(res.uuid))] = (res.candidate_name or str(res.uuid), url)
+
+    for job in Job.all_objects.filter(slug__in=ids['job']):
+        url = reverse('core:job_detail', kwargs={'slug': job.slug}) if not job.is_deleted else None
+        resolved[('job', job.slug)] = (job.title or job.slug, url)
+
+    for u in User.objects.filter(pk__in=_pks(ids['user'])):
+        resolved[('user', str(u.pk))] = (u.username, None)
+
+    for iv in Interview.all_objects.filter(pk__in=_pks(ids['interview'])).select_related('resume'):
+        cand = iv.resume.candidate_name if iv.resume_id else ''
+        label = f'Interview #{iv.pk}' + (f' · {cand}' if cand else '')
+        url = reverse('interviews:detail', kwargs={'pk': iv.pk}) if not iv.is_deleted else None
+        resolved[('interview', str(iv.pk))] = (label, url)
+
+    for ev in (InterviewEvaluation.all_objects
+               .filter(pk__in=_pks(ids['interview_evaluation']))
+               .select_related('interview__resume')):
+        cand = ev.interview.resume.candidate_name if ev.interview_id and ev.interview.resume_id else ''
+        label = f'Interview #{ev.interview_id} · {cand}' if cand else f'Evaluation #{ev.pk}'
+        resolved[('interview_evaluation', str(ev.pk))] = (label, None)
+
+    return resolved
+
+
+def _date_group_label(dt):
+    """Group heading for a row's date: 'Today', 'Yesterday', else a formatted date."""
+    today = timezone.localdate()
+    d = timezone.localtime(dt).date()
+    if d == today:
+        return 'Today'
+    if d == today - timedelta(days=1):
+        return 'Yesterday'
+    return date_filter(d, 'F j, Y')
+
+
 @_superuser_required
 def audit_log_list(request):
     qs = _filtered_audit_qs(request).order_by('-created_at')
     page_obj = Paginator(qs, 50).get_page(request.GET.get('page', 1))
 
+    resolved = _resolve_entities(page_obj.object_list)
+    prev_group = None
     for row in page_obj.object_list:
-        row.entity_url = _entity_url(row.entity_type, row.entity_id)
+        label, url = resolved.get((row.entity_type, row.entity_id), (row.entity_id, None))
+        row.entity_label = label
+        row.entity_url = url
+        group = _date_group_label(row.created_at)
+        # Only stamp the heading when the day changes (a page boundary may split a day).
+        row.date_group = group if group != prev_group else None
+        prev_group = group
 
     querystring = request.GET.copy()
     querystring.pop('page', None)
@@ -94,9 +164,13 @@ def audit_log_list(request):
 def audit_log_export_csv(request):
     qs = _filtered_audit_qs(request).order_by('-created_at')
 
+    # Human label appended as the LAST column so every existing raw column keeps
+    # its position/value and the export stays machine-parseable.
+    action_labels = dict(AuditLog.ACTION_CHOICES)
+
     def rows():
         yield ['Timestamp', 'Actor', 'Action', 'Entity Type', 'Entity ID',
-               'Details', 'Request ID']
+               'Details', 'Request ID', 'Action Label']
         for row in qs.iterator():
             yield [
                 row.created_at.strftime('%Y-%m-%d %H:%M:%S'),
@@ -106,6 +180,7 @@ def audit_log_export_csv(request):
                 _csv_safe(row.entity_id),
                 _csv_safe(row.details),
                 _csv_safe(row.request_id or ''),
+                _csv_safe(action_labels.get(row.action, row.action)),
             ]
 
     class Echo:
