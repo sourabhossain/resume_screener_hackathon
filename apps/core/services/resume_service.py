@@ -184,8 +184,11 @@ class ResumeService:
 
             resume.refresh_from_db()
 
+            from apps.core.services.audit import audit_log
+
             if resume.screening_status == 'needs_review':
                 logger.info(f"Resume {resume.id} flagged for manual review (job family uncertain)")
+                audit_log(None, 'resume.screening_needs_review', resume)
                 return {
                     'success': True,
                     'resume_id': resume.id,
@@ -195,6 +198,8 @@ class ResumeService:
 
             logger.info(f"Completed processing resume {resume.id}: Score={resume.final_score}")
 
+            audit_log(None, 'resume.screening_completed', resume,
+                      details=f'final_score={resume.final_score} tier={resume.tier}')
             return {
                 'success': True,
                 'resume_id': resume.id,
@@ -234,3 +239,6 @@ class ResumeService:
         resume.screening_status = 'failed'
         resume.reasoning = reason
         resume.save(update_fields=['screening_status', 'reasoning'])
+
+        from apps.core.services.audit import audit_log
+        audit_log(None, 'resume.screening_failed', resume)

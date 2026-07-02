@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from ..form_utils import form_errors_to_messages
 from ..forms import JobForm
 from ..models import Job, Resume
+from ..services import audit_log
 from ..utils import candidate_initial
 from ._helpers import _csv_safe, _ordered_active_resumes_queryset, _pipeline_stats
 
@@ -66,6 +67,7 @@ def job_create(request):
             job = form.save(commit=False)
             job.owner = request.user
             job.save()
+            audit_log(request.user, 'job.created', job, details=f'title={job.title}', request=request)
             messages.success(request, 'Job created successfully!')
             return redirect('core:job_detail', slug=job.slug)
         else:
@@ -107,6 +109,8 @@ def job_edit(request, slug):
         form = JobForm(request.POST, request.FILES, instance=job)
         if form.is_valid():
             form.save()
+            audit_log(request.user, 'job.updated', job,
+                      details=f'changed={",".join(form.changed_data)}', request=request)
             messages.success(request, 'Job updated successfully!')
             return redirect('core:job_detail', slug=job.slug)
         else:
@@ -121,6 +125,7 @@ def job_delete(request, slug):
     job = get_object_or_404(Job, slug=slug)
     if request.method == 'POST':
         job.soft_delete()
+        audit_log(request.user, 'job.deleted', job, details=f'title={job.title}', request=request)
         messages.success(request, f'Job "{job.title}" deleted successfully!')
         return redirect('core:job_list')
     return render(request, 'core/confirm_delete.html', {'object': job, 'type': 'job'})

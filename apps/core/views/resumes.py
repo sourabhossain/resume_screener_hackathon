@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from ..form_utils import clean_person_text, form_errors_to_messages
 from ..forms import ResumeEditForm, ResumeForm
 from ..models import Job, Resume
+from ..services import audit_log
 from ..utils import compute_file_hash
 from ._helpers import _get_active_resume, _ordered_active_resumes_queryset, _pipeline_stats
 
@@ -46,6 +47,8 @@ def resume_create(request, job_slug):
             from apps.core.tasks import screen_resume_task
             screen_resume_task.delay(resume.id)
 
+            audit_log(request.user, 'resume.uploaded', resume,
+                      details=f'candidate={resume.candidate_name} job={job.slug}', request=request)
             messages.success(
                 request,
                 'Resume added. AI screening is running in the background, the pipeline row will refresh automatically.',
@@ -67,6 +70,9 @@ def resume_edit(request, uuid):
     resume = _get_active_resume(uuid)
     SCORE_FIELDS = {'experience_score', 'education_score', 'skills_score',
                     'certification_score', 'achievement_score', 'final_score'}
+    # Capture the old score BEFORE binding the form: a ModelForm mutates its
+    # instance during clean(), so resume.final_score would already be the new value.
+    old_final_score = resume.final_score
     if request.method == 'POST':
         form = ResumeEditForm(request.POST, request.FILES, instance=resume)
         if form.is_valid():
@@ -86,6 +92,13 @@ def resume_edit(request, uuid):
                 else:
                     instance.tier, instance.recommendation = 'low', 'reject'
             instance.save()
+            if changed:
+                reason = form.cleaned_data.get('reason', '')
+                audit_log(
+                    request.user, 'resume.score_overridden', instance,
+                    details=f'old={old_final_score} new={instance.final_score} reason={reason}',
+                    request=request,
+                )
             messages.success(request, 'Resume updated successfully!')
             return redirect('core:resume_detail', uuid=uuid)
         else:
@@ -100,6 +113,8 @@ def resume_delete(request, uuid):
     job_slug = resume.job.slug
     if request.method == 'POST':
         resume.soft_delete()
+        audit_log(request.user, 'resume.deleted', resume,
+                  details=f'candidate={resume.candidate_name}', request=request)
         messages.success(request, f'Resume for "{resume.candidate_name}" deleted successfully!')
         return redirect('core:job_detail', slug=job_slug)
     return render(request, 'core/confirm_delete.html', {'object': resume, 'type': 'resume', 'job_slug': job_slug})
@@ -198,6 +213,8 @@ def resume_bulk_create(request, job_slug):
                 skipped.append(f'"{file.name}" - already submitted for this job')
                 continue
             screen_resume_task.delay(resume.id)
+            audit_log(request.user, 'resume.uploaded', resume,
+                      details=f'candidate={resume.candidate_name} job={job.slug} bulk', request=request)
             queued += 1
 
         if queued:
@@ -242,6 +259,7 @@ def resume_rescreen(request, uuid):
 
     screen_resume_task.delay(resume.id)
 
+    audit_log(request.user, 'resume.rescreen_requested', resume, request=request)
     if is_htmx:
         return _status_fragment()
     messages.success(request, 'AI screening queued! Results will appear shortly.')
@@ -277,8 +295,11 @@ def resume_status_update(request, uuid):
         new_status = request.POST.get('recruiter_status', '').strip()
         valid = {c[0] for c in Resume.RECRUITER_STATUS_CHOICES}
         if new_status in valid:
+            old_status = resume.recruiter_status
             resume.recruiter_status = new_status
             resume.save(update_fields=['recruiter_status'])
+            audit_log(request.user, 'resume.recruiter_status_changed', resume,
+                      details=f'old={old_status or "none"} new={new_status}', request=request)
             messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
         else:
             messages.error(request, 'Invalid status.')

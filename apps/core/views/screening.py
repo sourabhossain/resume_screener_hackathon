@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.shortcuts import redirect, render
 
 from ..models import Resume
+from ..services import audit_log
 
 def _failed_resumes_queryset():
     """Resumes whose AI screening did not complete (live jobs only)."""
@@ -108,8 +109,9 @@ def screening_rescreen_bulk(request):
         return redirect('core:screening_failed')
 
     Resume.objects.filter(id__in=ids, screening_status='failed').update(screening_status='processing')
-    for rid in ids:
-        screen_resume_task.delay(rid)
+    for resume in Resume.objects.filter(id__in=ids):
+        screen_resume_task.delay(resume.id)
+        audit_log(request.user, 'resume.rescreen_requested', resume, details='bulk', request=request)
 
     n = len(ids)
     messages.success(

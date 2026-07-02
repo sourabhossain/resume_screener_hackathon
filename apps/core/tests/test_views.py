@@ -393,6 +393,7 @@ class TestResumeViews:
             'certification_score': '',
             'achievement_score': '',
             'final_score': 87,
+            'reason': 'manual adjustment after panel review',
         }
         response = authenticated_client.post(
             reverse('core:resume_edit', kwargs={'uuid': sample_resume.uuid}),

@@ -110,6 +110,9 @@ def careers_apply(request, slug):
             from apps.core.tasks import screen_resume_task
             screen_resume_task.delay(resume.id)
 
+            from ..services import audit_log
+            audit_log(None, 'resume.uploaded', resume,
+                      details=f'candidate={resume.candidate_name} job={job.slug} public', request=request)
             return redirect('core:careers_thanks', slug=job.slug)
         else:
             form_errors_to_messages(request, form)

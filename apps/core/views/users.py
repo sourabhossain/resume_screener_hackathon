@@ -4,6 +4,7 @@ from django.contrib.auth.forms import SetPasswordForm, UserCreationForm
 from django.shortcuts import get_object_or_404, redirect, render
 
 from ..form_utils import clean_person_text, form_errors_to_messages
+from ..services import audit_log
 from ._helpers import User, _superuser_required, _validate_user_name_fields
 
 
@@ -26,6 +27,8 @@ def user_create(request):
             user.first_name = clean_person_text(request.POST.get('first_name', ''))
             user.last_name = clean_person_text(request.POST.get('last_name', ''))
             user.save()
+            audit_log(request.user, 'user.created', user,
+                      details=f'username={user.username}', request=request)
             messages.success(request, f'User "{user.username}" created successfully.')
             return redirect('core:user_list')
         elif not form.is_valid():
@@ -61,5 +64,7 @@ def user_toggle_active(request, pk):
             target.is_active = not target.is_active
             target.save()
             state = 'activated' if target.is_active else 'deactivated'
+            audit_log(request.user, f'user.{state}', target,
+                      details=f'username={target.username}', request=request)
             messages.success(request, f'User "{target.username}" has been {state}.')
     return redirect('core:user_list')

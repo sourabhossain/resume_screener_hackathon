@@ -8,6 +8,7 @@ from django.contrib import messages
 
 from apps.core.views import form_errors_to_messages
 from apps.core.models import Resume
+from apps.core.services import audit_log
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
 from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
 
@@ -36,6 +37,8 @@ def interview_create(request, resume_uuid):
                 interview = form.save(commit=False)
                 interview.resume = resume
                 interview.save()
+                audit_log(request.user, 'interview.created', interview,
+                          details=f'phase={interview.phase} resume={resume.uuid}', request=request)
                 messages.success(request, 'Interview scheduled.')
                 return redirect('interviews:detail', pk=interview.pk)
         if form.errors:
@@ -76,6 +79,8 @@ def interview_delete(request, pk):
     resume_uuid = interview.resume.uuid
     if request.method == 'POST':
         interview.soft_delete()
+        audit_log(request.user, 'interview.deleted', interview,
+                  details=f'resume={resume_uuid}', request=request)
         messages.success(request, 'Interview deleted.')
     return redirect('core:resume_detail', uuid=resume_uuid)
 
@@ -87,6 +92,9 @@ def evaluation_delete(request, token):
         return redirect('core:dashboard')
     interview_pk = ev.interview_id
     if request.method == 'POST':
+        # Log BEFORE the hard delete so the evaluation pk is still set.
+        audit_log(request.user, 'interview.eval_link_deleted', ev,
+                  details=f'interviewer={ev.interviewer_name} interview={interview_pk}', request=request)
         ev.delete()
         messages.success(request, 'Evaluation slot removed.')
     return redirect('interviews:detail', pk=interview_pk)
@@ -102,6 +110,8 @@ def evaluation_renew(request, token):
         ev.token = uuid.uuid4()
         ev.token_expires_at = timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS)
         ev.save(update_fields=['token', 'token_expires_at'])
+        audit_log(request.user, 'interview.eval_link_renewed', ev,
+                  details=f'interviewer={ev.interviewer_name} interview={ev.interview_id}', request=request)
         messages.success(request, f'New link generated for {ev.interviewer_name}.')
     return redirect('interviews:detail', pk=ev.interview_id)
 
@@ -133,6 +143,7 @@ def evaluate(request, token):
                 pct = round((sum(scores.values()) / MAX_SCORE) * 100)
                 recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
 
+            submitted_now = False
             with transaction.atomic():
                 locked = InterviewEvaluation.objects.select_for_update().get(pk=ev.pk)
                 if not locked.is_submitted and not locked.is_expired:
@@ -147,7 +158,12 @@ def evaluate(request, token):
                     locked.is_submitted = True
                     locked.submitted_at = timezone.now()
                     locked.save()
+                    submitted_now = True
 
+            if submitted_now:
+                # Public token form: no authenticated actor (actor=None).
+                audit_log(None, 'interview.evaluation_submitted', locked,
+                          details=f'interview={locked.interview_id} recommendation={recommendation}')
             return redirect('interviews:evaluate_done', token=token)
         else:
             form_errors_to_messages(request, form)

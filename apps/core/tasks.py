@@ -154,13 +154,22 @@ def close_expired_jobs():
     """
     from django.utils import timezone
     from apps.core.models import Job
+    from apps.core.services.audit import audit_log
 
     today = timezone.now().date()
+    expiring = list(Job.objects.filter(
+        status='active',
+        closing_date__isnull=False,
+        closing_date__lt=today,
+    ))
     count = Job.objects.filter(
         status='active',
         closing_date__isnull=False,
         closing_date__lt=today,
     ).update(status='closed', updated_at=timezone.now())
+
+    for job in expiring:
+        audit_log(None, 'job.auto_closed', job, details=f'title={job.title}')
 
     if count:
         logger.info("Auto-closed %d expired job(s) past their closing date", count)

@@ -227,6 +227,16 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
 class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for editing resumes - includes AI-generated fields that can be manually adjusted."""
 
+    SCORE_FIELDS = {'experience_score', 'education_score', 'skills_score',
+                    'certification_score', 'achievement_score', 'final_score'}
+
+    reason = forms.CharField(
+        required=False, label='Reason for score change',
+        help_text='Required when you change a score. Recorded in the audit trail (not stored on the résumé).',
+        widget=forms.Textarea(attrs={'class': 'form-input', 'rows': 2,
+                                     'placeholder': 'Why are you overriding the AI score?'}),
+    )
+
     class Meta:
         model = Resume
         fields = ['candidate_name', 'email', 'phone', 'file',
@@ -296,6 +306,13 @@ class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms
     def clean_file(self):
         """Validate uploaded file using mixin."""
         return self.validate_resume_file(self.cleaned_data.get('file'))
+
+    def clean(self):
+        cleaned = super().clean()
+        score_changed = any(f in self.changed_data for f in self.SCORE_FIELDS)
+        if score_changed and not (cleaned.get('reason') or '').strip():
+            self.add_error('reason', 'A reason is required when you change a score.')
+        return cleaned
 
     def clean_candidate_name(self):
         return clean_person_text(self.cleaned_data.get('candidate_name'), required=True)
