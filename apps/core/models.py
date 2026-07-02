@@ -2,7 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import IntegrityError, models
 from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
@@ -313,3 +313,100 @@ class ResumeNote(models.Model):
 
     def __str__(self):
         return f"Note on {self.resume.candidate_name} by {self.author}"
+
+class AuditLogQuerySet(models.QuerySet):
+    """QuerySet enforcing the append-only invariant at the app level.
+
+    update(), delete() and bulk_update() raise IntegrityError. bulk_create()
+    stays allowed as the legitimate batch-append path. This is an APP-LEVEL
+    guarantee only: raw SQL and the database layer are out of scope and can
+    still mutate the table.
+    """
+
+    def update(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; update() is not allowed.')
+
+    def delete(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; delete() is not allowed.')
+
+    def bulk_update(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; bulk_update() is not allowed.')
+
+class AuditLog(models.Model):
+    """Append-only trail of significant recruiter/system actions.
+
+    A plain models.Model (NOT SoftDeleteModel): rows are never modified or
+    deleted. Append-only is enforced at the app level via save()/delete() and
+    the manager (see AuditLogQuerySet); it is NOT a database-level guarantee.
+
+    entity_id stores a stable string reference (Resume.uuid / Job.slug /
+    Interview pk) rather than a ForeignKey, so rows survive entity deletion.
+    """
+
+    ACTION_CHOICES = [
+        ('job.created', 'Job created'),
+        ('job.updated', 'Job updated'),
+        ('job.deleted', 'Job deleted'),
+        ('job.restored', 'Job restored'),
+        ('job.auto_closed', 'Job auto-closed'),
+        ('resume.uploaded', 'Resume uploaded'),
+        ('resume.deleted', 'Resume deleted'),
+        ('resume.rescreen_requested', 'Resume rescreen requested'),
+        ('resume.recruiter_status_changed', 'Resume recruiter status changed'),
+        ('resume.score_overridden', 'Resume score overridden'),
+        ('resume.screening_completed', 'Resume screening completed'),
+        ('resume.screening_failed', 'Resume screening failed'),
+        ('resume.screening_needs_review', 'Resume screening needs review'),
+        ('interview.created', 'Interview created'),
+        ('interview.updated', 'Interview updated'),
+        ('interview.deleted', 'Interview deleted'),
+        ('interview.evaluation_submitted', 'Interview evaluation submitted'),
+        ('interview.eval_link_renewed', 'Interview eval link renewed'),
+        ('interview.eval_link_deleted', 'Interview eval link deleted'),
+        ('user.created', 'User created'),
+        ('user.activated', 'User activated'),
+        ('user.deactivated', 'User deactivated'),
+    ]
+
+    ENTITY_TYPE_CHOICES = [
+        ('job', 'Job'),
+        ('resume', 'Resume'),
+        ('interview', 'Interview'),
+        ('interview_evaluation', 'Interview Evaluation'),
+        ('user', 'User'),
+    ]
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    entity_type = models.CharField(max_length=32, choices=ENTITY_TYPE_CHOICES, blank=True)
+    entity_id = models.CharField(max_length=255, blank=True)
+    details = models.TextField(blank=True)
+    request_id = models.CharField(max_length=64, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = AuditLogQuerySet.as_manager()
+
+    class Meta:
+        db_table = 'audit_log'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['entity_type', 'entity_id'], name='audit_entity_idx'),
+            models.Index(fields=['-created_at'], name='audit_created_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.action} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise IntegrityError('AuditLog is append-only; existing rows cannot be modified.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; rows cannot be deleted.')
