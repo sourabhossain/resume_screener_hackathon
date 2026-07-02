@@ -22,6 +22,8 @@ _PRESENT = {'present', 'current', 'ongoing', 'now', 'till date', 'to date', 'dat
 
 _YEAR_RE = re.compile(r'(19|20)\d{2}')
 
+_BENGALI_DIGITS = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+
 def _abs_month(year: int, month: int) -> int:
     """Absolute month index so durations are simple subtraction."""
     return year * 12 + (month - 1)
@@ -36,7 +38,7 @@ def _parse_endpoint(raw: Optional[str], *, is_end: bool, today: datetime.date) -
     """
     if raw is None:
         return None
-    text = str(raw).strip().lower()
+    text = str(raw).strip().lower().translate(_BENGALI_DIGITS)
     if not text:
         return None
 
@@ -76,6 +78,7 @@ def _intervals(work_history, today: datetime.date) -> List[Tuple[int, int]]:
     intervals: List[Tuple[int, int]] = []
     if not isinstance(work_history, list):
         return intervals
+    today_idx = _abs_month(today.year, today.month)
     for entry in work_history:
         if not isinstance(entry, dict):
             continue
@@ -83,8 +86,11 @@ def _intervals(work_history, today: datetime.date) -> List[Tuple[int, int]]:
         end = _parse_endpoint(entry.get('end'), is_end=True, today=today)
         if start is None:
             continue
+        if start > today_idx:
+            continue
         if end is None:
-            end = _abs_month(today.year, today.month)
+            end = today_idx
+        end = min(end, today_idx)
         if end < start:
             continue
         intervals.append((start, end))
