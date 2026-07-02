@@ -127,9 +127,18 @@ class TestRecruiterViews:
     def test_create_get_and_post(self, authenticated_client, sample_resume):
         url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
         assert authenticated_client.get(url).status_code == 200
-        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': '2026-07-01', 'notes': 'x'})
+        future = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': future, 'notes': 'x'})
         assert resp.status_code == 302
         assert Interview.objects.filter(resume=sample_resume).exists()
+
+    def test_create_rejects_past_date(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        past = (timezone.now().date() - timedelta(days=1)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': past, 'notes': 'x'})
+        assert resp.status_code == 200
+        assert resp.context['form'].errors['scheduled_date'] == ['Interview date cannot be in the past.']
+        assert not Interview.objects.filter(resume=sample_resume).exists()
 
     def test_detail_renders(self, authenticated_client, interview):
         resp = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
