@@ -49,4 +49,7 @@ urlpatterns = [
     path('users/create/', views.user_create, name='user_create'),
     path('users/<int:pk>/password/', views.user_change_password, name='user_change_password'),
     path('users/<int:pk>/toggle/', views.user_toggle_active, name='user_toggle_active'),
+
+    path('audit/', views.audit_log_list, name='audit_log'),
+    path('audit/export/', views.audit_log_export_csv, name='audit_log_export'),
 ]

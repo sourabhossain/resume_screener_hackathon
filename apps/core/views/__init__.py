@@ -17,6 +17,7 @@ from ._helpers import (  # noqa: F401
     _superuser_required,
     _validate_user_name_fields,
 )
+from .audit import audit_log_export_csv, audit_log_list  # noqa: F401
 from .dashboard import dashboard, health_check  # noqa: F401
 from .jobs import (  # noqa: F401
     job_create,
