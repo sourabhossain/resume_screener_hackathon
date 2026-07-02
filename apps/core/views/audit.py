@@ -90,7 +90,20 @@ def _resolve_entities(rows):
     for res in Resume.all_objects.filter(uuid__in=ids['resume']).select_related('job'):
         live = not res.is_deleted and not res.job.is_deleted
         url = reverse('core:resume_detail', kwargs={'uuid': res.uuid}) if live else None
-        resolved[('resume', str(res.uuid))] = (res.candidate_name or str(res.uuid), url)
+        # Prefer the candidate's name; never surface the 'Unknown' extraction
+        # placeholder. Fall back to the job title for context, then a short uuid,
+        # and only call a genuinely empty name '(unnamed candidate)'.
+        name = (res.candidate_name or '').strip()
+        job_title = (res.job.title or '').strip() if res.job_id else ''
+        if name and name.lower() != 'unknown':
+            label = name
+        elif job_title:
+            label = job_title
+        elif not name:
+            label = '(unnamed candidate)'
+        else:
+            label = str(res.uuid)[:8]
+        resolved[('resume', str(res.uuid))] = (label, url)
 
     for job in Job.all_objects.filter(slug__in=ids['job']):
         url = reverse('core:job_detail', kwargs={'slug': job.slug}) if not job.is_deleted else None
@@ -108,8 +121,10 @@ def _resolve_entities(rows):
     for ev in (InterviewEvaluation.all_objects
                .filter(pk__in=_pks(ids['interview_evaluation']))
                .select_related('interview__resume')):
-        cand = ev.interview.resume.candidate_name if ev.interview_id and ev.interview.resume_id else ''
-        label = f'Interview #{ev.interview_id} · {cand}' if cand else f'Evaluation #{ev.pk}'
+        # Always a labelled 'Evaluation #N' (never a bare number), with the
+        # interviewer's name appended when recorded.
+        interviewer = (ev.interviewer_name or '').strip()
+        label = f'Evaluation #{ev.pk}' + (f' · {interviewer}' if interviewer else '')
         resolved[('interview_evaluation', str(ev.pk))] = (label, None)
 
     return resolved
@@ -129,7 +144,13 @@ def _date_group_label(dt):
 @_superuser_required
 def audit_log_list(request):
     qs = _filtered_audit_qs(request).order_by('-created_at')
-    page_obj = Paginator(qs, 50).get_page(request.GET.get('page', 1))
+    paginator = Paginator(qs, 50)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    # Page numbers with ellipsis truncation (e.g. 1 … 4 [5] 6 … 12), computed
+    # here so the template just renders the sequence.
+    page_range = list(paginator.get_elided_page_range(
+        page_obj.number, on_each_side=1, on_ends=1))
 
     resolved = _resolve_entities(page_obj.object_list)
     prev_group = None
@@ -147,6 +168,8 @@ def audit_log_list(request):
 
     return render(request, 'core/audit_log.html', {
         'page_obj': page_obj,
+        'page_range': page_range,
+        'ellipsis': paginator.ELLIPSIS,
         'actors': User.objects.filter(audit_logs__isnull=False).distinct().order_by('username'),
         'action_choices': AuditLog.ACTION_CHOICES,
         'querystring': querystring.urlencode(),

@@ -137,6 +137,86 @@ class TestAuditCsvExport:
         assert rows[1][7] == 'Job created'      # appended human label
 
 
+@pytest.mark.django_db
+class TestAuditIdColumn:
+    """The row id is dropped from the on-screen table but kept in the CSV/data-attr."""
+
+    def test_id_not_shown_as_table_column(self, superuser_client):
+        row = AuditLog.objects.create(action='job.created', entity_type='job', entity_id='a')
+        resp = superuser_client.get(reverse('core:audit_log'))
+        html = resp.content.decode()
+        # No visible '#<pk>' id cell, and no 'ID' column header.
+        assert f'#{row.pk}' not in html
+        assert '>ID</th>' not in html
+
+    def test_id_present_as_data_attribute(self, superuser_client):
+        row = AuditLog.objects.create(action='job.created', entity_type='job', entity_id='a')
+        resp = superuser_client.get(reverse('core:audit_log'))
+        assert f'data-audit-id="{row.pk}"' in resp.content.decode()
+
+    def test_csv_export_still_carries_the_record(self, superuser_client):
+        """The machine-readable export is unchanged: its Entity ID column stays."""
+        AuditLog.objects.create(action='job.created', entity_type='job', entity_id='slug-a')
+        resp = superuser_client.get(reverse('core:audit_log_export'))
+        rows = list(csv.reader(io.StringIO(b''.join(resp.streaming_content).decode())))
+        assert 'Entity ID' in rows[0]
+        assert 'slug-a' in rows[1]
+
+
+@pytest.mark.django_db
+class TestAuditPagination:
+    def _make_rows(self, n, action='job.created'):
+        for i in range(n):
+            AuditLog.objects.create(action=action, entity_type='job', entity_id=f'slug-{i}')
+
+    def test_page_two_returns_next_slice(self, superuser_client):
+        self._make_rows(60)
+        p1 = superuser_client.get(reverse('core:audit_log'), {'page': 1})
+        p2 = superuser_client.get(reverse('core:audit_log'), {'page': 2})
+        pks1 = {r.pk for r in p1.context['page_obj']}
+        pks2 = {r.pk for r in p2.context['page_obj']}
+        assert len(pks1) == 50
+        assert len(pks2) == 10
+        assert pks1.isdisjoint(pks2)             # a genuine next slice, no overlap
+        assert len(pks1 | pks2) == 60
+
+    def test_links_preserve_active_action_filter(self, superuser_client):
+        self._make_rows(60, action='job.created')
+        self._make_rows(5, action='resume.deleted')
+        resp = superuser_client.get(reverse('core:audit_log'), {'action': 'job.created'})
+        assert resp.context['querystring'] == 'action=job.created'
+        html = resp.content.decode()
+        # The Next / page links carry the filter alongside the page param.
+        assert 'page=2&action=job.created' in html
+        # Only the 60 filtered rows paginate (2 pages), not the resume.deleted ones.
+        assert resp.context['page_obj'].paginator.count == 60
+
+    def test_summary_line_shows_correct_range(self, superuser_client):
+        self._make_rows(60)
+        resp = superuser_client.get(reverse('core:audit_log'), {'page': 2})
+        html = resp.content.decode()
+        assert 'Showing' in html
+        page_obj = resp.context['page_obj']
+        assert page_obj.start_index() == 51
+        assert page_obj.end_index() == 60
+        assert page_obj.paginator.count == 60
+        assert '>51</span>' in html and '>60</span>' in html
+
+    def test_single_page_renders_no_controls(self, superuser_client):
+        self._make_rows(10)
+        resp = superuser_client.get(reverse('core:audit_log'))
+        html = resp.content.decode()
+        assert 'aria-label="Pagination"' not in html   # no prev/next/page controls
+        assert 'Showing' in html                        # summary still present
+
+    def test_ellipsis_range_present_for_many_pages(self, superuser_client):
+        self._make_rows(50 * 12)     # 12 pages
+        resp = superuser_client.get(reverse('core:audit_log'), {'page': 6})
+        page_range = resp.context['page_range']
+        assert resp.context['ellipsis'] in page_range   # truncated with an ellipsis
+        assert 1 in page_range and 12 in page_range      # first and last always shown
+
+
 # --------------------------------------------------------------- polish helpers
 class TestBadgeCategory:
     @pytest.mark.parametrize('action,expected', [
@@ -184,6 +264,19 @@ class TestDetailsFilter:
     def test_empty_is_blank(self):
         assert audit_details('') == ''
 
+    def test_uuid_is_truncated_with_full_value_in_tooltip(self):
+        full = '84694ebc-1111-2222-3333-444455556666'
+        out = audit_details(f'resume={full}')
+        assert '84694ebc…' in out              # truncated to first 8 chars
+        assert f'title="{full}"' in out         # full value kept in the tooltip
+        assert full not in out.replace(f'title="{full}"', '')   # not shown inline
+
+    def test_non_uuid_content_is_escaped(self):
+        # Details are untrusted; any HTML in them must be escaped, not rendered.
+        out = audit_details('note=<script>alert(1)</script>')
+        assert '<script>' not in out
+        assert '&lt;script&gt;' in out
+
 
 @pytest.mark.django_db
 class TestEntityLabels:
@@ -215,6 +308,36 @@ class TestEntityLabels:
         AuditLog.objects.create(action='job.created', entity_type='job', entity_id=sample_job.slug)
         resp = superuser_client.get(reverse('core:audit_log'))
         assert list(resp.context['page_obj'])[0].entity_label == sample_job.title
+
+    def test_unknown_candidate_name_falls_back_to_job_title(self, superuser_client, sample_job):
+        res = Resume.objects.create(job=sample_job, candidate_name='Unknown', final_score=50)
+        AuditLog.objects.create(action='resume.uploaded', entity_type='resume',
+                                entity_id=str(res.uuid))
+        resp = superuser_client.get(reverse('core:audit_log'))
+        label = list(resp.context['page_obj'])[0].entity_label
+        assert label == sample_job.title       # never the literal 'Unknown'
+        assert label != 'Unknown'
+
+    def test_empty_candidate_name_shows_unnamed_placeholder(self, superuser_client, sample_job):
+        # candidate_name empty AND job with no title -> '(unnamed candidate)'.
+        job = Job.objects.create(owner=sample_job.owner, title='', description='x', status='active')
+        res = Resume.objects.create(job=job, candidate_name='', final_score=50)
+        AuditLog.objects.create(action='resume.uploaded', entity_type='resume',
+                                entity_id=str(res.uuid))
+        resp = superuser_client.get(reverse('core:audit_log'))
+        assert list(resp.context['page_obj'])[0].entity_label == '(unnamed candidate)'
+
+    def test_evaluation_label_is_numbered_with_interviewer(self, superuser_client, sample_resume):
+        from datetime import date
+
+        from apps.interviews.models import Interview, InterviewEvaluation
+        interview = Interview.objects.create(resume=sample_resume, scheduled_date=date(2020, 1, 1))
+        ev = InterviewEvaluation.objects.create(interview=interview, interviewer_name='Jane Smith')
+        AuditLog.objects.create(action='interview.evaluation_submitted',
+                                entity_type='interview_evaluation', entity_id=str(ev.pk))
+        resp = superuser_client.get(reverse('core:audit_log'))
+        label = list(resp.context['page_obj'])[0].entity_label
+        assert label == f'Evaluation #{ev.pk} · Jane Smith'
 
     def test_entity_resolution_has_no_n_plus_1(self, superuser_client, sample_job):
         """Query count for the list view must not grow with the number of rows."""
