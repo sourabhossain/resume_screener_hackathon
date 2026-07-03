@@ -6,7 +6,11 @@ from django.db import transaction
 logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3, soft_time_limit=180, time_limit=210, acks_late=True)
-def screen_resume_task(self, resume_id: int):
+def screen_resume_task(self, resume_id: int, job_type: str = None):
+    """Screen a resume. When job_type is provided (a valid job-family key), the
+    detector is skipped and that family is used — this is how a needs-review
+    resolution re-runs screening with a recruiter-chosen family. Left as None
+    for the normal flow, so existing callers are unaffected."""
     from apps.core.models import Resume
     from apps.core.services.resume_service import ResumeService
 
@@ -19,7 +23,7 @@ def screen_resume_task(self, resume_id: int):
 
         logger.info(f"Starting screening for resume {resume_id}")
 
-        result = ResumeService.process_resume(resume)
+        result = ResumeService.process_resume(resume, job_type=job_type)
 
         if result.get('success'):
             logger.info(f"Completed screening for resume {resume_id}: Score={result.get('final_score')}, Tier={result.get('tier')}")

@@ -39,7 +39,28 @@ class TestScreenResumeTaskSuccess:
                    return_value={'success': True}) as mock_process:
             screen_resume_task(sample_resume.id)
 
-        mock_process.assert_called_once_with(sample_resume)
+        mock_process.assert_called_once_with(sample_resume, job_type=None)
+
+    def test_default_job_type_is_none_backward_compatible(self, sample_resume):
+        """Existing callers dispatch without job_type; the task defaults it to
+        None and passes that through unchanged."""
+        from apps.core.tasks import screen_resume_task
+
+        with patch('apps.core.services.resume_service.ResumeService.process_resume',
+                   return_value={'success': True}) as mock_process:
+            screen_resume_task(sample_resume.id)
+
+        mock_process.assert_called_once_with(sample_resume, job_type=None)
+
+    def test_job_type_threaded_to_process_resume(self, sample_resume):
+        """A supplied job_type (needs-review resolution) reaches process_resume."""
+        from apps.core.tasks import screen_resume_task
+
+        with patch('apps.core.services.resume_service.ResumeService.process_resume',
+                   return_value={'success': True}) as mock_process:
+            screen_resume_task(sample_resume.id, job_type='data_ai')
+
+        mock_process.assert_called_once_with(sample_resume, job_type='data_ai')
 
     def test_failure_result_logged_but_returned(self, sample_resume):
         from apps.core.tasks import screen_resume_task

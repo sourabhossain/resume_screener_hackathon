@@ -39,6 +39,7 @@ urlpatterns = [
     path('talent-pool/', views.talent_pool, name='talent_pool'),
 
     path('needs-review/', views.needs_review_list, name='needs_review'),
+    path('resumes/<uuid:uuid>/resolve-review/', views.resume_resolve_review, name='resume_resolve_review'),
 
     path('screening-failed/', views.screening_failed_list, name='screening_failed'),
     path('screening-failed/rescreen/', views.screening_rescreen_bulk, name='screening_rescreen_bulk'),

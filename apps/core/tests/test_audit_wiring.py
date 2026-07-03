@@ -161,7 +161,7 @@ class TestScreeningTransitions:
     def test_completed_logs_no_actor(self, sample_resume, monkeypatch):
         monkeypatch.setattr(ResumeService, 'extract_text', staticmethod(lambda resume: 'cv text'))
         monkeypatch.setattr(ResumeService, 'run_screening',
-                            staticmethod(lambda resume: {'final_score': 80}))
+                            staticmethod(lambda resume, job_type=None: {'final_score': 80}))
         ResumeService.process_resume(sample_resume)
         row = _rows('resume.screening_completed', sample_resume.uuid).get()
         assert row.actor is None
@@ -169,7 +169,7 @@ class TestScreeningTransitions:
     def test_needs_review_logs(self, sample_resume, monkeypatch):
         monkeypatch.setattr(ResumeService, 'extract_text', staticmethod(lambda resume: 'cv text'))
         monkeypatch.setattr(ResumeService, 'run_screening',
-                            staticmethod(lambda resume: {'needs_review': True, 'reasoning': 'uncertain'}))
+                            staticmethod(lambda resume, job_type=None: {'needs_review': True, 'reasoning': 'uncertain'}))
         ResumeService.process_resume(sample_resume)
         assert _rows('resume.screening_needs_review', sample_resume.uuid).exists()
 
@@ -243,11 +243,22 @@ class TestAuditPIIAbsence:
             reverse('core:resume_status_update', kwargs={'uuid': resume.uuid}),
             {'recruiter_status': Resume.RECRUITER_STATUS_CHOICES[0][0]},
         )
+        # 5) Needs-review resolve (assign a job family + re-screen).
+        review_resume = Resume.objects.create(
+            job=sample_job, candidate_name='Review Pii', screening_status='needs_review',
+            email=self.EMAIL, phone=self.PHONE, raw_text=self.RAW, reasoning=self.RAW,
+        )
+        with patch('apps.core.tasks.screen_resume_task.delay'):
+            authenticated_client.post(
+                reverse('core:resume_resolve_review', kwargs={'uuid': review_resume.uuid}),
+                {'job_type': 'software_engineering'},
+            )
 
         # Guard the guard: the flows actually produced the audit rows we care about.
         assert _rows('resume.uploaded').filter(entity_type='resume').exists()
         assert _rows('resume.score_overridden', resume.uuid).exists()
         assert _rows('resume.recruiter_status_changed', resume.uuid).exists()
+        assert _rows('resume.rescreen_requested', review_resume.uuid).exists()
 
         # No marker may appear in ANY audit row's details.
         blob = '\n'.join(AuditLog.objects.values_list('details', flat=True))

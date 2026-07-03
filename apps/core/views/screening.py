@@ -6,6 +6,7 @@ from django.shortcuts import redirect, render
 
 from ..models import Resume
 from ..services import audit_log
+from ._helpers import _get_active_resume
 
 def _failed_resumes_queryset():
     """Resumes whose AI screening did not complete (live jobs only)."""
@@ -52,6 +53,7 @@ def talent_pool(request):
 @login_required
 def needs_review_list(request):
     from django.core.paginator import Paginator
+    from apps.core.services.job_families import family_choices
     resumes_qs = _needs_review_resumes_queryset()
     search_q = request.GET.get('q', '').strip()
     if search_q:
@@ -65,7 +67,60 @@ def needs_review_list(request):
         'page_obj': page_obj,
         'search_q': search_q,
         'total': resumes_qs.count(),
+        'family_choices': family_choices(),
     })
+
+@login_required
+def resume_resolve_review(request, uuid):
+    """Resolve a needs-review candidate by assigning a recruiter-chosen job
+    family, then re-run screening with that family (detection skipped) so the
+    candidate reappears in the pipeline with fresh results.
+
+    login_required + _get_active_resume, matching other resume actions.
+    """
+    from apps.core.tasks import screen_resume_task
+    from apps.core.services.job_families import VALID_JOB_TYPES, family_choices
+
+    resume = _get_active_resume(uuid)
+
+    if request.method != 'POST':
+        return redirect('core:needs_review')
+
+    if resume.screening_status != 'needs_review':
+        messages.error(request, 'This candidate is not awaiting review.')
+        return redirect('core:needs_review')
+
+    # Never trust the select: the job family must be in the catalog.
+    job_type = (request.POST.get('job_type') or '').strip()
+    if job_type not in VALID_JOB_TYPES:
+        messages.error(request, 'Please choose a valid job family.')
+        return redirect('core:needs_review')
+
+    # Claim the row (guards a double-submit / concurrent resolve).
+    updated = Resume.objects.filter(uuid=uuid, screening_status='needs_review').update(
+        screening_status='processing',
+        verification_status='pending',
+        verification_results={},
+        verification_score=None,
+        verified_at=None,
+    )
+    if not updated:
+        messages.info(request, 'This candidate is no longer awaiting review.')
+        return redirect('core:needs_review')
+
+    screen_resume_task.delay(resume.id, job_type=job_type)
+
+    # No dedicated migration-bearing ACTION_CHOICE: reuse rescreen_requested and
+    # record the chosen family in details (machine value, no PII).
+    audit_log(request.user, 'resume.rescreen_requested', resume,
+              details=f'resolved review as {job_type}', request=request)
+
+    label = dict(family_choices()).get(job_type, job_type)
+    messages.success(
+        request,
+        f'Re-screening {resume.candidate_name} as {label}. Results will appear shortly.',
+    )
+    return redirect('core:needs_review')
 
 @login_required
 def screening_failed_list(request):

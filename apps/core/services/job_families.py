@@ -34,6 +34,14 @@ FALLBACK_ROLE = 'software_engineering'
 
 VALID_JOB_TYPES = frozenset(JOB_FAMILIES)
 
+def family_choices():
+    """(value, human_label) pairs for the job-family taxonomy, in catalog order.
+
+    Values are the machine keys (validated against VALID_JOB_TYPES); labels are
+    a humanized form for recruiter-facing selects.
+    """
+    return [(value, value.replace('_', ' ').title()) for value in JOB_FAMILIES]
+
 def render_catalog() -> str:
     """Render the family catalog grouped, as '- label - description' lines."""
     lines = []

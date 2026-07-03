@@ -103,7 +103,7 @@ class ResumeService:
             resume.save(update_fields=update_fields)
 
     @staticmethod
-    def run_screening(resume) -> ScreeningResult:
+    def run_screening(resume, job_type=None) -> ScreeningResult:
         from apps.core.services.ai_screener import screen_resume
 
         if not resume.job.description:
@@ -114,7 +114,7 @@ class ResumeService:
 
         result = screen_resume(
             resume.raw_text, resume.job.description,
-            resume_id=resume.id, job_type="",
+            resume_id=resume.id, job_type=job_type or "",
             required_experience=resume.job.required_experience,
             required_skills=resume.job.required_skills,
         )
@@ -172,14 +172,14 @@ class ResumeService:
         transaction.on_commit(lambda: verify_resume_links_task.delay(resume.id))
 
     @classmethod
-    def process_resume(cls, resume) -> Dict[str, Any]:
+    def process_resume(cls, resume, job_type=None) -> Dict[str, Any]:
         try:
             resume.screening_status = 'processing'
             resume.save(update_fields=['screening_status'])
 
             raw_text = cls.extract_text(resume)
             cls._fill_contact_info(resume, raw_text)
-            result = cls.run_screening(resume)
+            result = cls.run_screening(resume, job_type=job_type)
             cls.apply_screening_result(resume, result)
 
             resume.refresh_from_db()

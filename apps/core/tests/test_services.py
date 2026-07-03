@@ -114,7 +114,7 @@ class TestResumeService:
 
         monkeypatch.setattr(ResumeService, 'extract_text', staticmethod(lambda r: 'cv text'))
         monkeypatch.setattr(ResumeService, '_fill_contact_info', classmethod(lambda cls, r, t: None))
-        def _boom(resume):
+        def _boom(resume, job_type=None):
             raise AIScreeningError('Request timed out.', stage='screening')
         monkeypatch.setattr(ResumeService, 'run_screening', staticmethod(_boom))
 

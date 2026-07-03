@@ -47,6 +47,7 @@ from .screening import (  # noqa: F401
     _failed_resumes_queryset,
     _needs_review_resumes_queryset,
     needs_review_list,
+    resume_resolve_review,
     screening_failed_list,
     screening_rescreen_bulk,
     talent_pool,
