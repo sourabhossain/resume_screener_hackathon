@@ -34,13 +34,38 @@ FALLBACK_ROLE = 'software_engineering'
 
 VALID_JOB_TYPES = frozenset(JOB_FAMILIES)
 
+# Explicit recruiter-facing display labels, keyed by machine value. Kept as a
+# parallel map (not folded into JOB_FAMILIES) so the LLM-facing render_catalog()
+# and its (group, desc) tuple shape stay byte-identical: display labels are for
+# humans only and must never leak into the detector's expected vocabulary.
+# Every key in JOB_FAMILIES must appear here (enforced by tests).
+FAMILY_LABELS = {
+    'software_engineering': 'Software Engineering',
+    'devops_sre': 'DevOps / SRE',
+    'qa_test': 'QA & Testing',
+    'data_ai': 'Data & AI',
+    'security': 'Security',
+    'product_management': 'Product Management',
+    'design_creative': 'Design & Creative',
+    'project_management': 'Project & Program Management',
+    'sales': 'Sales',
+    'marketing': 'Marketing',
+    'customer_success': 'Customer Success',
+    'customer_support': 'Customer Support',
+    'finance_admin': 'Finance & Accounting',
+    'hr_recruitment': 'HR & Recruitment',
+    'legal_compliance': 'Legal & Compliance',
+    'it_internal': 'IT & Internal Support',
+    'operations': 'Operations',
+}
+
 def family_choices():
     """(value, human_label) pairs for the job-family taxonomy, in catalog order.
 
     Values are the machine keys (validated against VALID_JOB_TYPES); labels are
-    a humanized form for recruiter-facing selects.
+    the explicit recruiter-facing names from FAMILY_LABELS.
     """
-    return [(value, value.replace('_', ' ').title()) for value in JOB_FAMILIES]
+    return [(value, FAMILY_LABELS[value]) for value in JOB_FAMILIES]
 
 def render_catalog() -> str:
     """Render the family catalog grouped, as '- label - description' lines."""
