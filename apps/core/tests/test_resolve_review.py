@@ -1,5 +1,6 @@
 """Tests for the needs-review resolve flow (resume_resolve_review):
 assign a recruiter-chosen job family and re-screen with detection skipped."""
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 import pytest
@@ -125,3 +126,75 @@ class TestResolveReview:
                                    entity_id=str(sample_resume.uuid))
         assert 'data_ai' in row.details
         assert 'Data & AI' not in row.details
+
+
+class _StartTagCollector(HTMLParser):
+    """Collect every start tag as (tag, {attr: value}) for markup assertions."""
+
+    def __init__(self):
+        super().__init__()
+        self.tags = []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+
+
+@pytest.mark.django_db
+class TestNeedsReviewMarkup:
+    """Regression guards for the Tailwind migration of needs_review.html.
+
+    These pin the two properties the migration must never regress: the
+    Alpine wrapper/inner-flex decoupling, and the removal of the bespoke
+    inline-style dark-mode hack.
+    """
+
+    def _needs_review(self, resume):
+        resume.screening_status = 'needs_review'
+        resume.reasoning = 'Job family uncertain from the description'
+        resume.save(update_fields=['screening_status', 'reasoning'])
+        return resume
+
+    def test_no_flex_or_grid_inline_style_on_an_x_show_element(
+        self, authenticated_client, sample_resume
+    ):
+        """Alpine decoupling: x-show toggles display, so it must never sit on an
+        element whose own inline style forces display:flex/grid — that fight
+        broke the layout before commit 464c306. Pins it through the rewrite."""
+        self._needs_review(sample_resume)
+        content = authenticated_client.get(reverse('core:needs_review')).content.decode()
+
+        collector = _StartTagCollector()
+        collector.feed(content)
+
+        offenders = []
+        for tag, attrs in collector.tags:
+            if 'x-show' not in attrs:
+                continue
+            style = (attrs.get('style') or '').replace(' ', '').lower()
+            if 'display:flex' in style or 'display:grid' in style:
+                offenders.append((tag, attrs.get('x-show'), attrs.get('style')))
+        assert not offenders, f"x-show sits on a flex/grid inline-styled element: {offenders}"
+
+    def test_bespoke_inline_style_darkmode_hack_is_gone(
+        self, authenticated_client, sample_resume
+    ):
+        """The page must render via Tailwind dark: variants, not the old
+        [style*=...] attribute-matching <style> block or its .nr-root scope."""
+        self._needs_review(sample_resume)
+        content = authenticated_client.get(reverse('core:needs_review')).content.decode()
+
+        assert '[style*=' not in content   # the attribute-matching selector hack
+        assert 'nr-root' not in content    # the scope class it hung off of
+
+    def test_resolve_control_and_family_options_still_render(
+        self, authenticated_client, sample_resume
+    ):
+        """Intent of the pre-existing markup assertions, restated for this
+        migration: the resolve form posts to the resolve URL and renders the
+        job-family options."""
+        self._needs_review(sample_resume)
+        content = authenticated_client.get(reverse('core:needs_review')).content.decode()
+
+        assert _url(sample_resume) in content       # resolve form action preserved
+        assert 'Resolve &amp; re-screen' in content  # the recently-fixed submit label
+        assert 'value="software_engineering"' in content  # a catalog family option
