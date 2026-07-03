@@ -47,8 +47,9 @@ def pending_resume(db, sample_job):
     )
 
 def _rank_cell(row_html):
-    """Return just the first <td> (the Rank cell) from a rendered row."""
-    return row_html.split('</td>', 1)[0]
+    """Return the Rank cell from a rendered row. A compare-selection checkbox
+    cell now precedes it, so the Rank cell is the second <td>."""
+    return row_html.split('</td>')[1]
 
 @pytest.mark.django_db
 class TestRankDisplay:

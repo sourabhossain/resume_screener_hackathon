@@ -1,5 +1,6 @@
 """Recruiter-facing Job views: list, CRUD, pipeline search, CSV export."""
 import re
+import uuid as uuid_lib
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -100,6 +101,55 @@ def job_detail(request, slug):
             'search_q': search_q,
         },
     )
+
+
+@login_required
+def job_compare(request, slug):
+    """Side-by-side comparison of 2-4 candidates of THIS job.
+
+    Read-only, shareable GET: ?candidates=<uuid>,<uuid>[,...]. Not audit-logged
+    (consistent with the no-'Viewed'-logging decision). Soft-delete visibility
+    matches the rest of the app: the job must be live (get_object_or_404 over
+    Job.objects), and every uuid must resolve to an active resume of this job.
+    """
+    from ..services.comparison import build_comparison
+
+    job = get_object_or_404(Job, slug=slug)
+
+    raw = request.GET.get('candidates', '')
+    ordered, seen = [], set()
+    for token in raw.split(','):
+        token = token.strip()
+        if token and token not in seen:
+            seen.add(token)
+            ordered.append(token)
+
+    if not (2 <= len(ordered) <= 4):
+        messages.error(request, 'Select 2 to 4 candidates to compare.')
+        return redirect('core:job_detail', slug=job.slug)
+
+    try:
+        wanted = [uuid_lib.UUID(token) for token in ordered]
+    except (ValueError, TypeError):
+        messages.error(request, 'One or more selected candidates are invalid.')
+        return redirect('core:job_detail', slug=job.slug)
+
+    # ONE query, scoped to this job's active resumes. Resume.objects already
+    # excludes soft-deleted resumes; job=job + job__is_deleted=False rejects
+    # cross-job mixing and deleted-job candidates.
+    found = {
+        str(r.uuid): r
+        for r in Resume.objects.filter(
+            job=job, job__is_deleted=False, uuid__in=wanted
+        ).select_related('job')
+    }
+    if len(found) != len(wanted):
+        messages.error(request, 'Some selected candidates could not be found for this job.')
+        return redirect('core:job_detail', slug=job.slug)
+
+    candidates = [found[str(u)] for u in wanted]
+    context = {'job': job, 'candidates': candidates, **build_comparison(candidates)}
+    return render(request, 'core/job_compare.html', context)
 
 
 @login_required

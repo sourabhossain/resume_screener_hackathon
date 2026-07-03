@@ -20,6 +20,7 @@ from ._helpers import (  # noqa: F401
 from .audit import audit_log_export_csv, audit_log_list  # noqa: F401
 from .dashboard import dashboard, health_check  # noqa: F401
 from .jobs import (  # noqa: F401
+    job_compare,
     job_create,
     job_delete,
     job_detail,

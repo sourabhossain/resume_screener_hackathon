@@ -7,6 +7,15 @@
     hx-swap="outerHTML"
     {% endif %}>
 
+    <td class="px-4 py-4 text-center align-middle">
+        <input type="checkbox" value="{{ resume.uuid }}"
+               @change="toggle('{{ resume.uuid }}', $event.target.checked)"
+               :checked="selected.includes('{{ resume.uuid }}')"
+               :disabled="selected.length >= 4 && !selected.includes('{{ resume.uuid }}')"
+               class="h-4 w-4 cursor-pointer rounded border-zinc-300 accent-primary-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600"
+               aria-label="Select {{ resume.candidate_name|title }} to compare">
+    </td>
+
     <td data-label="Rank" class="px-4 py-4 text-center align-middle">
         {% if rank and resume.final_score is not None %}
         <span class="inline-flex h-7 w-7 items-center justify-center rounded-full
