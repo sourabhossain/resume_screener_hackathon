@@ -194,6 +194,68 @@ class TestUserFlows:
         assert _rows('user.activated', user.pk).exists()
 
 
+# ------------------------------------------------------------ PII-absence guard
+@pytest.mark.django_db
+class TestAuditPIIAbsence:
+    """Audit details must never leak candidate PII. Run every instrumented flow
+    that touches a candidate with distinctive email/phone/raw_text markers, then
+    assert none of the markers appear in any AuditLog.details."""
+
+    EMAIL = 'pii.marker.zzz@secret-domain.invalid'
+    PHONE = '+8801700000042'
+    RAW = 'RAWTEXTPIIMARKER_XYZ'
+    _PDF = b'%PDF-1.4 minimal'
+
+    def test_no_candidate_pii_in_any_audit_details(self, authenticated_client, client, sample_job):
+        # A resume with distinctive PII for the override + status-change flows.
+        resume = Resume.objects.create(
+            job=sample_job, candidate_name='Pii Person',
+            email=self.EMAIL, phone=self.PHONE, raw_text=self.RAW,
+            experience_score=85, education_score=75, skills_score=90, final_score=85,
+        )
+
+        with patch('apps.core.tasks.screen_resume_task.delay'):
+            # 1) Recruiter upload.
+            authenticated_client.post(
+                reverse('core:resume_create', kwargs={'job_slug': sample_job.slug}),
+                {'candidate_name': 'Uploaded Pii',
+                 'file': SimpleUploadedFile('cv.pdf', self._PDF, content_type='application/pdf')},
+            )
+            # 2) Public careers apply (email/phone entered by the applicant).
+            client.post(reverse('core:careers_apply', kwargs={'slug': sample_job.slug}), {
+                'candidate_name': 'Applicant Pii', 'email': self.EMAIL, 'phone': self.PHONE,
+                'file': SimpleUploadedFile('cv.pdf', self._PDF, content_type='application/pdf'),
+            })
+
+        # 3) Score override (mandatory reason).
+        authenticated_client.post(reverse('core:resume_edit', kwargs={'uuid': resume.uuid}), {
+            'candidate_name': resume.candidate_name,
+            'experience_score': resume.experience_score,
+            'education_score': resume.education_score,
+            'skills_score': resume.skills_score,
+            'certification_score': '',
+            'achievement_score': '',
+            'final_score': 42,
+            'reason': 'panel adjusted after debrief',
+        })
+        # 4) Recruiter status change.
+        authenticated_client.post(
+            reverse('core:resume_status_update', kwargs={'uuid': resume.uuid}),
+            {'recruiter_status': Resume.RECRUITER_STATUS_CHOICES[0][0]},
+        )
+
+        # Guard the guard: the flows actually produced the audit rows we care about.
+        assert _rows('resume.uploaded').filter(entity_type='resume').exists()
+        assert _rows('resume.score_overridden', resume.uuid).exists()
+        assert _rows('resume.recruiter_status_changed', resume.uuid).exists()
+
+        # No marker may appear in ANY audit row's details.
+        blob = '\n'.join(AuditLog.objects.values_list('details', flat=True))
+        assert self.EMAIL not in blob
+        assert self.PHONE not in blob
+        assert self.RAW not in blob
+
+
 # -------------------------------------------------------------------- interviews
 @pytest.mark.django_db
 class TestInterviewFlows:

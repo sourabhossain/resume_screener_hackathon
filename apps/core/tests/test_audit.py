@@ -24,6 +24,14 @@ class TestAuditLogAppendOnly:
             AuditLog.objects.all().update(details='mutated')
         assert AuditLog.objects.get().details == ''
 
+    def test_queryset_bulk_update_raises_and_leaves_row_unchanged(self):
+        row = self._row()
+        row.details = 'mutated'
+        with pytest.raises(IntegrityError):
+            AuditLog.objects.bulk_update([row], ['details'])
+        row.refresh_from_db()
+        assert row.details == ''
+
     def test_queryset_delete_raises_and_row_survives(self):
         self._row()
         with pytest.raises(IntegrityError):

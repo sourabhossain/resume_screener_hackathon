@@ -52,6 +52,26 @@ class TestScreenResumeTaskSuccess:
         assert 'LLM error' in result['error']
 
 @pytest.mark.django_db
+class TestScreenResumeTaskIdempotency:
+
+    def test_already_completed_is_skipped(self, sample_resume):
+        """A resume already in 'completed' state is skipped: no reprocessing and
+        no duplicate audit row (guards against a re-dispatched/duplicate task)."""
+        from apps.core.tasks import screen_resume_task
+        from apps.core.models import AuditLog
+
+        sample_resume.screening_status = 'completed'
+        sample_resume.save(update_fields=['screening_status'])
+        audit_before = AuditLog.objects.count()
+
+        with patch('apps.core.services.resume_service.ResumeService.process_resume') as mock_process:
+            result = screen_resume_task(sample_resume.id)
+
+        mock_process.assert_not_called()                       # no reprocessing
+        assert result.get('skipped') == 'already_completed'
+        assert AuditLog.objects.count() == audit_before        # no duplicate audit row
+
+@pytest.mark.django_db
 class TestScreenResumeTaskNotFound:
 
     def test_missing_resume_sets_failed_status(self):
