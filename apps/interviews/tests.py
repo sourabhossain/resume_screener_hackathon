@@ -384,6 +384,34 @@ class TestInterviewCalendar:
         # Timed ascending first, untimed last.
         assert day['interviews'] == [early, late, untimed]
 
+    # --- Part B: rendered-HTML / presentation checks -----------------------
+
+    def test_desktop_seven_column_grid_markup(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        resp = authenticated_client.get(self.url)
+        assert b'lg:grid-cols-7' in resp.content          # single 7-col desktop grid
+        assert resp.content.count(b'data-day-column') == 7
+
+    def test_card_shows_time_job_title_and_ics_link(self, authenticated_client, sample_resume):
+        d = _monday() + timedelta(days=2)
+        iv = Interview.objects.create(resume=sample_resume, phase='2',
+                                      scheduled_date=d, scheduled_time=time(9, 30))
+        resp = authenticated_client.get(self.url, {'week': d.isoformat()})
+        content = resp.content.decode()
+        assert '09:30' in content                          # HH:MM on a timed card
+        assert sample_resume.job.title in content          # job title (line 3)
+        assert reverse('interviews:ics', kwargs={'pk': iv.pk}) in content  # per-card ics link
+
+    def test_today_column_highlight_present_on_current_week(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        resp = authenticated_client.get(self.url)          # defaults to current week
+        assert b'day-today' in resp.content
+
+    def test_today_column_highlight_absent_on_other_week(self, authenticated_client):
+        far = (_monday() + timedelta(days=70)).isoformat()
+        resp = authenticated_client.get(self.url, {'week': far})
+        assert b'day-today' not in resp.content
+
 
 @pytest.mark.django_db
 class TestInterviewICS:

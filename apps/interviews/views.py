@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -92,6 +93,16 @@ def interview_calendar(request):
         .filter(scheduled_date__range=(monday, sunday),
                 resume__is_deleted=False, resume__job__is_deleted=False)
         .select_related('resume', 'resume__job')
+        # Pending/submitted evaluation counts via annotation (single query, no
+        # N+1) so cards can show status without touching the model properties.
+        .annotate(
+            n_pending=Count('evaluations',
+                            filter=Q(evaluations__is_submitted=False,
+                                     evaluations__is_deleted=False)),
+            n_submitted=Count('evaluations',
+                              filter=Q(evaluations__is_submitted=True,
+                                       evaluations__is_deleted=False)),
+        )
         .order_by('scheduled_date', 'phase')
     )
 
