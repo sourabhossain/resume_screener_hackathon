@@ -412,6 +412,35 @@ class TestInterviewCalendar:
         resp = authenticated_client.get(self.url, {'week': far})
         assert b'day-today' not in resp.content
 
+    def test_day_header_is_static_and_precedes_card(self, authenticated_client, sample_resume):
+        # Regression for the sticky-header bug: the day header must be a plain
+        # static element rendered BEFORE its cards, so cards can never overlap
+        # or render above their own header.
+        thursday = _monday() + timedelta(days=3)
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=thursday)
+        resp = authenticated_client.get(self.url, {'week': thursday.isoformat()})
+        content = resp.content.decode()
+
+        # No sticky positioning classes on the day headers.
+        assert 'lg:sticky' not in content
+        assert 'lg:top-16' not in content
+
+        # Header (weekday label) precedes the interview card (candidate name).
+        weekday = thursday.strftime('%a')                # e.g. 'Thu'
+        name = sample_resume.candidate_name.title()      # 'John Doe'
+        assert weekday in content and name in content
+        assert content.index(weekday) < content.index(name)
+
+    def test_empty_week_shows_single_message_not_dashed_box(self, authenticated_client):
+        far = (_monday() + timedelta(days=70)).isoformat()
+        resp = authenticated_client.get(self.url, {'week': far})
+        content = resp.content.decode()
+        # Grid with day headers still renders (week structure stays visible)...
+        assert resp.content.count(b'data-day-column') == 7
+        # ...and the "No interviews" message appears exactly once (no duplicate box).
+        assert content.count('No interviews scheduled this week') == 1
+        assert 'border-dashed' not in content
+
 
 @pytest.mark.django_db
 class TestInterviewICS:

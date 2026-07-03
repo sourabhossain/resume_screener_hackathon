@@ -57,10 +57,7 @@
     </div>
 
     {% if interview_count == 0 %}
-    <div class="mb-6 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
-        <svg class="mx-auto h-10 w-10 text-zinc-200 dark:text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        <p class="mt-3 text-sm text-zinc-400">No interviews scheduled this week.</p>
-    </div>
+    <p class="mb-3 text-center text-sm text-zinc-400 dark:text-zinc-500">No interviews scheduled this week.</p>
     {% endif %}
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
@@ -68,8 +65,8 @@
         <div data-day-column
              class="flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-soft dark:bg-zinc-900
                     {% if day.is_today %}day-today border-primary-300 ring-1 ring-primary-200 dark:border-primary-700 dark:ring-primary-900/50{% else %}border-zinc-200/90 dark:border-zinc-800{% endif %}">
-            <div class="flex items-center justify-between border-b px-3 py-2 lg:sticky lg:top-16 lg:z-10
-                        {% if day.is_today %}border-primary-200/70 bg-primary-50/80 backdrop-blur dark:border-primary-800/40 dark:bg-primary-900/20{% else %}border-zinc-100 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90{% endif %}">
+            <div class="flex items-center justify-between border-b px-3 py-2
+                        {% if day.is_today %}border-primary-200/70 bg-primary-50 dark:border-primary-800/40 dark:bg-primary-900/20{% else %}border-zinc-100 dark:border-zinc-800{% endif %}">
                 <span class="text-xs font-bold uppercase tracking-wider {% if day.is_today %}text-primary-600 dark:text-primary-400{% else %}text-zinc-500 dark:text-zinc-400{% endif %}">
                     {{ day.date|date:"D" }}
                 </span>
