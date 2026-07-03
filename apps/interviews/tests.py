@@ -1,6 +1,6 @@
 """Tests for the interviews app: models, recruiter views, and the public
 token-based evaluation flow."""
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 from django.urls import reverse
@@ -139,6 +139,23 @@ class TestRecruiterViews:
         assert resp.status_code == 200
         assert resp.context['form'].errors['scheduled_date'] == ['Interview date cannot be in the past.']
         assert not Interview.objects.filter(resume=sample_resume).exists()
+
+    def test_create_accepts_empty_time(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        future = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': future, 'scheduled_time': '', 'notes': ''})
+        assert resp.status_code == 302
+        iv = Interview.objects.get(resume=sample_resume)
+        assert iv.scheduled_time is None
+
+    def test_create_accepts_valid_time(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        future = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': future, 'scheduled_time': '14:30', 'notes': ''})
+        assert resp.status_code == 302
+        iv = Interview.objects.get(resume=sample_resume)
+        assert iv.scheduled_time is not None
+        assert iv.scheduled_time.strftime('%H:%M') == '14:30'
 
     def test_detail_renders(self, authenticated_client, interview):
         resp = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
@@ -350,6 +367,23 @@ class TestInterviewCalendar:
 
         assert n_small == n_large, f'query count grew: {n_small} -> {n_large}'
 
+    def test_day_ordering_timed_before_untimed(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        d = _monday() + timedelta(days=1)
+
+        def mk(name, t):
+            r = Resume.objects.create(job=sample_job, candidate_name=name, final_score=70)
+            return Interview.objects.create(resume=r, phase='1', scheduled_date=d, scheduled_time=t)
+
+        untimed = mk('Untimed', None)
+        late = mk('Late', time(14, 0))
+        early = mk('Early', time(9, 0))
+
+        resp = authenticated_client.get(self.url, {'week': d.isoformat()})
+        day = next(x for x in resp.context['days'] if x['date'] == d)
+        # Timed ascending first, untimed last.
+        assert day['interviews'] == [early, late, untimed]
+
 
 @pytest.mark.django_db
 class TestInterviewICS:
@@ -399,3 +433,22 @@ class TestInterviewICS:
         interview.soft_delete()
         resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
         assert resp.status_code == 404
+
+    def test_ics_timed_event(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(job=sample_job, candidate_name='Timed Person', final_score=70)
+        iv = Interview.objects.create(
+            resume=r, phase='1', scheduled_date=timezone.localdate(), scheduled_time=time(14, 30)
+        )
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': iv.pk})).content.decode()
+        day = iv.scheduled_date.strftime('%Y%m%d')
+        # TIME_ZONE is UTC, so 14:30 local == 14:30Z; DTEND is one hour later.
+        assert f'DTSTART:{day}T143000Z' in body
+        assert f'DTEND:{day}T153000Z' in body
+        assert 'VALUE=DATE' not in body
+
+    def test_ics_untimed_still_all_day(self, authenticated_client, interview):
+        # Regression: the `interview` fixture has scheduled_time=None.
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk})).content.decode()
+        assert f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}' in body
+        assert 'T143000Z' not in body

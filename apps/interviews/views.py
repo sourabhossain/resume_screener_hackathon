@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404, HttpResponse
@@ -39,8 +39,11 @@ def interview_create(request, resume_uuid):
                 interview = form.save(commit=False)
                 interview.resume = resume
                 interview.save()
+                details = f'phase={interview.phase} resume={resume.uuid}'
+                if interview.scheduled_time is not None:
+                    details += f' time={interview.scheduled_time.strftime("%H:%M")}'
                 audit_log(request.user, 'interview.created', interview,
-                          details=f'phase={interview.phase} resume={resume.uuid}', request=request)
+                          details=details, request=request)
                 messages.success(request, 'Interview scheduled.')
                 return redirect('interviews:detail', pk=interview.pk)
         if form.errors:
@@ -95,6 +98,12 @@ def interview_calendar(request):
     by_day = {monday + timedelta(days=i): [] for i in range(7)}
     for iv in interviews:
         by_day[iv.scheduled_date].append(iv)
+
+    # Within each day, timed interviews come first in ascending time order;
+    # untimed (all-day) ones sort last. Done in Python on the already-fetched
+    # week queryset -- no extra DB ordering.
+    for ivs in by_day.values():
+        ivs.sort(key=lambda iv: (iv.scheduled_time is None, iv.scheduled_time))
 
     today = timezone.localdate()
     days = [{'date': d, 'interviews': ivs, 'is_today': d == today}
@@ -158,11 +167,26 @@ def interview_ics(request, pk):
     name = interview.resume.candidate_name
     summary = f'Interview - {name} - Phase {interview.phase}'
     description = f'{interview.resume.job.title} - {interview.get_phase_display()}'
-    dtstart = interview.scheduled_date.strftime('%Y%m%d')
-    # All-day VEVENT: scheduled_date is a DateField (no time component), so
-    # DTSTART/DTEND use VALUE=DATE and DTEND is the exclusive next day.
-    dtend = (interview.scheduled_date + timedelta(days=1)).strftime('%Y%m%d')
     dtstamp = timezone.now().strftime('%Y%m%dT%H%M%SZ')
+
+    if interview.scheduled_time is not None:
+        # Timed VEVENT. Emit UTC instants (DTSTART:...Z) rather than a TZID with
+        # a hand-written VTIMEZONE: converting to UTC is unambiguous and needs no
+        # VTIMEZONE block, so it can't drift out of sync. Combine the local
+        # date+time in the project timezone, then convert to UTC.
+        local = timezone.make_aware(
+            datetime.combine(interview.scheduled_date, interview.scheduled_time),
+            timezone.get_current_timezone(),
+        )
+        start_utc = local.astimezone(dt_timezone.utc)
+        end_utc = start_utc + timedelta(hours=1)  # default 1h duration (future setting)
+        dtstart_line = f'DTSTART:{start_utc.strftime("%Y%m%dT%H%M%SZ")}'
+        dtend_line = f'DTEND:{end_utc.strftime("%Y%m%dT%H%M%SZ")}'
+    else:
+        # All-day VEVENT: no time component, so DTSTART/DTEND use VALUE=DATE and
+        # DTEND is the exclusive next day.
+        dtstart_line = f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}'
+        dtend_line = f'DTEND;VALUE=DATE:{(interview.scheduled_date + timedelta(days=1)).strftime("%Y%m%d")}'
 
     lines = [
         'BEGIN:VCALENDAR',
@@ -172,8 +196,8 @@ def interview_ics(request, pk):
         'BEGIN:VEVENT',
         f'UID:interview-{interview.pk}@{request.get_host()}',
         f'DTSTAMP:{dtstamp}',
-        f'DTSTART;VALUE=DATE:{dtstart}',
-        f'DTEND;VALUE=DATE:{dtend}',
+        dtstart_line,
+        dtend_line,
         f'SUMMARY:{_ics_escape(summary)}',
         f'DESCRIPTION:{_ics_escape(description)}',
         'STATUS:CONFIRMED',

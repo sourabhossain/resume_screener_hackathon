@@ -42,6 +42,10 @@ class Interview(SoftDeleteModel):
     )
     phase = models.CharField(max_length=5, choices=PHASE_CHOICES, default='1')
     scheduled_date = models.DateField()
+    scheduled_time = models.TimeField(
+        null=True, blank=True,
+        help_text='Optional. Leave empty for an all-day/unspecified slot.'
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

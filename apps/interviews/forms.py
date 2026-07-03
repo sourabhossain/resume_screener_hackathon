@@ -6,13 +6,17 @@ from apps.core.form_utils import AriaInvalidMixin, clean_label_text, clean_perso
 class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
     class Meta:
         model = Interview
-        fields = ['phase', 'scheduled_date', 'notes']
+        fields = ['phase', 'scheduled_date', 'scheduled_time', 'notes']
         widgets = {
             'phase': forms.Select(attrs={
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
             }),
             'scheduled_date': forms.DateInput(attrs={
                 'type': 'date',
+                'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
+            }),
+            'scheduled_time': forms.TimeInput(attrs={
+                'type': 'time',
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
             }),
             'notes': forms.Textarea(attrs={
