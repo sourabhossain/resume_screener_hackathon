@@ -253,3 +253,149 @@ class TestPublicEvaluate:
     def test_evaluate_done_renders(self, client, evaluation):
         resp = client.get(reverse('interviews:evaluate_done', kwargs={'token': evaluation.token}))
         assert resp.status_code == 200
+
+
+def _monday(d=None):
+    d = d or timezone.localdate()
+    return d - timedelta(days=d.weekday())
+
+
+@pytest.mark.django_db
+class TestInterviewCalendar:
+    url = reverse('interviews:calendar')
+
+    def test_requires_login(self, client):
+        resp = client.get(self.url)
+        assert resp.status_code == 302
+        assert 'login' in resp.url
+
+    def test_shows_interview_in_correct_day_column(self, authenticated_client, sample_resume):
+        # Wednesday of the current week (offset 2 from Monday).
+        wednesday = _monday() + timedelta(days=2)
+        iv = Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=wednesday)
+        resp = authenticated_client.get(self.url)
+        assert resp.status_code == 200
+        assert resp.context['interview_count'] == 1
+        assert sample_resume.candidate_name.title().encode() in resp.content
+
+        days = resp.context['days']
+        assert len(days) == 7
+        for day in days:
+            if day['date'] == wednesday:
+                assert iv in day['interviews']
+            else:
+                assert iv not in day['interviews']
+
+    def test_renders_seven_day_columns_and_controls(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        resp = authenticated_client.get(self.url)
+        assert resp.content.count(b'data-day-column') == 7
+        assert b'?week=' in resp.content            # prev/next controls
+        assert b'Today' in resp.content
+        assert b'1 interview this week' in resp.content
+
+    def test_excludes_soft_deleted_interview(self, authenticated_client, sample_resume):
+        iv = Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        iv.soft_delete()
+        resp = authenticated_client.get(self.url)
+        assert resp.context['interview_count'] == 0
+
+    def test_excludes_interview_of_soft_deleted_resume(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        sample_resume.soft_delete()
+        resp = authenticated_client.get(self.url)
+        assert resp.context['interview_count'] == 0
+
+    def test_excludes_interview_of_soft_deleted_job(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        sample_resume.job.soft_delete()
+        resp = authenticated_client.get(self.url)
+        assert resp.context['interview_count'] == 0
+
+    def test_week_navigation_moves_window(self, authenticated_client, sample_resume):
+        next_monday = _monday() + timedelta(days=7)
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=next_monday)
+        # Not visible in the current week...
+        assert authenticated_client.get(self.url).context['interview_count'] == 0
+        # ...but visible when navigating to that week.
+        resp = authenticated_client.get(self.url, {'week': next_monday.isoformat()})
+        assert resp.context['interview_count'] == 1
+        assert resp.context['week_start'] == next_monday
+
+    def test_empty_week_renders_empty_state(self, authenticated_client):
+        far = (_monday() + timedelta(days=70)).isoformat()
+        resp = authenticated_client.get(self.url, {'week': far})
+        assert resp.context['interview_count'] == 0
+        assert b'No interviews scheduled this week' in resp.content
+
+    def test_query_count_does_not_grow_with_interviews(self, authenticated_client, sample_job):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from apps.core.models import Resume
+
+        def make(n, phase='1'):
+            r = Resume.objects.create(job=sample_job, candidate_name=f'Cand {n}', final_score=70)
+            Interview.objects.create(resume=r, phase=phase, scheduled_date=_monday())
+
+        make(1); make(2)
+        with CaptureQueriesContext(connection) as ctx_small:
+            assert authenticated_client.get(self.url).context['interview_count'] == 2
+        n_small = len(ctx_small)
+
+        for i in range(3, 11):
+            make(i)
+        with CaptureQueriesContext(connection) as ctx_large:
+            assert authenticated_client.get(self.url).context['interview_count'] == 10
+        n_large = len(ctx_large)
+
+        assert n_small == n_large, f'query count grew: {n_small} -> {n_large}'
+
+
+@pytest.mark.django_db
+class TestInterviewICS:
+    def test_requires_login(self, client, interview):
+        resp = client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 302
+        assert 'login' in resp.url
+
+    def test_content_type_and_disposition(self, authenticated_client, interview):
+        resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 200
+        assert resp['Content-Type'] == 'text/calendar; charset=utf-8'
+        assert resp['Content-Disposition'] == f'attachment; filename="interview-{interview.pk}.ics"'
+
+    def test_contains_vevent_name_and_date(self, authenticated_client, interview):
+        resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        body = resp.content.decode()
+        assert 'BEGIN:VCALENDAR' in body
+        assert 'BEGIN:VEVENT' in body
+        assert 'STATUS:CONFIRMED' in body
+        assert interview.resume.candidate_name in body
+        assert f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}' in body
+        assert '\r\n' in body                       # CRLF line endings
+        assert f'UID:interview-{interview.pk}@' in body
+
+    def test_special_characters_escaped(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(job=sample_job, candidate_name='Khan, Md; Test', final_score=80)
+        iv = Interview.objects.create(resume=r, phase='2', scheduled_date=timezone.localdate())
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': iv.pk})).content.decode()
+        assert 'Khan\\, Md\\; Test' in body          # comma + semicolon escaped
+        assert 'SUMMARY:Interview - Khan, Md; Test' not in body   # raw form must not appear
+
+    def test_no_pii_or_scores_in_output(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(
+            job=sample_job, candidate_name='Jane Roe',
+            email='secret.person@example.com', phone='01711223344', final_score=91,
+        )
+        iv = Interview.objects.create(resume=r, phase='1', scheduled_date=timezone.localdate())
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': iv.pk})).content.decode()
+        assert 'secret.person@example.com' not in body
+        assert '01711223344' not in body
+        assert 'score' not in body.lower()
+
+    def test_soft_deleted_interview_404(self, authenticated_client, interview):
+        interview.soft_delete()
+        resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 404

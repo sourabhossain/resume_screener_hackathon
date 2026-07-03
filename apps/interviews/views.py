@@ -1,9 +1,11 @@
 import uuid
+from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.contrib import messages
 
 from apps.core.views import form_errors_to_messages
@@ -69,6 +71,121 @@ def interview_detail(request, pk):
         'add_form': add_form,
         'criteria': EVALUATION_CRITERIA,
     })
+
+@login_required
+def interview_calendar(request):
+    """Week (Mon-Sun) calendar of scheduled interviews. Navigate with
+    ?week=YYYY-MM-DD (any date in the target week). Single-company: every
+    authenticated recruiter sees all interviews (matching the rest of the app).
+    Soft-deleted interviews, and interviews of soft-deleted resumes/jobs, are
+    hidden -- same visibility as the evaluate/rank-report querysets.
+    """
+    base_day = parse_date(request.GET.get('week', '') or '') or timezone.localdate()
+    monday = base_day - timedelta(days=base_day.weekday())
+    sunday = monday + timedelta(days=6)
+
+    interviews = list(
+        Interview.objects
+        .filter(scheduled_date__range=(monday, sunday),
+                resume__is_deleted=False, resume__job__is_deleted=False)
+        .select_related('resume', 'resume__job')
+        .order_by('scheduled_date', 'phase')
+    )
+
+    by_day = {monday + timedelta(days=i): [] for i in range(7)}
+    for iv in interviews:
+        by_day[iv.scheduled_date].append(iv)
+
+    today = timezone.localdate()
+    days = [{'date': d, 'interviews': ivs, 'is_today': d == today}
+            for d, ivs in by_day.items()]
+
+    return render(request, 'interviews/calendar.html', {
+        'days': days,
+        'week_start': monday,
+        'week_end': sunday,
+        'interview_count': len(interviews),
+        'prev_week': (monday - timedelta(days=7)).isoformat(),
+        'next_week': (monday + timedelta(days=7)).isoformat(),
+        'is_current_week': monday <= today <= sunday,
+    })
+
+
+def _ics_escape(text):
+    """Escape a value for an RFC 5545 TEXT field. Candidate names are untrusted
+    input, so commas/semicolons/backslashes/newlines must be escaped."""
+    return (
+        str(text or '')
+        .replace('\\', '\\\\')
+        .replace(';', '\\;')
+        .replace(',', '\\,')
+        .replace('\r\n', '\\n')
+        .replace('\r', '\\n')
+        .replace('\n', '\\n')
+    )
+
+
+def _ics_fold(line):
+    """Fold a content line to <=75 octets per RFC 5545, without splitting a
+    multi-byte UTF-8 character. Continuation lines start with a single space."""
+    if len(line.encode('utf-8')) <= 75:
+        return line
+    chunks, current, limit = [], b'', 75
+    for ch in line:
+        b = ch.encode('utf-8')
+        if len(current) + len(b) > limit:
+            chunks.append(current)
+            current, limit = b, 74  # continuation lines carry a leading space
+        else:
+            current += b
+    if current:
+        chunks.append(current)
+    return '\r\n '.join(c.decode('utf-8') for c in chunks)
+
+
+@login_required
+def interview_ics(request, pk):
+    """Download a single interview as an .ics (RFC 5545) calendar event. Same
+    access rules as interview_detail. Read-only export -- deliberately NOT
+    audit-logged (consistent with not logging 'Viewed'). The event carries no
+    resume content, scores, email or phone -- only the candidate name, job
+    title and phase.
+    """
+    interview = get_object_or_404(Interview.objects.select_related('resume__job'), pk=pk)
+    if not _can_access_interview(request.user, interview):
+        raise Http404
+
+    name = interview.resume.candidate_name
+    summary = f'Interview - {name} - Phase {interview.phase}'
+    description = f'{interview.resume.job.title} - {interview.get_phase_display()}'
+    dtstart = interview.scheduled_date.strftime('%Y%m%d')
+    # All-day VEVENT: scheduled_date is a DateField (no time component), so
+    # DTSTART/DTEND use VALUE=DATE and DTEND is the exclusive next day.
+    dtend = (interview.scheduled_date + timedelta(days=1)).strftime('%Y%m%d')
+    dtstamp = timezone.now().strftime('%Y%m%dT%H%M%SZ')
+
+    lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Career//Interview Calendar//EN',
+        'CALSCALE:GREGORIAN',
+        'BEGIN:VEVENT',
+        f'UID:interview-{interview.pk}@{request.get_host()}',
+        f'DTSTAMP:{dtstamp}',
+        f'DTSTART;VALUE=DATE:{dtstart}',
+        f'DTEND;VALUE=DATE:{dtend}',
+        f'SUMMARY:{_ics_escape(summary)}',
+        f'DESCRIPTION:{_ics_escape(description)}',
+        'STATUS:CONFIRMED',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ]
+    body = '\r\n'.join(_ics_fold(line) for line in lines) + '\r\n'
+
+    resp = HttpResponse(body, content_type='text/calendar; charset=utf-8')
+    resp['Content-Disposition'] = f'attachment; filename="interview-{interview.pk}.ics"'
+    return resp
+
 
 @login_required
 def interview_delete(request, pk):
