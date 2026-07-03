@@ -179,7 +179,7 @@
                           data-confirm-text="This evaluator will be removed from the interview."
                           data-confirm-button="Remove">
                         {% csrf_token %}
-                        <button type="submit" class="rounded-lg p-1.5 text-zinc-300 transition hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
+                        <button type="submit" aria-label="Remove evaluator {{ ev.interviewer_name }}" title="Remove evaluator" class="rounded-lg p-1.5 text-zinc-300 transition hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </form>

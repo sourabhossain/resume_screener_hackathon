@@ -334,6 +334,30 @@
                                 Calendar
                             </span>
                         </a>
+                        <a href="{% url 'core:talent_pool' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                </svg>
+                                Talent Pool
+                            </span>
+                        </a>
+                        <a href="{% url 'core:needs_review' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                Needs Review
+                            </span>
+                        </a>
+                        <a href="{% url 'core:screening_failed' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Screening Failed
+                            </span>
+                        </a>
                         {% if user.is_superuser %}
                         <a href="{% url 'core:user_list' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
                             <span class="flex items-center gap-2">
@@ -494,6 +518,45 @@
                     <div>
                         <p class="font-semibold">Calendar</p>
                         <p class="text-xs text-zinc-500 dark:text-zinc-500">Interview schedule</p>
+                    </div>
+                </a>
+
+                <a href="{% url 'core:talent_pool' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40">
+                        <svg class="h-5 w-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Talent Pool</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Saved candidates</p>
+                    </div>
+                </a>
+
+                <a href="{% url 'core:needs_review' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Needs Review</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Pending triage</p>
+                    </div>
+                </a>
+
+                <a href="{% url 'core:screening_failed' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
+                        <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Screening Failed</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Re-run screening</p>
                     </div>
                 </a>
 

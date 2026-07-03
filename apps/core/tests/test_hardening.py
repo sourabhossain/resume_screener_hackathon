@@ -5,6 +5,8 @@ Each test pins a specific fixed behavior so it can't silently regress:
 soft-delete cascade, deleted-job access guards, CSV formula-injection escaping,
 the LLM reasoning-model temperature fix, and the skill_score subset guard.
 """
+from html.parser import HTMLParser
+
 import pytest
 from django.db import IntegrityError, transaction
 from django.urls import reverse
@@ -246,3 +248,73 @@ class TestJobFormCapturesRequirements:
         assert job.required_skills == ['Python', 'Django', 'MySQL']
         assert job.required_education == ['Bachelor', 'Computer Science']
         assert job.required_experience == 5
+
+
+class _StartTagCollector(HTMLParser):
+    """Collect every start tag as (tag, {attr: value}) for markup assertions."""
+
+    def __init__(self):
+        super().__init__()
+        self.tags = []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+
+
+@pytest.mark.django_db
+class TestScreeningFailedMarkup:
+    """Regression guards for the Tailwind migration of screening_failed.html
+    (the needs_review twin). These pin the two properties the migration must
+    never regress: the Alpine x-show / inline-display decoupling, and the
+    removal of the bespoke [style*=...] dark-mode hack + its .nr-root scope.
+    """
+
+    def _failed(self, resume):
+        resume.screening_status = 'failed'
+        resume.reasoning = 'AI screening timed out'
+        resume.save(update_fields=['screening_status', 'reasoning'])
+        return resume
+
+    def test_no_flex_or_grid_inline_style_on_an_x_show_element(
+        self, authenticated_client, sample_resume
+    ):
+        """x-show toggles display, so it must never sit on an element whose own
+        inline style forces display:flex/grid — that fight breaks the layout."""
+        self._failed(sample_resume)
+        content = authenticated_client.get(reverse('core:screening_failed')).content.decode()
+
+        collector = _StartTagCollector()
+        collector.feed(content)
+
+        offenders = []
+        for tag, attrs in collector.tags:
+            if 'x-show' not in attrs:
+                continue
+            style = (attrs.get('style') or '').replace(' ', '').lower()
+            if 'display:flex' in style or 'display:grid' in style:
+                offenders.append((tag, attrs.get('x-show'), attrs.get('style')))
+        assert not offenders, f"x-show sits on a flex/grid inline-styled element: {offenders}"
+
+    def test_bespoke_inline_style_darkmode_hack_is_gone(
+        self, authenticated_client, sample_resume
+    ):
+        """The page must render via Tailwind dark: variants, not the old
+        [style*=...] attribute-matching <style> block or its .nr-root scope."""
+        self._failed(sample_resume)
+        content = authenticated_client.get(reverse('core:screening_failed')).content.decode()
+
+        assert '[style*=' not in content   # the attribute-matching selector hack
+        assert 'nr-root' not in content    # the scope class it hung off of
+
+    def test_rescreen_form_wiring_still_renders(
+        self, authenticated_client, sample_resume
+    ):
+        """Intent of the pre-existing behaviour, restated for this migration:
+        the bulk-rescreen form, CSRF, scope input, and per-row checkbox survive."""
+        self._failed(sample_resume)
+        content = authenticated_client.get(reverse('core:screening_failed')).content.decode()
+
+        assert reverse('core:screening_rescreen_bulk') in content   # form action preserved
+        assert 'name="scope"' in content                            # scope hidden input
+        assert 'csrfmiddlewaretoken' in content                     # CSRF token
+        assert f'value="{sample_resume.uuid}"' in content           # per-row selection checkbox
