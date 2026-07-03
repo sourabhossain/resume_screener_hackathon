@@ -4,20 +4,12 @@ Django REST Framework Serializers for Job and Resume.
 from rest_framework import serializers
 from .models import Job, Resume
 
-_SCORE_FIELD = dict(min_value=0, max_value=100, allow_null=True, required=False)
-
 class ResumeSerializer(serializers.ModelSerializer):
     """Serializer for Resume with computed display fields."""
     tier_display = serializers.CharField(source='get_tier_display', read_only=True)
     recommendation_display = serializers.CharField(source='get_recommendation_display', read_only=True)
     screening_status_display = serializers.CharField(source='get_screening_status_display', read_only=True)
     verification_status_display = serializers.CharField(source='get_verification_status_display', read_only=True)
-
-    experience_score = serializers.FloatField(**_SCORE_FIELD)
-    education_score = serializers.FloatField(**_SCORE_FIELD)
-    skills_score = serializers.FloatField(**_SCORE_FIELD)
-    certification_score = serializers.FloatField(**_SCORE_FIELD)
-    final_score = serializers.FloatField(**_SCORE_FIELD)
 
     class Meta:
         model = Resume
@@ -39,7 +31,13 @@ class ResumeSerializer(serializers.ModelSerializer):
             'id', 'file_name', 'file_type', 'created_at', 'updated_at',
             'tier', 'tier_display', 'recommendation', 'recommendation_display',
             'screening_status', 'screening_status_display',
-            'achievement_score', 'skills', 'education', 'certifications', 'achievements',
+            # Scores are AI-derived. They must not be writable via the API:
+            # the mandatory-reason + audited override control lives in the edit
+            # form/service, and a raw PATCH would bypass it. (achievement_score
+            # was already read-only; the rest are now consistent.)
+            'experience_score', 'education_score', 'skills_score',
+            'certification_score', 'achievement_score', 'final_score',
+            'skills', 'education', 'certifications', 'achievements',
             'matched_skills', 'missing_skills', 'reasoning',
             'extracted_links', 'verification_results', 'verification_status',
             'verification_status_display', 'verification_score', 'verified_at',

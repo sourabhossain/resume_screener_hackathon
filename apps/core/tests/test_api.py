@@ -162,6 +162,50 @@ class TestResumeAPI:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'job' in response.json()
 
+    def test_patch_score_fields_are_read_only(self, authenticated_client, sample_resume):
+        """Scores are AI-derived and read-only on the API. DRF silently drops
+        read-only fields, so a PATCH leaves every score unchanged -- the
+        mandatory-reason override control cannot be bypassed via the API."""
+        score_fields = ['final_score', 'experience_score', 'education_score',
+                        'skills_score', 'certification_score', 'achievement_score']
+        before = {f: getattr(sample_resume, f) for f in score_fields}
+
+        response = authenticated_client.patch(
+            f'/api/resumes/{sample_resume.uuid}/',
+            data={'final_score': 1, 'experience_score': 2, 'education_score': 3,
+                  'skills_score': 4, 'certification_score': 5, 'achievement_score': 6},
+            content_type='application/json',
+        )
+        # DRF ignores read-only fields rather than erroring -> 200, values persist.
+        assert response.status_code == status.HTTP_200_OK
+        sample_resume.refresh_from_db()
+        for field, original in before.items():
+            assert getattr(sample_resume, field) == original, field
+
+    def test_patch_writable_field_still_works(self, authenticated_client, sample_resume):
+        """Making scores read-only must not lock the whole resource: a
+        legitimately-writable field can still be updated via PATCH."""
+        response = authenticated_client.patch(
+            f'/api/resumes/{sample_resume.uuid}/',
+            data={'candidate_name': 'Renamed Via API'},
+            content_type='application/json',
+        )
+        assert response.status_code == status.HTTP_200_OK
+        sample_resume.refresh_from_db()
+        assert sample_resume.candidate_name == 'Renamed Via API'
+
+    def test_api_score_patch_writes_no_override_audit(self, authenticated_client, sample_resume):
+        """An API attempt to change a score must not produce a
+        resume.score_overridden audit row (it never reaches the override path)."""
+        from apps.core.models import AuditLog
+
+        authenticated_client.patch(
+            f'/api/resumes/{sample_resume.uuid}/',
+            data={'final_score': 1},
+            content_type='application/json',
+        )
+        assert not AuditLog.objects.filter(action='resume.score_overridden').exists()
+
 @pytest.mark.django_db
 class TestAPIDocumentation:
     """Tests for API documentation endpoints."""
