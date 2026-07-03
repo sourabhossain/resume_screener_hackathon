@@ -78,37 +78,39 @@
             {% if day.interviews %}
             <div class="flex flex-1 flex-col gap-2 p-2">
                 {% for iv in day.interviews %}
-                <div class="group relative rounded-xl border border-zinc-200 bg-zinc-50/70 p-2.5 transition hover:border-primary-300 hover:bg-primary-50/50 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-primary-700 dark:hover:bg-primary-900/10">
-                    <a href="{% url 'interviews:detail' iv.pk %}" class="block pr-7">
+                <div class="group rounded-xl border border-zinc-200 bg-zinc-50/70 p-2.5 transition hover:border-primary-300 hover:bg-primary-50/50 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-primary-700 dark:hover:bg-primary-900/10">
+                    <a href="{% url 'interviews:detail' iv.pk %}" class="block">
                         <div class="flex flex-wrap items-center gap-1.5">
                             {% if iv.scheduled_time %}
-                            <span class="text-sm font-bold tabular-nums text-zinc-900 dark:text-white">{{ iv.scheduled_time|time:"H:i" }}</span>
+                            <span class="shrink-0 text-sm font-bold tabular-nums text-zinc-900 dark:text-white">{{ iv.scheduled_time|time:"H:i" }}</span>
                             {% endif %}
-                            <span class="inline-flex items-center rounded-md bg-primary-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
+                            <span class="inline-flex shrink-0 items-center rounded-md bg-primary-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
                                 {{ iv.get_phase_display }}
                             </span>
                             {% if iv.n_pending %}
-                            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+                            <span class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
                                   title="{{ iv.n_pending }} evaluation{{ iv.n_pending|pluralize }} pending">
                                 <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400"></span>
                                 Pending
                             </span>
                             {% elif iv.n_submitted %}
-                            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+                            <span class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
                                   title="All evaluations submitted">
                                 <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                                 Done
                             </span>
                             {% endif %}
                         </div>
-                        <p class="mt-1 truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ iv.resume.candidate_name|title }}</p>
-                        <p class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ iv.resume.job.title }}</p>
+                        <p class="mt-1 line-clamp-2 text-sm font-semibold text-zinc-900 dark:text-white" title="{{ iv.resume.candidate_name|title }}">{{ iv.resume.candidate_name|title }}</p>
+                        <p class="truncate text-xs text-zinc-500 dark:text-zinc-400" title="{{ iv.resume.job.title }}">{{ iv.resume.job.title }}</p>
                     </a>
-                    <a href="{% url 'interviews:ics' iv.pk %}" hx-boost="false" download
-                       class="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition hover:border-primary-300 hover:text-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-primary-700 dark:hover:text-primary-400"
-                       title="Add to calendar (.ics)" aria-label="Download .ics for this interview">
-                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
-                    </a>
+                    <div class="mt-1.5 flex justify-end">
+                        <a href="{% url 'interviews:ics' iv.pk %}" hx-boost="false" download
+                           class="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition hover:border-primary-300 hover:text-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-primary-700 dark:hover:text-primary-400"
+                           title="Add to calendar (.ics)" aria-label="Download .ics for this interview">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
+                        </a>
+                    </div>
                 </div>
                 {% endfor %}
             </div>

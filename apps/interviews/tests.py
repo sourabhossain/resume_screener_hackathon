@@ -400,7 +400,18 @@ class TestInterviewCalendar:
         content = resp.content.decode()
         assert '09:30' in content                          # HH:MM on a timed card
         assert sample_resume.job.title in content          # job title (line 3)
-        assert reverse('interviews:ics', kwargs={'pk': iv.pk}) in content  # per-card ics link
+        # Exactly one .ics affordance per card.
+        assert content.count(reverse('interviews:ics', kwargs={'pk': iv.pk})) == 1
+
+    def test_card_has_full_text_tooltips_for_name_and_job(self, authenticated_client, sample_resume):
+        """Truncated card text (name up to 2 lines, job single-line) exposes the
+        full value via a title attribute so hover reveals it on narrow columns."""
+        d = _monday() + timedelta(days=2)
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=d)
+        resp = authenticated_client.get(self.url, {'week': d.isoformat()})
+        content = resp.content.decode()
+        assert f'title="{sample_resume.candidate_name.title()}"' in content
+        assert f'title="{sample_resume.job.title}"' in content
 
     def test_today_column_highlight_present_on_current_week(self, authenticated_client, sample_resume):
         Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
