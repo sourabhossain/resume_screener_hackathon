@@ -12,14 +12,102 @@ from ..models import Job, Resume
 
 logger = logging.getLogger(__name__)
 
-def health_check(request):
+# Celery worker liveness is probed via a broker broadcast (app.control.ping),
+# which is heavier than a local check, so the result is cached briefly to keep a
+# frequently-polled /health/ from hammering the broker.
+CELERY_PING_TIMEOUT = 1.0
+_CELERY_CACHE_KEY = '__health_celery_ok__'
+_CELERY_CACHE_TTL = 30
+
+
+def _probe_db():
+    """DB reachability via SELECT 1."""
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
-        return JsonResponse({'status': 'healthy', 'database': 'connected', 'version': '1.0.0'})
+        return True
     except Exception as e:
-        logger.error(f"Health check database connectivity failed: {e}")
-        return JsonResponse({'status': 'unhealthy', 'database': 'disconnected'}, status=503)
+        logger.error("Health: database probe failed: %s", e)
+        return False
+
+
+def _probe_redis():
+    """Redis reachability, short-bounded. Uses ResilientRedisCache.is_available()
+    when present (socket_connect_timeout/socket_timeout are pinned to 1s in
+    settings, so a dead Redis cannot hang the endpoint); falls back to a cache
+    round-trip for non-Redis backends (e.g. LocMemCache in tests)."""
+    from django.core.cache import cache
+    is_available = getattr(cache, 'is_available', None)
+    if callable(is_available):
+        try:
+            return bool(is_available())
+        except Exception as e:
+            logger.warning("Health: redis probe error: %s", e)
+            return False
+    try:
+        cache.set('__health_redis_probe__', '1', 5)
+        return cache.get('__health_redis_probe__') == '1'
+    except Exception as e:
+        logger.warning("Health: cache round-trip probe error: %s", e)
+        return False
+
+
+def _celery_ping():
+    """Broadcast a ping to workers; True if any worker replies. Bounded by a
+    short timeout so a dead broker/worker cannot hang the endpoint."""
+    try:
+        from config.celery import app
+        replies = app.control.ping(timeout=CELERY_PING_TIMEOUT)
+        return bool(replies)
+    except Exception as e:
+        logger.warning("Health: celery ping error: %s", e)
+        return False
+
+
+def _probe_celery():
+    """Cached Celery worker liveness (see CELERY_CACHE_TTL note above)."""
+    from django.core.cache import cache
+    cached = cache.get(_CELERY_CACHE_KEY)
+    if cached is not None:
+        return bool(cached)
+    ok = _celery_ping()
+    cache.set(_CELERY_CACHE_KEY, ok, _CELERY_CACHE_TTL)
+    return ok
+
+
+def health_check(request):
+    """Unauthenticated liveness/readiness probe for db, redis and celery.
+
+    200 {"status":"ok"} when all pass. 503 otherwise: "unhealthy" if the DB is
+    down (cannot serve), "degraded" if the DB is up but Redis/Celery are down
+    (reads may work but the screening pipeline cannot run). The payload exposes
+    only component name + ok/reason -- never connection strings or hostnames.
+    """
+    components = {
+        'db': _probe_db(),
+        'redis': _probe_redis(),
+        'celery': _probe_celery(),
+    }
+
+    detail = {}
+    for name, ok in components.items():
+        detail[name] = {'ok': ok} if ok else {'ok': False, 'reason': 'unreachable'}
+
+    if not components['db']:
+        status = 'unhealthy'
+    elif not all(components.values()):
+        status = 'degraded'
+    else:
+        status = 'ok'
+
+    http_status = 200 if status == 'ok' else 503
+    if status != 'ok':
+        logger.error("Health check %s: %s", status,
+                     {n: v['ok'] for n, v in detail.items()})
+    return JsonResponse(
+        {'status': status, 'components': detail, 'version': '1.0.0'},
+        status=http_status,
+    )
 
 @login_required
 def dashboard(request):

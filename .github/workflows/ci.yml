@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Tests, migrations & system checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # The test settings are fully self-contained: SQLite in-memory, LocMemCache,
+      # eager Celery, and a dummy OpenAI key. No MySQL/Redis services are needed.
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        # `pip install playwright` installs only the Python package; it does NOT
+        # download browsers (that needs an explicit `playwright install`, which we
+        # never run — the tests mock the crawler). So the install stays lean.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check --settings=config.settings.test
+
+      - name: Migration drift check
+        run: python manage.py makemigrations --check --dry-run --settings=config.settings.test
+
+      - name: Test suite
+        run: python -m pytest --ds=config.settings.test

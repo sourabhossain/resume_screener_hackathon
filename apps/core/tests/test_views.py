@@ -1,9 +1,15 @@
 """
 Unit tests for views.
 """
+import importlib
+
 import pytest
 from django.urls import reverse
 from apps.core.models import Job, Resume
+
+# apps.core.views re-exports `dashboard` (the view fn), shadowing the submodule,
+# so import the module explicitly to monkeypatch its health probes.
+_dashboard = importlib.import_module('apps.core.views.dashboard')
 
 @pytest.mark.django_db
 class TestErrorPages:
@@ -53,13 +59,17 @@ class TestErrorPages:
 class TestHealthCheck:
     """Tests for health check endpoint."""
     
-    def test_health_check_success(self, client):
-        """Test health check returns 200 and healthy status."""
+    def test_health_check_success(self, client, monkeypatch):
+        """Health check returns 200 / status 'ok' when all components pass.
+        (Redis + Celery probes are stubbed; a real test worker never replies to
+        the broker ping. Full component matrix lives in test_health.py.)"""
+        monkeypatch.setattr(_dashboard, '_probe_redis', lambda: True)
+        monkeypatch.setattr(_dashboard, '_probe_celery', lambda: True)
         response = client.get(reverse('core:health_check'))
         assert response.status_code == 200
         data = response.json()
-        assert data['status'] == 'healthy'
-        assert data['database'] == 'connected'
+        assert data['status'] == 'ok'
+        assert data['components']['db']['ok'] is True
 
 @pytest.mark.django_db
 class TestDashboardView:
