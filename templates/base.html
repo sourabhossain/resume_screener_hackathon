@@ -334,30 +334,66 @@
                                 Calendar
                             </span>
                         </a>
-                        <a href="{% url 'core:talent_pool' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
-                            <span class="flex items-center gap-2">
+                        {# Pipeline dropdown — groups the three triage pages so the nav stays one row. #}
+                        {# Interaction pattern copied from partials/status_picker.html: button with #}
+                        {# aria-expanded + aria-haspopup, x-show popup, click-away + Escape to close. #}
+                        <div class="relative" x-data="{ pipelineOpen: false }">
+                            <button type="button"
+                                    @click="pipelineOpen = !pipelineOpen"
+                                    :aria-expanded="pipelineOpen"
+                                    aria-haspopup="menu"
+                                    class="nav-link flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M6 12h12M10 17h4"></path>
                                 </svg>
-                                Talent Pool
-                            </span>
-                        </a>
-                        <a href="{% url 'core:needs_review' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                Pipeline
+                                <svg class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': pipelineOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                 </svg>
-                                Needs Review
-                            </span>
-                        </a>
-                        <a href="{% url 'core:screening_failed' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                Screening Failed
-                            </span>
-                        </a>
+                            </button>
+
+                            <div x-show="pipelineOpen"
+                                 x-cloak
+                                 @click.outside="pipelineOpen = false"
+                                 @keydown.escape.window="pipelineOpen = false"
+                                 x-transition:enter="transition ease-out duration-150"
+                                 x-transition:enter-start="opacity-0 scale-[0.98] -translate-y-1"
+                                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                 x-transition:leave="transition ease-in duration-100"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 role="menu"
+                                 aria-label="Pipeline pages"
+                                 class="absolute left-0 top-full z-50 mt-2 w-60 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+                                <a href="{% url 'core:talent_pool' %}" role="menuitem" @click="pipelineOpen = false"
+                                   class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40">
+                                        <svg class="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="font-medium">Talent Pool</span>
+                                </a>
+                                <a href="{% url 'core:needs_review' %}" role="menuitem" @click="pipelineOpen = false"
+                                   class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40">
+                                        <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="font-medium">Needs Review</span>
+                                </a>
+                                <a href="{% url 'core:screening_failed' %}" role="menuitem" @click="pipelineOpen = false"
+                                   class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
+                                        <svg class="h-4 w-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="font-medium">Screening Failed</span>
+                                </a>
+                            </div>
+                        </div>
                         {% if user.is_superuser %}
                         <a href="{% url 'core:user_list' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
                             <span class="flex items-center gap-2">

@@ -520,3 +520,118 @@ class TestInterviewICS:
         body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk})).content.decode()
         assert f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}' in body
         assert 'T143000Z' not in body
+
+
+@pytest.mark.django_db
+class TestInterviewCalendarMonth:
+    """Month overview grid (?view=month&month=YYYY-MM). Shares the week view's
+    queryset + soft-delete filters + intra-day ordering; adds the grid layout."""
+
+    url = reverse('interviews:calendar')
+
+    def _month(self, client, ym):
+        return client.get(self.url, {'view': 'month', 'month': ym})
+
+    def _cell(self, resp, d):
+        return next(c for week in resp.context['weeks'] for c in week if c['date'] == d)
+
+    def test_full_month_starting_monday_has_four_week_rows(self, authenticated_client):
+        # Feb 2021 began on a Monday and had 28 days -> exactly 4 week rows.
+        resp = self._month(authenticated_client, '2021-02')
+        assert resp.status_code == 200
+        assert resp.content.count(b'data-week-row') == 4
+
+    def test_month_spanning_six_weeks_has_six_rows(self, authenticated_client):
+        # May 2021 (starts Sat, ends Mon) spills into a 6-row grid.
+        resp = self._month(authenticated_client, '2021-05')
+        assert resp.content.count(b'data-week-row') == 6
+
+    def test_interview_lands_in_correct_in_month_cell(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(job=sample_job, candidate_name='Jane Roe', final_score=80)
+        iv = Interview.objects.create(resume=r, phase='1',
+                                      scheduled_date=date(2021, 5, 15), scheduled_time=time(9, 30))
+        resp = self._month(authenticated_client, '2021-05')
+        assert resp.context['interview_count'] == 1
+
+        cell = self._cell(resp, date(2021, 5, 15))
+        assert cell['in_month'] is True
+        assert iv in cell['interviews']
+        content = resp.content.decode()
+        assert 'Roe' in content        # last-name-or-short label
+        assert '09:30' in content       # compact time
+
+    def test_adjacent_month_cells_are_muted_and_hold_no_interviews(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        # Apr 28 2021 shows as a leading (previous-month) cell in the May grid.
+        r = Resume.objects.create(job=sample_job, candidate_name='Outside Person', final_score=70)
+        Interview.objects.create(resume=r, phase='1', scheduled_date=date(2021, 4, 28))
+
+        resp = self._month(authenticated_client, '2021-05')
+        # The month query window is May only, so the April interview is excluded.
+        assert resp.context['interview_count'] == 0
+        cell = self._cell(resp, date(2021, 4, 28))
+        assert cell['in_month'] is False
+        assert cell['interviews'] == []
+        assert b'data-in-month="false"' in resp.content
+
+    def test_plus_n_more_appears_when_a_day_exceeds_the_cap(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        d = date(2021, 5, 10)
+        for i in range(4):                                    # cap is 3 per cell
+            r = Resume.objects.create(job=sample_job, candidate_name=f'Cand{i} Nom', final_score=70)
+            Interview.objects.create(resume=r, phase='1', scheduled_date=d)
+
+        resp = self._month(authenticated_client, '2021-05')
+        cell = self._cell(resp, d)
+        assert len(cell['interviews']) == 3
+        assert cell['overflow'] == 1
+        assert '+1 more' in resp.content.decode()
+
+    def test_view_toggle_links_present_both_ways(self, authenticated_client):
+        week = authenticated_client.get(self.url).content.decode()
+        assert 'view=month' in week                            # Week page offers a Month toggle
+        month = self._month(authenticated_client, '2021-05').content.decode()
+        assert '?week=' in month                               # Month page toggles back to Week
+        assert 'view=month' in month                           # ...and has month prev/next nav
+
+    def test_month_excludes_soft_deleted(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+
+        def one(name):
+            r = Resume.objects.create(job=sample_job, candidate_name=name, final_score=70)
+            return r, Interview.objects.create(resume=r, phase='1', scheduled_date=date(2021, 5, 12))
+
+        r1, iv1 = one('A'); iv1.soft_delete()
+        r2, iv2 = one('B'); r2.soft_delete()
+        r3, iv3 = one('C'); r3.job.soft_delete()
+
+        assert self._month(authenticated_client, '2021-05').context['interview_count'] == 0
+
+    def test_month_query_count_does_not_grow_with_interviews(self, authenticated_client, sample_job):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from apps.core.models import Resume
+
+        def make(n):
+            r = Resume.objects.create(job=sample_job, candidate_name=f'C{n} Nom', final_score=70)
+            Interview.objects.create(resume=r, phase='1', scheduled_date=date(2021, 5, 12))
+
+        make(1); make(2)
+        with CaptureQueriesContext(connection) as ctx_small:
+            assert self._month(authenticated_client, '2021-05').context['interview_count'] == 2
+        n_small = len(ctx_small)
+
+        for i in range(3, 11):
+            make(i)
+        with CaptureQueriesContext(connection) as ctx_large:
+            assert self._month(authenticated_client, '2021-05').context['interview_count'] == 10
+        n_large = len(ctx_large)
+
+        assert n_small == n_large, f'query count grew: {n_small} -> {n_large}'
+
+    def test_empty_month_still_renders_full_grid(self, authenticated_client):
+        resp = self._month(authenticated_client, '2021-05')
+        assert resp.context['interview_count'] == 0
+        assert resp.content.count(b'data-week-row') == 6      # grid is never "empty"
+        assert b'data-day-cell' in resp.content

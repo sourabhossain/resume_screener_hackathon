@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}Interview Calendar — Month{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl">
+
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl gradient-bg shadow-md">
+                    <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-zinc-900 dark:text-white">Interview Calendar</h1>
+                    <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ month_label }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex items-center overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-soft dark:border-zinc-700 dark:bg-zinc-900" role="group" aria-label="Calendar view">
+                <a href="{% url 'interviews:calendar' %}?week={{ to_week }}"
+                   class="px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">Week</a>
+                <span aria-current="page"
+                      class="cursor-default select-none border-l border-zinc-200 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-500 dark:border-zinc-700 dark:bg-primary-900/20 dark:text-primary-400">Month</span>
+            </div>
+
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 shadow-soft dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>
+                {{ interview_count }} interview{{ interview_count|pluralize }} this month
+            </span>
+
+            <div class="inline-flex items-center overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-soft dark:border-zinc-700 dark:bg-zinc-900">
+                <a href="?view=month&amp;month={{ prev_month }}"
+                   class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                   aria-label="Previous month">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    <span class="hidden sm:inline">Prev</span>
+                </a>
+                {% if is_current_month %}
+                <span aria-disabled="true"
+                      class="cursor-default select-none border-x border-zinc-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-400 dark:border-zinc-700 dark:bg-primary-900/20 dark:text-primary-500/70">
+                    Today
+                </span>
+                {% else %}
+                <a href="{% url 'interviews:calendar' %}?view=month"
+                   class="border-x border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Today
+                </a>
+                {% endif %}
+                <a href="?view=month&amp;month={{ next_month }}"
+                   class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                   aria-label="Next month">
+                    <span class="hidden sm:inline">Next</span>
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <div class="min-w-[46rem] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+
+            <div class="grid grid-cols-7 border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60">
+                {% for wd in weekday_headers %}
+                <div class="px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{{ wd }}</div>
+                {% endfor %}
+            </div>
+
+            {% for week in weeks %}
+            <div data-week-row class="grid grid-cols-7">
+                {% for day in week %}
+                <div data-day-cell data-in-month="{{ day.in_month|yesno:'true,false' }}"
+                     class="flex min-h-[6.75rem] flex-col gap-0.5 border-b border-r border-zinc-100 p-1.5 last:border-r-0 dark:border-zinc-800
+                            {% if not day.in_month %}bg-zinc-50/60 dark:bg-zinc-950/40{% endif %}
+                            {% if day.is_today %}day-today bg-primary-50/70 ring-1 ring-inset ring-primary-400 dark:bg-primary-900/20 dark:ring-primary-500{% endif %}">
+                    <div class="flex items-center justify-end">
+                        <a href="?week={{ day.week_param }}"
+                           class="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md px-1 text-xs font-bold tabular-nums transition hover:bg-primary-100 dark:hover:bg-primary-900/30
+                                  {% if day.is_today %}text-primary-600 dark:text-primary-300{% elif day.in_month %}text-zinc-700 dark:text-zinc-300{% else %}text-zinc-300 dark:text-zinc-600{% endif %}"
+                           aria-label="Open week of {{ day.date|date:'M j, Y' }}">{{ day.date|date:"j" }}</a>
+                    </div>
+
+                    {% for iv in day.interviews %}
+                    <a href="?week={{ day.week_param }}"
+                       class="flex items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-[11px] leading-tight text-zinc-700 transition hover:bg-primary-50 dark:text-zinc-300 dark:hover:bg-primary-900/20"
+                       title="{{ iv.resume.candidate_name|title }} — {{ iv.get_phase_display }}{% if iv.scheduled_time %} · {{ iv.scheduled_time|time:'H:i' }}{% endif %}">
+                        <span class="h-1.5 w-1.5 shrink-0 rounded-full {% if iv.n_pending %}bg-amber-400{% elif iv.n_submitted %}bg-emerald-400{% else %}bg-primary-400{% endif %}" aria-hidden="true"></span>
+                        {% if iv.scheduled_time %}<span class="shrink-0 font-semibold tabular-nums">{{ iv.scheduled_time|time:"H:i" }}</span>{% endif %}
+                        <span class="truncate">{{ iv.short_name }}</span>
+                    </a>
+                    {% endfor %}
+
+                    {% if day.overflow %}
+                    <a href="?week={{ day.week_param }}"
+                       class="mt-auto block rounded px-1 text-[11px] font-semibold text-primary-600 transition hover:bg-primary-50 hover:underline dark:text-primary-400 dark:hover:bg-primary-900/20">+{{ day.overflow }} more</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

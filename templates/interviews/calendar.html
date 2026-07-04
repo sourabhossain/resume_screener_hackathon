@@ -23,6 +23,13 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex items-center overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-soft dark:border-zinc-700 dark:bg-zinc-900" role="group" aria-label="Calendar view">
+                <span aria-current="page"
+                      class="cursor-default select-none bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-500 dark:bg-primary-900/20 dark:text-primary-400">Week</span>
+                <a href="{% url 'interviews:calendar' %}?view=month&amp;month={{ to_month }}"
+                   class="border-l border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Month</a>
+            </div>
+
             <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 shadow-soft dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
                 <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>
                 {{ interview_count }} interview{{ interview_count|pluralize }} this week

@@ -76,25 +76,18 @@ def interview_detail(request, pk):
         'criteria': EVALUATION_CRITERIA,
     })
 
-@login_required
-def interview_calendar(request):
-    """Week (Mon-Sun) calendar of scheduled interviews. Navigate with
-    ?week=YYYY-MM-DD (any date in the target week). Single-company: every
-    authenticated recruiter sees all interviews (matching the rest of the app).
-    Soft-deleted interviews, and interviews of soft-deleted resumes/jobs, are
-    hidden -- same visibility as the evaluate/rank-report querysets.
-    """
-    base_day = parse_date(request.GET.get('week', '') or '') or timezone.localdate()
-    monday = base_day - timedelta(days=base_day.weekday())
-    sunday = monday + timedelta(days=6)
-
-    interviews = list(
+def _calendar_interviews(start, end):
+    """Shared calendar queryset for both the week and month views: all live
+    interviews (excluding soft-deleted interviews and those of soft-deleted
+    resumes/jobs) whose scheduled_date is in [start, end], with pending/submitted
+    evaluation counts annotated in a single query. select_related keeps card
+    rendering off the DB. Ordered by date then phase; intra-day time ordering is
+    applied in Python by the caller via _sort_intraday."""
+    return list(
         Interview.objects
-        .filter(scheduled_date__range=(monday, sunday),
+        .filter(scheduled_date__range=(start, end),
                 resume__is_deleted=False, resume__job__is_deleted=False)
         .select_related('resume', 'resume__job')
-        # Pending/submitted evaluation counts via annotation (single query, no
-        # N+1) so cards can show status without touching the model properties.
         .annotate(
             n_pending=Count('evaluations',
                             filter=Q(evaluations__is_submitted=False,
@@ -106,15 +99,43 @@ def interview_calendar(request):
         .order_by('scheduled_date', 'phase')
     )
 
+
+def _sort_intraday(ivs):
+    """Timed interviews first in ascending time order; untimed (all-day) last.
+    In-place, on the already-fetched list -- no extra DB ordering."""
+    ivs.sort(key=lambda iv: (iv.scheduled_time is None, iv.scheduled_time))
+
+
+def _short_last_name(name):
+    """Compact label for a month cell: the candidate's last name (or a short
+    single token), title-cased. Falls back to 'Candidate' for blank names."""
+    parts = str(name or '').split()
+    return (parts[-1].title() if parts else '') or 'Candidate'
+
+
+@login_required
+def interview_calendar(request):
+    """Week (Mon-Sun) calendar of scheduled interviews. Navigate with
+    ?week=YYYY-MM-DD (any date in the target week). ?view=month switches to the
+    month overview (same shared queryset). Single-company: every authenticated
+    recruiter sees all interviews (matching the rest of the app). Soft-deleted
+    interviews, and interviews of soft-deleted resumes/jobs, are hidden -- same
+    visibility as the evaluate/rank-report querysets.
+    """
+    if request.GET.get('view') == 'month':
+        return _interview_calendar_month(request)
+
+    base_day = parse_date(request.GET.get('week', '') or '') or timezone.localdate()
+    monday = base_day - timedelta(days=base_day.weekday())
+    sunday = monday + timedelta(days=6)
+
+    interviews = _calendar_interviews(monday, sunday)
+
     by_day = {monday + timedelta(days=i): [] for i in range(7)}
     for iv in interviews:
         by_day[iv.scheduled_date].append(iv)
-
-    # Within each day, timed interviews come first in ascending time order;
-    # untimed (all-day) ones sort last. Done in Python on the already-fetched
-    # week queryset -- no extra DB ordering.
     for ivs in by_day.values():
-        ivs.sort(key=lambda iv: (iv.scheduled_time is None, iv.scheduled_time))
+        _sort_intraday(ivs)
 
     today = timezone.localdate()
     days = [{'date': d, 'interviews': ivs, 'is_today': d == today}
@@ -128,6 +149,72 @@ def interview_calendar(request):
         'prev_week': (monday - timedelta(days=7)).isoformat(),
         'next_week': (monday + timedelta(days=7)).isoformat(),
         'is_current_week': monday <= today <= sunday,
+        # Month to land on when the header's Week|Month toggle switches to month.
+        'to_month': monday.strftime('%Y-%m'),
+    })
+
+
+# Month cells show at most this many interviews; the rest collapse to "+N more".
+_MONTH_CELL_CAP = 3
+
+
+def _interview_calendar_month(request):
+    """Month overview grid: weeks as rows, 7 columns Mon-Sun, leading/trailing
+    days from adjacent months rendered muted. The query window is the month
+    itself, so adjacent-month cells never show interviews -- the week view stays
+    the detail surface (clicking a day or "+N more" navigates there). Reuses the
+    shared _calendar_interviews queryset and _sort_intraday ordering.
+    """
+    today = timezone.localdate()
+    raw = request.GET.get('month', '') or ''
+    anchor = parse_date(raw + '-01') if len(raw) == 7 else None
+    first = (anchor or today).replace(day=1)
+
+    if first.month == 12:
+        next_first = first.replace(year=first.year + 1, month=1)
+    else:
+        next_first = first.replace(month=first.month + 1)
+    last = next_first - timedelta(days=1)
+
+    grid_start = first - timedelta(days=first.weekday())        # Monday on/before the 1st
+    grid_end = last + timedelta(days=6 - last.weekday())        # Sunday on/after the last
+
+    interviews = _calendar_interviews(first, last)              # month only -> ONE query
+    by_day = {}
+    for iv in interviews:
+        by_day.setdefault(iv.scheduled_date, []).append(iv)
+    for ivs in by_day.values():
+        _sort_intraday(ivs)
+        for iv in ivs:
+            iv.short_name = _short_last_name(iv.resume.candidate_name)
+
+    weeks, cursor = [], grid_start
+    while cursor <= grid_end:
+        row = []
+        for _ in range(7):
+            day_ivs = by_day.get(cursor, [])
+            row.append({
+                'date': cursor,
+                'in_month': cursor.month == first.month,
+                'is_today': cursor == today,
+                'interviews': day_ivs[:_MONTH_CELL_CAP],
+                'overflow': max(0, len(day_ivs) - _MONTH_CELL_CAP),
+                # Any day links to the week view of the week that contains it.
+                'week_param': (cursor - timedelta(days=cursor.weekday())).isoformat(),
+            })
+            cursor += timedelta(days=1)
+        weeks.append(row)
+
+    return render(request, 'interviews/calendar_month.html', {
+        'weeks': weeks,
+        'weekday_headers': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        'month_label': first.strftime('%B %Y'),
+        'interview_count': len(interviews),
+        'prev_month': (first - timedelta(days=1)).strftime('%Y-%m'),
+        'next_month': next_first.strftime('%Y-%m'),
+        'is_current_month': (first.year, first.month) == (today.year, today.month),
+        # Week to land on when the toggle switches back to week: the one holding the 1st.
+        'to_week': first.isoformat(),
     })
 
 
