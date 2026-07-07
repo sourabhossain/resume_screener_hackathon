@@ -56,6 +56,18 @@ class TestCareersList:
         assert resp.status_code == 200
         assert b"<!DOCTYPE" not in resp.content
 
+    def test_htmx_boosted_request_returns_full_page(self, client, sample_job):
+        """Boosted nav (All positions, logo) must return #main-content, not search partial."""
+        resp = client.get(
+            reverse("core:careers"),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_BOOSTED="true",
+        )
+        assert resp.status_code == 200
+        assert b'id="main-content"' in resp.content
+        assert b"Open positions" in resp.content
+
+
 @pytest.mark.django_db
 class TestCareersApplyGet:
     def test_active_job_renders_form(self, client, sample_job):
