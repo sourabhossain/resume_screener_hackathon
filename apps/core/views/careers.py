@@ -42,7 +42,10 @@ def careers_list(request):
         'suggestions': suggestions,
     }
 
-    if request.headers.get('HX-Request'):
+    # HTMX live-search request → return just the results + OOB suggestions.
+    # Boosted navigation (e.g. "All positions") also sends HX-Request but needs
+    # the full page so hx-select="#main-content" can swap the shell.
+    if request.headers.get('HX-Request') and not request.headers.get('HX-Boosted'):
         return render(request, 'careers/_search_response.html', context)
 
     return render(request, 'careers/job_list.html', context)
