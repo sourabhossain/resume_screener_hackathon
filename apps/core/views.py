@@ -10,7 +10,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
 from django.db.models import Avg, Case, Count, IntegerField, Prefetch, Q, Value, When
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse
+from django.utils.text import slugify
+from zipstream import ZipStream
 from django.db import connection
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
@@ -208,6 +210,19 @@ def job_detail(request, slug):
             Q(phone__icontains=search_q)
         )
 
+    # Counts for the "Download CVs" menu — only resumes that actually have a file.
+    with_files = (
+        Resume.objects.filter(job=job, is_deleted=False)
+        .exclude(file='').exclude(file__isnull=True)
+    )
+    download_counts = with_files.aggregate(
+        total=Count('id'),
+        shortlisted=Count('id', filter=Q(recommendation__in=['interview', 'talent_pool'])),
+        interview=Count('id', filter=Q(recommendation='interview')),
+        talent_pool=Count('id', filter=Q(recommendation='talent_pool')),
+        reject=Count('id', filter=Q(recommendation='reject')),
+    )
+
     return render(
         request,
         'core/job_detail.html',
@@ -216,6 +231,11 @@ def job_detail(request, slug):
             'resumes': resumes,
             'pipeline_stats': _pipeline_stats(resumes),
             'search_q': search_q,
+            'total_count': download_counts['total'],
+            'shortlisted_count': download_counts['shortlisted'],
+            'interview_count': download_counts['interview'],
+            'talent_pool_count': download_counts['talent_pool'],
+            'reject_count': download_counts['reject'],
         },
     )
 
@@ -941,6 +961,105 @@ def job_export_csv(request, slug):
     )
     safe_title = re.sub(r'[^\w\-]', '_', job.title)[:50]
     response['Content-Disposition'] = f'attachment; filename="{safe_title}_candidates.csv"'
+    return response
+
+
+@login_required
+def download_resumes_zip(request, slug):
+    """
+    Stream all (or filtered) resume files for a job as a ZIP.
+    Memory-safe: streams chunks instead of building the full ZIP in RAM.
+
+    Query param 'filter':
+      - 'all' (default): every resume with a file
+      - 'shortlisted': interview + talent_pool only
+      - 'interview': interview only
+      - 'talent_pool': talent_pool only
+      - 'reject': rejected only
+    """
+    job = get_object_or_404(Job, slug=slug)
+
+    filter_type = request.GET.get('filter', 'all')
+
+    resumes = (
+        Resume.objects
+        .filter(job=job, is_deleted=False)
+        .exclude(file='')
+        .exclude(file__isnull=True)
+        .order_by('-final_score')
+    )
+
+    if filter_type == 'shortlisted':
+        resumes = resumes.filter(recommendation__in=['interview', 'talent_pool'])
+    elif filter_type == 'interview':
+        resumes = resumes.filter(recommendation='interview')
+    elif filter_type == 'talent_pool':
+        resumes = resumes.filter(recommendation='talent_pool')
+    elif filter_type == 'reject':
+        resumes = resumes.filter(recommendation='reject')
+
+    resumes = list(resumes)
+
+    if not resumes:
+        messages.warning(request, 'No resume files found for this selection.')
+        return redirect('core:job_detail', slug=slug)
+
+    logger.info(
+        "Streaming %d CVs for job %s (filter=%s)",
+        len(resumes), job.slug, filter_type,
+    )
+
+    zs = ZipStream(sized=True)
+
+    summary_lines = [
+        f"Job: {job.title}",
+        f"Filter: {filter_type}",
+        f"Total candidates: {len(resumes)}",
+        "",
+        f"{'Rank':<6}{'Name':<30}{'Score':<8}{'Tier':<8}{'Decision':<14}",
+        "-" * 66,
+    ]
+
+    included_count = 0
+    for index, resume in enumerate(resumes, start=1):
+        file_path = resume.file.path if resume.file else None
+
+        # Skip files missing from disk (DB record exists but file gone)
+        if not file_path or not os.path.exists(file_path):
+            logger.warning("Resume %s file missing on disk: %s", resume.pk, file_path)
+            continue
+
+        name = resume.candidate_name or f'Candidate_{resume.pk}'
+        clean_name = slugify(name).replace('-', '_') or f'candidate_{resume.pk}'
+        decision = (resume.recommendation or 'pending').replace('_', '')
+        score = int(resume.final_score) if resume.final_score is not None else 0
+        ext = os.path.splitext(file_path)[1] or '.pdf'
+
+        # e.g. Interview_01_Sourab_Hossain_86.pdf
+        arcname = f"{decision.title()}_{index:02d}_{clean_name}_{score}{ext}"
+
+        zs.add_path(file_path, arcname=arcname)
+        included_count += 1
+
+        summary_lines.append(
+            f"{index:<6}{name[:28]:<30}{score:<8}"
+            f"{(resume.tier or '-'):<8}{(resume.recommendation or '-'):<14}"
+        )
+
+    if not included_count:
+        messages.warning(request, 'No resume files found for this selection.')
+        return redirect('core:job_detail', slug=slug)
+
+    summary_text = "\n".join(summary_lines).encode('utf-8')
+    zs.add(summary_text, arcname="_summary.txt")
+
+    job_slug = slugify(job.title)[:50] or 'job'
+    suffix = '' if filter_type == 'all' else f'_{filter_type}'
+    zip_filename = f"{job_slug}{suffix}_resumes.zip"
+
+    response = StreamingHttpResponse(zs, content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+    response['Content-Length'] = len(zs)
     return response
 
 
