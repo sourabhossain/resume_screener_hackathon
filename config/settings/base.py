@@ -295,7 +295,12 @@ AI_SCREENING_CONFIG = {
     # pushing long resumes to artificially low scores. gpt-5-nano handles the
     # larger input cheaply, especially with extraction on reasoning_effort=minimal.
     'MAX_RESUME_CHARS': 16000,
-    'MAX_JOB_DESC_CHARS': 3000,
+    # Same truncation trap as MAX_RESUME_CHARS, on the job side. The JD is cut to
+    # this length for BOTH job-type detection and candidate matching, so a long
+    # multi-domain JD (e.g. a Head-of-Data role spanning 7 areas) lost its tail
+    # requirements -> misrouted family and candidates scored against a partial
+    # spec. 8000 covers realistic JDs; cheap for gpt-5-nano.
+    'MAX_JOB_DESC_CHARS': 8000,
     # Detector results below this confidence are flagged for manual review
     # rather than routed to a guessed family.
     'JOB_TYPE_CONFIDENCE_THRESHOLD': 0.4,
