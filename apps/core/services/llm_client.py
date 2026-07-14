@@ -76,6 +76,18 @@ class LLMClient:
                 model_kwargs={"response_format": {"type": "json_object"}}
             )
 
+            # Extraction (invoke_json(..., fast=True)) uses minimal reasoning to cut
+            # latency. reasoning_effort is only valid on reasoning models; for other
+            # models we reuse the standard json client so 'fast' still works.
+            if self._is_reasoning_model(model):
+                self._llm_json_minimal = ChatOpenAI(
+                    **common_kwargs,
+                    reasoning_effort="minimal",
+                    model_kwargs={"response_format": {"type": "json_object"}},
+                )
+            else:
+                self._llm_json_minimal = self._llm_json
+
             logger.info(f"LLMClient initialized with model: {model}")
 
     def _get_cache_key(self, prompt: str) -> str:
