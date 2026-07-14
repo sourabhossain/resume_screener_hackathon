@@ -173,7 +173,7 @@ def extract_node(state: ResumeScreeningState) -> ResumeScreeningState:
 
         prompt = build_extraction_prompt(job_type, resume_text)
 
-        response = llm_client.invoke_json(prompt, "You are an expert resume parser." + _INJECTION_GUARD)
+        response = llm_client.invoke_json(prompt, "You are an expert resume parser." + _INJECTION_GUARD, fast=True)
         parsed = parse_llm_json(
             ExtractionResult, response, context=f"extraction[resume {state.get('resume_id')}]"
         )

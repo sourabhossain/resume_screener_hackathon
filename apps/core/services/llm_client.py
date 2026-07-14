@@ -26,6 +26,7 @@ class LLMClient:
     _instance = None
     _llm = None
     _llm_json = None
+    _llm_json_minimal = None
 
     CACHE_TIMEOUT = 3600
 
@@ -69,7 +70,25 @@ class LLMClient:
                 max_retries=self.MAX_RETRIES,
                 model_kwargs={"response_format": {"type": "json_object"}}
             )
-            
+
+            # Extraction is a retrieval task (pull name/skills/dates out of the
+            # resume), not a judgment task, so it doesn't need the model's default
+            # reasoning budget. reasoning_effort='minimal' cuts the per-call latency
+            # that was making extraction blow past REQUEST_TIMEOUT. Scoring stays on
+            # the default client above so match/score quality is unchanged.
+            # Passed as a top-level kwarg (not model_kwargs): it's a declared field
+            # on ChatOpenAI, so nesting it in model_kwargs triggers a warning and is
+            # ambiguous.
+            self._llm_json_minimal = ChatOpenAI(
+                model=model,
+                temperature=0.0,
+                api_key=api_key,
+                timeout=self.REQUEST_TIMEOUT,
+                max_retries=self.MAX_RETRIES,
+                reasoning_effort="minimal",
+                model_kwargs={"response_format": {"type": "json_object"}},
+            )
+
             logger.info(f"LLMClient initialized with model: {model}")
     
     def _get_cache_key(self, prompt: str) -> str:
@@ -90,34 +109,39 @@ class LLMClient:
     )
 
     @_llm_retry
-    def invoke_json(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> Dict[str, Any]:
+    def invoke_json(self, prompt: str, system_prompt: str = "You are a helpful assistant.", fast: bool = False) -> Dict[str, Any]:
         """
         Invoke LLM and return parsed JSON response.
         Uses caching to avoid duplicate API calls.
-        
+
         Args:
             prompt: The user prompt
             system_prompt: The system prompt
-            
+            fast: Use the minimal-reasoning client (for retrieval-style calls like
+                  extraction where the default reasoning budget just adds latency).
+
         Returns:
             Parsed JSON response as dictionary
         """
-        if not self._llm_json:
+        llm = self._llm_json_minimal if fast else self._llm_json
+        if not llm:
             raise RuntimeError("LLM not initialized. Check OPENAI_API_KEY.")
-        
-        cache_key = self._get_cache_key(f"{system_prompt}:{prompt}")
+
+        # 'min:' namespaces the fast cache so minimal- and default-effort responses
+        # for the same prompt never collide.
+        cache_key = self._get_cache_key(f"{'min:' if fast else ''}{system_prompt}:{prompt}")
         cached = cache.get(cache_key)
         if cached:
             logger.debug("LLM cache hit")
             return cached
-        
+
 
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=prompt)
         ]
-        
-        response = self._llm_json.invoke(messages)
+
+        response = llm.invoke(messages)
         result = json.loads(response.content)
         
 
