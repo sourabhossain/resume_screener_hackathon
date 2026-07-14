@@ -1,7 +1,4 @@
-{% comment %}
-Reusable recruiter status form with custom picker. Requires `resume` in context.
-Uses hx-boost="false" so POST → redirect always does a full navigation and Alpine/CSS stay in sync.
-{% endcomment %}
+
 <form method="post"
       action="{% url 'core:resume_status_update' resume.uuid %}"
       hx-boost="false"

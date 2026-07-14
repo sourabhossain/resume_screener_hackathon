@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SSL Wireless Careers{% endblock %}</title>
     <meta name="description" content="{% block meta_description %}Screen resumes with structured AI scoring, clear tiers, and consistent criteria across every role.{% endblock %}">
-    {# Single dynamic theme-color — kept in sync with the class-based dark-mode toggle (not OS) #}
+
     <meta name="theme-color" id="theme-color-meta" content="#fafafa">
     <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
     {% block social_meta %}
@@ -35,8 +35,6 @@
             }
         });
 
-
-        // Map Django message tags → SweetAlert2 icons
         function djIcon(tags) {
             if (!tags) return 'info';
             if (tags.indexOf('success') !== -1) return 'success';
@@ -45,7 +43,6 @@
             return 'info';
         }
 
-        // Toast notification (top-end), auto-dismiss, pause on hover.
         window.Toast = Swal.mixin({
             toast: true,
             position: 'top-end',
@@ -58,21 +55,16 @@
             },
         });
 
-        // Quick helper: window.notify('success', 'Saved!')
         window.notify = function (icon, title, timer) {
             return window.Toast.fire({ icon: icon, title: title, timer: timer || 4200 });
         };
 
-        // Escape arbitrary (possibly user-supplied) text for safe HTML insertion.
         function djEsc(s) {
             const d = document.createElement('div');
             d.textContent = s == null ? '' : String(s);
             return d.innerHTML;
         }
 
-        // Branded confirmation dialog. Returns a Promise<SweetAlertResult>.
-        // opts.strong is treated as untrusted (e.g. a candidate name) and escaped;
-        // opts.text is a trusted static sentence supplied by our own templates.
         window.swalConfirm = function (opts) {
             opts = opts || {};
             const danger = opts.danger !== false; // default to danger styling
@@ -93,7 +85,6 @@
             });
         };
 
-        // Build + submit a POST form (with CSRF) to a given URL.
         function djPostTo(url) {
             const f = document.createElement('form');
             f.method = 'POST';
@@ -107,7 +98,6 @@
             f.submit();
         }
 
-        // Read confirmation options from data-* attributes on an element.
         function djConfirmOpts(el) {
             return {
                 title: el.dataset.confirmTitle,
@@ -119,13 +109,11 @@
             };
         }
 
-        // Delegated handler: any <a data-confirm> or <form data-confirm> in the
-        // whole app gets a SweetAlert2 confirmation. Links may POST via
-        // data-method="post"; forms submit themselves after confirmation.
         document.addEventListener('click', function (e) {
             const link = e.target.closest('a[data-confirm]');
             if (!link) return;
             e.preventDefault();
+            e.stopImmediatePropagation(); // stop hx-boost from navigating before the user confirms
             window.swalConfirm(djConfirmOpts(link)).then((res) => {
                 if (!res.isConfirmed) return;
                 if ((link.dataset.method || 'get').toLowerCase() === 'post') {
@@ -134,9 +122,8 @@
                     window.location.href = link.href;
                 }
             });
-        });
+        }, true);
 
-        // Friendly label for a form control (used in validation toasts).
         function djFieldLabel(field) {
             if (field.labels && field.labels.length) {
                 return field.labels[0].textContent.replace('*', '').trim();
@@ -144,8 +131,6 @@
             return field.getAttribute('aria-label') || field.placeholder || '';
         }
 
-        // Show a validation toast for an invalid field — with a graceful fallback
-        // to the browser's native message if SweetAlert2 didn't load.
         function djFieldValidationToast(field) {
             const label = djFieldLabel(field);
             const msg = field.validationMessage || 'Please complete this field.';
@@ -160,13 +145,11 @@
             }
         }
 
-        // Turn off the browser's native validation bubbles so we can render our
-        // own toast-based validation consistently (applied to current + HTMX forms).
         function djDisableNativeValidation(root) {
             (root || document).querySelectorAll('form:not([data-native-validate])')
                 .forEach((f) => f.setAttribute('novalidate', ''));
         }
-        // Run once the body's forms exist, and again for any HTMX-swapped content.
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => djDisableNativeValidation());
         } else {
@@ -174,11 +157,9 @@
         }
         document.addEventListener('htmx:afterSettle', (e) => djDisableNativeValidation(e.detail && e.detail.elt));
 
-        // Unified submit handler: (1) HTML5 validation → toast, then (2) confirmation.
         document.addEventListener('submit', function (e) {
             const form = e.target;
 
-            // 1) Constraint validation (we disabled native UI above).
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 e.preventDefault();
                 e.stopPropagation(); // keep the form's own @submit (e.g. spinner) from firing
@@ -190,27 +171,26 @@
                 return;
             }
 
-            // 2) Confirmation dialog for destructive forms.
             if (form.matches('form[data-confirm]')) {
                 if (form.dataset.confirmed === '1') return; // already confirmed → let it submit
                 e.preventDefault();
+                e.stopImmediatePropagation(); // critical with hx-boost: stop HTMX from AJAX-submitting before the user confirms
                 window.swalConfirm(djConfirmOpts(form)).then((res) => {
                     if (res.isConfirmed) {
                         form.dataset.confirmed = '1';
-                        form.submit();
+                        form.submit(); // native POST (bypasses hx-boost) only AFTER confirmation
                     }
                 });
             }
         }, true); // capture phase — run before the form's own handlers
 
-        // Fire Django flash messages as toasts once the DOM is ready.
         function djFlushMessages() {
             const el = document.getElementById('dj-messages');
             if (!el) return;
             let items = [];
             try { items = JSON.parse(el.textContent); } catch (_) { return; }
             el.remove();
-            // Show sequentially so multiple messages stack visibly.
+
             (function show(i) {
                 if (i >= items.length) return;
                 const m = items[i];
@@ -239,7 +219,7 @@
                 else a.removeAttribute('aria-current');
             });
         }
-        // After every boosted page swap: re-flush flash messages and refresh nav state.
+
         document.addEventListener('htmx:afterSettle', function () {
             djFlushMessages();
             djSetActiveNav();
@@ -249,19 +229,33 @@
         } else {
             djSetActiveNav();
         }
-        // Surface a "page is loading" cue during boosted navigation (htmx adds .htmx-request to body).
+
         document.addEventListener('htmx:beforeRequest', function (e) {
             if (e.detail && e.detail.boosted) document.documentElement.classList.add('app-navigating');
         });
         document.addEventListener('htmx:afterSettle', function () {
             document.documentElement.classList.remove('app-navigating');
         });
+
+        document.addEventListener('htmx:responseError', function (e) {
+            document.documentElement.classList.remove('app-navigating');
+            if (window.Toast) {
+                var code = e.detail && e.detail.xhr ? e.detail.xhr.status : '';
+                window.Toast.fire({ icon: 'error', title: 'Something went wrong' + (code ? ' (' + code + ')' : '') + '. Please try again.' });
+            }
+        });
+        document.addEventListener('htmx:sendError', function () {
+            document.documentElement.classList.remove('app-navigating');
+            if (window.Toast) {
+                window.Toast.fire({ icon: 'error', title: 'Network error — check your connection and try again.' });
+            }
+        });
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
     <script>
-        // Keep the browser chrome (theme-color) in sync with the app's class-based theme.
+
         window.applyThemeColor = function (isDark) {
             const meta = document.getElementById('theme-color-meta');
             if (meta) meta.setAttribute('content', isDark ? '#09090b' : '#fafafa');
@@ -282,7 +276,6 @@
 
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
 
-    {# One restrained warm wash at the top instead of the generic floating gradient blobs #}
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
         <div class="absolute -top-32 left-1/2 h-[28rem] w-[min(120%,46rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-brand-blue/[0.06] to-transparent blur-3xl dark:from-brand-blue/[0.08] dark:to-transparent"></div>
     </div>
@@ -291,7 +284,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex min-h-[4.25rem] items-center justify-between py-3">
                 <div class="flex items-center space-x-6 lg:space-x-10">
-                    <!-- Mobile Menu Button -->
+
                     <button @click="mobileMenuOpen = !mobileMenuOpen"
                             aria-label="Toggle navigation menu"
                             :aria-expanded="mobileMenuOpen"
@@ -331,6 +324,74 @@
                                 Jobs
                             </span>
                         </a>
+                        <a href="{% url 'interviews:calendar' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                Calendar
+                            </span>
+                        </a>
+                        {# Pipeline dropdown — groups the three triage pages so the nav stays one row. #}
+                        {# Interaction pattern copied from partials/status_picker.html: button with #}
+                        {# aria-expanded + aria-haspopup, x-show popup, click-away + Escape to close. #}
+                        <div class="relative" x-data="{ pipelineOpen: false }">
+                            <button type="button"
+                                    @click="pipelineOpen = !pipelineOpen"
+                                    :aria-expanded="pipelineOpen"
+                                    aria-haspopup="menu"
+                                    class="nav-link flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M6 12h12M10 17h4"></path>
+                                </svg>
+                                Pipeline
+                                <svg class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-180': pipelineOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+
+                            <div x-show="pipelineOpen"
+                                 x-cloak
+                                 @click.outside="pipelineOpen = false"
+                                 @keydown.escape.window="pipelineOpen = false"
+                                 x-transition:enter="transition ease-out duration-150"
+                                 x-transition:enter-start="opacity-0 scale-[0.98] -translate-y-1"
+                                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                 x-transition:leave="transition ease-in duration-100"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 role="menu"
+                                 aria-label="Pipeline pages"
+                                 class="absolute left-0 top-full z-50 mt-2 w-60 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+                                <a href="{% url 'core:talent_pool' %}" role="menuitem" @click="pipelineOpen = false"
+                                   class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40">
+                                        <svg class="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="font-medium">Talent Pool</span>
+                                </a>
+                                <a href="{% url 'core:needs_review' %}" role="menuitem" @click="pipelineOpen = false"
+                                   class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40">
+                                        <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="font-medium">Needs Review</span>
+                                </a>
+                                <a href="{% url 'core:screening_failed' %}" role="menuitem" @click="pipelineOpen = false"
+                                   class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
+                                        <svg class="h-4 w-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="font-medium">Screening Failed</span>
+                                </a>
+                            </div>
+                        </div>
                         {% if user.is_superuser %}
                         <a href="{% url 'core:user_list' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
                             <span class="flex items-center gap-2">
@@ -338,6 +399,14 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                                 </svg>
                                 Users
+                            </span>
+                        </a>
+                        <a href="{% url 'core:audit_log' %}" class="nav-link text-zinc-600 dark:text-zinc-400">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                                </svg>
+                                Audit
                             </span>
                         </a>
                         {% endif %}
@@ -348,7 +417,7 @@
 
                 <!-- Right Side Actions -->
                 <div class="flex items-center gap-2 sm:gap-3">
-                    <!-- Dark Mode Toggle -->
+
                     <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); applyThemeColor(darkMode)"
                             :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
                             class="rounded-lg border border-zinc-200/80 bg-white p-2.5 transition-all hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/55 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
@@ -476,6 +545,58 @@
                     </div>
                 </a>
 
+                <a href="{% url 'interviews:calendar' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                        <svg class="h-5 w-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Calendar</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Interview schedule</p>
+                    </div>
+                </a>
+
+                <a href="{% url 'core:talent_pool' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40">
+                        <svg class="h-5 w-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Talent Pool</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Saved candidates</p>
+                    </div>
+                </a>
+
+                <a href="{% url 'core:needs_review' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Needs Review</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Pending triage</p>
+                    </div>
+                </a>
+
+                <a href="{% url 'core:screening_failed' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
+                        <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Screening Failed</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Re-run screening</p>
+                    </div>
+                </a>
+
                 {% if user.is_superuser %}
                 <a href="{% url 'core:user_list' %}" @click="mobileMenuOpen = false"
                    class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
@@ -487,6 +608,18 @@
                     <div>
                         <p class="font-semibold">Users</p>
                         <p class="text-xs text-zinc-500 dark:text-zinc-500">Manage accounts</p>
+                    </div>
+                </a>
+                <a href="{% url 'core:audit_log' %}" @click="mobileMenuOpen = false"
+                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/40">
+                        <svg class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Audit Trail</p>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Action history</p>
                     </div>
                 </a>
                 {% endif %}
@@ -507,7 +640,6 @@
             {% endif %}
             {% endblock mobile_recruiter_nav %}
 
-            <!-- Mobile Menu Footer -->
             <div class="absolute bottom-0 left-0 right-0 border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div class="flex items-center justify-between">
                     <span class="text-sm text-zinc-500 dark:text-zinc-400">Theme</span>

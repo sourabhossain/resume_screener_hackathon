@@ -2,11 +2,10 @@ import uuid
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
-from django.db.models import F, Q
+from django.db import IntegrityError, models
+from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
-
 
 class SoftDeleteManager(models.Manager):
     """Manager that filters out soft-deleted objects by default."""
@@ -20,29 +19,47 @@ class SoftDeleteManager(models.Manager):
     def deleted_only(self):
         return super().get_queryset().filter(is_deleted=True)
 
-
 class SoftDeleteModel(models.Model):
-    """Abstract base model with soft delete functionality."""
-    
+    """Abstract base with soft delete; subclasses list reverse relations to
+    cascade into via SOFT_DELETE_CASCADE (each must be a SoftDeleteModel)."""
+
     is_deleted = models.BooleanField(default=False, db_default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    
+
+    SOFT_DELETE_CASCADE = ()
+
     objects = SoftDeleteManager()
     all_objects = models.Manager()
-    
+
     class Meta:
         abstract = True
-    
+
     def soft_delete(self):
+        if self.is_deleted:
+            return
         self.is_deleted = True
         self.deleted_at = timezone.now()
         self.save(update_fields=['is_deleted', 'deleted_at'])
-    
+        self._cascade_soft_delete()
+
+    def _cascade_soft_delete(self):
+        for accessor in self.SOFT_DELETE_CASCADE:
+            related = getattr(self, accessor, None)
+            if related is None:
+                continue
+            qs = related.all_with_deleted() if hasattr(related, 'all_with_deleted') else related.all()
+            for obj in qs.filter(is_deleted=False):
+                obj.is_deleted = True
+                obj.deleted_at = self.deleted_at
+                obj.save(update_fields=['is_deleted', 'deleted_at'])
+                cascade = getattr(obj, '_cascade_soft_delete', None)
+                if cascade:
+                    cascade()
+
     def restore(self):
         self.is_deleted = False
         self.deleted_at = None
         self.save(update_fields=['is_deleted', 'deleted_at'])
-
 
 class Job(SoftDeleteModel):
     """Job Description model - stores job postings for resume screening."""
@@ -67,8 +84,6 @@ class Job(SoftDeleteModel):
         ('hybrid', 'Hybrid'),
     ]
 
-    # The recruiter who owns this job. All access is scoped to the owner so one
-    # recruiter/company cannot read or modify another's jobs or candidate PII.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -78,7 +93,6 @@ class Job(SoftDeleteModel):
         db_index=True,
     )
     title = models.CharField(max_length=255)
-    # Public, URL-safe identifier for the careers pages (avoids exposing the numeric id).
     slug = models.SlugField(max_length=255, unique=True, blank=True, null=True)
     description = models.TextField(blank=True)
     file_name = models.CharField(max_length=255, blank=True)
@@ -92,7 +106,6 @@ class Job(SoftDeleteModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     file_type = models.CharField(max_length=50, blank=True)
-    
 
     required_skills = models.JSONField(default=list, blank=True, help_text="Required skills for matching")
     required_experience = models.FloatField(null=True, blank=True, help_text="Required years of experience")
@@ -114,14 +127,12 @@ class Job(SoftDeleteModel):
         base = slugify(self.title) or 'job'
         slug = base
         n = 2
-        # all_objects so a soft-deleted job's slug isn't silently reused
         while Job.all_objects.filter(slug=slug).exclude(pk=self.pk).exists():
             slug = f"{base}-{n}"
             n += 1
         return slug
 
     def save(self, *args, **kwargs):
-        # Generate the slug once at creation and keep it stable so public URLs don't break.
         if not self.slug:
             self.slug = self._generate_unique_slug()
         super().save(*args, **kwargs)
@@ -130,10 +141,11 @@ class Job(SoftDeleteModel):
     def active_resumes(self):
         return self.resumes.filter(is_deleted=False)
 
-
 class Resume(SoftDeleteModel):
     """Resume model - stores candidate resumes and their screening results."""
-    
+
+    SOFT_DELETE_CASCADE = ('interviews',)
+
     TIER_CHOICES = [
         ('low', 'Low'),
         ('mid', 'Mid'),
@@ -146,8 +158,7 @@ class Resume(SoftDeleteModel):
         ('reject', 'Reject'),
     ]
     
-    # Opaque public identifier used in recruiter URLs instead of the numeric pk.
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, null=True)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     job = models.ForeignKey(
@@ -172,7 +183,6 @@ class Resume(SoftDeleteModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     file_type = models.CharField(max_length=50, blank=True)
-    
 
     skills = models.JSONField(default=list, blank=True, help_text="Extracted skills from resume")
     education = models.JSONField(default=list, blank=True, help_text="Extracted education")
@@ -196,10 +206,9 @@ class Resume(SoftDeleteModel):
         default='pending'
     )
 
-    # SHA-256 of the uploaded file — used to detect duplicate submissions for the same job.
     file_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    dedup_key = models.CharField(max_length=64, null=True, blank=True, editable=False)
 
-    # Link Verification
     extracted_links = models.JSONField(default=list, blank=True)
     verification_results = models.JSONField(default=dict, blank=True)
     verification_status = models.CharField(
@@ -232,7 +241,6 @@ class Resume(SoftDeleteModel):
         default='new',
         blank=True,
     )
-    # Tracks whether a recruiter manually changed AI-generated scores.
     score_manually_edited = models.BooleanField(default=False)
     score_edited_at = models.DateTimeField(null=True, blank=True)
     score_edited_by = models.ForeignKey(
@@ -252,15 +260,9 @@ class Resume(SoftDeleteModel):
             models.Index(fields=['screening_status'], name='resume_status_idx'),
         ]
         constraints = [
-            # DB-level backstop against duplicate submissions: the same file can't
-            # be submitted twice for one job. Complements the app-level .exists()
-            # checks in the views, closing the race window between check and save.
-            # Scoped to non-deleted rows with a real hash so re-uploads after a
-            # delete, and rows without a file, are unaffected.
             models.UniqueConstraint(
-                fields=['job', 'file_hash'],
-                condition=Q(is_deleted=False) & ~Q(file_hash=''),
-                name='uniq_active_resume_file_per_job',
+                fields=['job', 'dedup_key'],
+                name='uniq_active_resume_dedup',
             ),
         ]
     
@@ -285,8 +287,14 @@ class Resume(SoftDeleteModel):
 
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
+        self.dedup_key = self.file_hash if (not self.is_deleted and self.file_hash) else None
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            if {'is_deleted', 'file_hash'} & update_fields:
+                update_fields.add('dedup_key')
+                kwargs['update_fields'] = update_fields
         super().save(*args, **kwargs)
-
 
 class ResumeNote(models.Model):
     """Internal recruiter notes attached to a resume."""
@@ -305,3 +313,100 @@ class ResumeNote(models.Model):
 
     def __str__(self):
         return f"Note on {self.resume.candidate_name} by {self.author}"
+
+class AuditLogQuerySet(models.QuerySet):
+    """QuerySet enforcing the append-only invariant at the app level.
+
+    update(), delete() and bulk_update() raise IntegrityError. bulk_create()
+    stays allowed as the legitimate batch-append path. This is an APP-LEVEL
+    guarantee only: raw SQL and the database layer are out of scope and can
+    still mutate the table.
+    """
+
+    def update(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; update() is not allowed.')
+
+    def delete(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; delete() is not allowed.')
+
+    def bulk_update(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; bulk_update() is not allowed.')
+
+class AuditLog(models.Model):
+    """Append-only trail of significant recruiter/system actions.
+
+    A plain models.Model (NOT SoftDeleteModel): rows are never modified or
+    deleted. Append-only is enforced at the app level via save()/delete() and
+    the manager (see AuditLogQuerySet); it is NOT a database-level guarantee.
+
+    entity_id stores a stable string reference (Resume.uuid / Job.slug /
+    Interview pk) rather than a ForeignKey, so rows survive entity deletion.
+    """
+
+    ACTION_CHOICES = [
+        ('job.created', 'Job created'),
+        ('job.updated', 'Job updated'),
+        ('job.deleted', 'Job deleted'),
+        ('job.restored', 'Job restored'),
+        ('job.auto_closed', 'Job auto-closed'),
+        ('resume.uploaded', 'Resume uploaded'),
+        ('resume.deleted', 'Resume deleted'),
+        ('resume.rescreen_requested', 'Resume rescreen requested'),
+        ('resume.recruiter_status_changed', 'Resume recruiter status changed'),
+        ('resume.score_overridden', 'Resume score overridden'),
+        ('resume.screening_completed', 'Resume screening completed'),
+        ('resume.screening_failed', 'Resume screening failed'),
+        ('resume.screening_needs_review', 'Resume screening needs review'),
+        ('interview.created', 'Interview created'),
+        ('interview.updated', 'Interview updated'),
+        ('interview.deleted', 'Interview deleted'),
+        ('interview.evaluation_submitted', 'Interview evaluation submitted'),
+        ('interview.eval_link_renewed', 'Interview eval link renewed'),
+        ('interview.eval_link_deleted', 'Interview eval link deleted'),
+        ('user.created', 'User created'),
+        ('user.activated', 'User activated'),
+        ('user.deactivated', 'User deactivated'),
+    ]
+
+    ENTITY_TYPE_CHOICES = [
+        ('job', 'Job'),
+        ('resume', 'Resume'),
+        ('interview', 'Interview'),
+        ('interview_evaluation', 'Interview Evaluation'),
+        ('user', 'User'),
+    ]
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    entity_type = models.CharField(max_length=32, choices=ENTITY_TYPE_CHOICES, blank=True)
+    entity_id = models.CharField(max_length=255, blank=True)
+    details = models.TextField(blank=True)
+    request_id = models.CharField(max_length=64, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = AuditLogQuerySet.as_manager()
+
+    class Meta:
+        db_table = 'audit_log'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['entity_type', 'entity_id'], name='audit_entity_idx'),
+            models.Index(fields=['-created_at'], name='audit_created_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.action} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise IntegrityError('AuditLog is append-only; existing rows cannot be modified.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise IntegrityError('AuditLog is append-only; rows cannot be deleted.')

@@ -13,7 +13,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from .models import Job, Resume
 from .serializers import JobListSerializer, JobDetailSerializer, ResumeSerializer
-
+from .services import audit_log
 
 @extend_schema_view(
     list=extend_schema(tags=['Jobs'], summary='List jobs', operation_id='job_list'),
@@ -39,8 +39,13 @@ class JobViewSet(viewsets.ModelViewSet):
         return JobDetailSerializer
     
     def perform_create(self, serializer):
-        # Record the creator (informational); single-company tool shares all data.
-        serializer.save(owner=self.request.user)
+        job = serializer.save(owner=self.request.user)
+        audit_log(self.request.user, 'job.created', job,
+                  details=f'title={job.title} api', request=self.request)
+
+    def perform_update(self, serializer):
+        job = serializer.save()
+        audit_log(self.request.user, 'job.updated', job, details='api', request=self.request)
 
     def get_queryset(self):
         queryset = Job.objects.annotate(
@@ -62,6 +67,8 @@ class JobViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.soft_delete()
+        audit_log(self.request.user, 'job.deleted', instance,
+                  details=f'title={instance.title} api', request=self.request)
 
     @extend_schema(tags=['Jobs'], summary='Restore job', operation_id='job_restore')
     @action(detail=True, methods=['post'])
@@ -74,8 +81,9 @@ class JobViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to restore this job.")
         job.restore()
+        audit_log(request.user, 'job.restored', job,
+                  details=f'title={job.title} api', request=request)
         return Response({'status': 'restored'})
-
 
 @extend_schema_view(
     list=extend_schema(tags=['Resumes'], summary='List resumes', operation_id='resume_list'),
@@ -95,14 +103,17 @@ class ResumeViewSet(viewsets.ModelViewSet):
     queryset = Resume.objects.all()
     serializer_class = ResumeSerializer
     permission_classes = [IsAuthenticated]
+    lookup_field = 'uuid'
 
     def perform_create(self, serializer):
         from apps.core.tasks import screen_resume_task
         resume = serializer.save(screening_status='processing')
         screen_resume_task.delay(resume.id)
+        audit_log(self.request.user, 'resume.uploaded', resume,
+                  details=f'candidate={resume.candidate_name} api', request=self.request)
 
     def get_queryset(self):
-        queryset = Resume.objects.select_related('job')
+        queryset = Resume.objects.select_related('job').filter(job__is_deleted=False)
         job_id = self.request.query_params.get('job', None)
         if job_id:
             queryset = queryset.filter(job_id=job_id)
@@ -110,6 +121,8 @@ class ResumeViewSet(viewsets.ModelViewSet):
         if tier in ['top', 'mid', 'low']:
             queryset = queryset.filter(tier=tier)
         return queryset.order_by('-final_score', '-created_at')
-    
+
     def perform_destroy(self, instance):
         instance.soft_delete()
+        audit_log(self.request.user, 'resume.deleted', instance,
+                  details=f'candidate={instance.candidate_name} api', request=self.request)

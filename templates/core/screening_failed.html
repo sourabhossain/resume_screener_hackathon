@@ -3,6 +3,7 @@
 {% block title %}Screening Failed{% endblock %}
 
 {% block content %}
+
 <div x-data="{
         selected: [],
         pageUuids: [{% for resume in page_obj %}'{{ resume.uuid }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
@@ -25,95 +26,91 @@
                 this.$refs.form.submit();
             });
         }
-     }"
-     style="font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#171717;">
+     }">
 
-    <!-- Header -->
-    <div style="display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap;">
-        <div style="width:58px; height:58px; flex:none; border-radius:16px; background:linear-gradient(150deg,#f87171,#dc2626); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 22px -8px rgba(220,38,38,0.55), inset 0 1px 0 rgba(255,255,255,0.4);">
-            <svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+    <div class="flex flex-wrap items-start gap-5">
+        <div class="flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-gradient-to-br from-red-400 to-red-600 shadow-lg shadow-red-500/40">
+            <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
         </div>
-        <div style="flex:1 1 auto; min-width:0;">
-            <div style="display:flex; align-items:center; gap:13px;">
-                <h1 style="margin:0; font-size:38px; font-weight:800; letter-spacing:-0.025em; line-height:1;">Screening Failed</h1>
+        <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-3">
+                <h1 class="text-4xl font-extrabold leading-none tracking-tight text-zinc-900 dark:text-zinc-100">Screening Failed</h1>
                 {% if total %}
-                <span style="display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; padding:0 9px; border-radius:999px; background:#fee2e2; color:#b91c1c; font-size:15px; font-weight:700;">{{ total }}</span>
+                <span class="inline-flex h-7 min-w-[28px] items-center justify-center rounded-full bg-red-100 px-2.5 text-[15px] font-bold text-red-700 dark:bg-red-900/30 dark:text-red-400">{{ total }}</span>
                 {% endif %}
             </div>
-            <p style="margin:9px 0 0; font-size:17px; color:#71717a; line-height:1.4; max-width:720px; text-wrap:pretty;">AI screening didn’t finish for these candidates (a timeout or transient error). Re-run it — one at a time or all at once.</p>
+            <p class="mt-2 max-w-[45rem] text-lg leading-snug text-zinc-500 dark:text-zinc-400 [text-wrap:pretty]">AI screening didn’t finish for these candidates (a timeout or transient error). Re-run it — one at a time or all at once.</p>
         </div>
 
         {% if page_obj.object_list %}
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" @click="rescreen('selected')" x-show="count > 0 && count < total" style="display:none; align-items:center; gap:8px; padding:11px 18px; border:1px solid #e7e5e0; border-radius:12px; background:#fff; color:#3f3f46; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">
+        <div class="flex flex-wrap gap-2.5">
+            <button type="button" @click="rescreen('selected')" x-show="count > 0 && count < total" x-cloak class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
                 Re-screen selected (<span x-text="count"></span>)
             </button>
-            <button type="button" @click="rescreen('all')" style="display:flex; align-items:center; gap:8px; padding:11px 18px; border:none; border-radius:12px; background:#18181b; color:#fff; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 8px 16px -8px rgba(0,0,0,0.5);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
+            <button type="button" @click="rescreen('all')" class="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white shadow-md hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
                 Re-screen all ({{ total }})
             </button>
         </div>
         {% endif %}
     </div>
 
-    <!-- Search -->
     {% if page_obj.object_list or search_q %}
-    <form method="get" action="{% url 'core:screening_failed' %}" style="position:relative; margin:34px 0 20px; max-width:500px;">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:18px; top:50%; transform:translateY(-50%);"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input name="q" value="{{ search_q }}" placeholder="Search candidates..." style="width:100%; border:1px solid #e7e5e0; background:#fff; border-radius:14px; padding:15px 18px 15px 48px; font-family:inherit; font-size:16px; color:#171717; outline:none; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+    <form method="get" action="{% url 'core:screening_failed' %}" class="relative mb-5 mt-8 w-full max-w-lg">
+        <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input name="q" value="{{ search_q }}" placeholder="Search candidates..."
+               class="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-12 pr-4 text-base text-zinc-900 placeholder-zinc-400 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500">
     </form>
     {% endif %}
 
-    <!-- Selection banner -->
-    <div x-show="count > 0" x-cloak x-transition style="display:none; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; padding:11px 16px; border:1px solid #fecaca; background:#fef2f2; border-radius:13px;">
-        <span style="font-size:14px; font-weight:600; color:#b91c1c;"><span x-text="count"></span> selected</span>
-        <button type="button" @click="selected = []" style="border:none; background:none; font-size:13px; font-weight:600; color:#dc2626; cursor:pointer;">Clear</button>
+    <div x-show="count > 0" x-cloak x-transition class="mb-3.5 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 dark:border-red-900/50 dark:bg-red-950/30">
+        <span class="text-sm font-semibold text-red-700 dark:text-red-400"><span x-text="count"></span> selected</span>
+        <button type="button" @click="selected = []" class="text-[13px] font-semibold text-red-600 dark:text-red-400">Clear</button>
     </div>
 
-    <!-- Candidate list -->
     {% if page_obj.object_list %}
     <form method="post" action="{% url 'core:screening_rescreen_bulk' %}" x-ref="form">
         {% csrf_token %}
         <input type="hidden" name="scope" x-ref="scope" value="selected">
 
-        <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="flex flex-col gap-4">
             {% for resume in page_obj %}
-            <div style="background:#fff; border:1px solid #efeee9; border-radius:20px; box-shadow:0 1px 2px rgba(0,0,0,0.03),0 14px 36px -28px rgba(0,0,0,0.2); padding:24px 26px; display:flex; gap:26px; align-items:stretch;"
-                 :style="selected.includes('{{ resume.uuid }}') ? { boxShadow: '0 0 0 2px #fca5a5', borderColor: '#fca5a5' } : {}">
+            <div class="flex items-stretch gap-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark"
+                 :class="selected.includes('{{ resume.uuid }}') ? 'ring-2 ring-red-300 border-red-300 dark:ring-red-500/60 dark:border-red-500/60' : ''">
 
-                <!-- Left: select + identity + reason -->
-                <div style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:16px;">
-                    <div style="display:flex; align-items:center; gap:14px;">
-                        <input type="checkbox" name="uuids" value="{{ resume.uuid }}" x-model="selected" aria-label="Select {{ resume.candidate_name }}" style="flex:none; width:18px; height:18px; accent-color:#dc2626; cursor:pointer;">
-                        <div style="width:50px; height:50px; flex:none; border-radius:50%; background:#18181b; color:#fff; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:700; box-shadow:0 4px 12px -4px rgba(0,0,0,0.35);">{{ resume.candidate_name|slice:":1"|upper }}</div>
-                        <div style="min-width:0; display:flex; flex-direction:column; align-items:flex-start;">
-                            <span style="font-size:20px; font-weight:700; letter-spacing:-0.015em;">{{ resume.candidate_name|title }}</span>
+                <div class="flex min-w-0 flex-1 flex-col gap-4">
+                    <div class="flex items-center gap-3.5">
+                        <input type="checkbox" name="uuids" value="{{ resume.uuid }}" x-model="selected" aria-label="Select {{ resume.candidate_name }}" class="h-[18px] w-[18px] flex-none cursor-pointer accent-red-600">
+                        <div class="flex h-[50px] w-[50px] flex-none items-center justify-center rounded-full bg-zinc-900 text-lg font-bold text-white shadow-md dark:bg-zinc-700">{{ resume.candidate_name|slice:":1"|upper }}</div>
+                        <div class="flex min-w-0 flex-col items-start">
+                            <span class="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{{ resume.candidate_name|title }}</span>
                             {% if resume.email %}
-                            <span style="display:inline-flex; align-items:center; font-size:14.5px; color:#71717a; margin-top:4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:7px; flex:none;"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>{{ resume.email }}</span>
+                            <span class="mt-1 inline-flex items-center text-sm text-zinc-500 dark:text-zinc-400"><svg class="mr-2 h-[15px] w-[15px] flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>{{ resume.email }}</span>
                             {% endif %}
                         </div>
                     </div>
 
-                    <span style="display:inline-flex; align-items:center; gap:9px;">
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-                        <span style="font-size:15.5px; color:#52525b;">Applied for <a href="{% url 'core:job_detail' resume.job.slug %}" style="color:#171717; font-weight:600; text-decoration:none;">{{ resume.job.title }}</a></span>
-                    </span>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span class="inline-flex items-center gap-2">
+                            <svg class="h-[17px] w-[17px] flex-none text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                            <span class="text-sm text-zinc-600 dark:text-zinc-400">Applied for <a href="{% url 'core:job_detail' resume.job.slug %}" class="font-semibold text-zinc-900 no-underline hover:underline dark:text-indigo-100">{{ resume.job.title }}</a></span>
+                        </span>
+                    </div>
 
-                    <div style="display:flex; gap:12px; background:#fef2f2; border:1px solid #fecaca; border-radius:13px; padding:13px 15px;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none; margin-top:1px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                        <p style="margin:0; font-size:15px; line-height:1.5; color:#b91c1c; text-wrap:pretty;">{{ resume.reasoning|default:"AI screening didn’t complete (timeout or a transient error). Re-run it to try again." }}</p>
+                    <div class="flex gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+                        <svg class="mt-0.5 h-[18px] w-[18px] flex-none text-red-600 dark:text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                        <p class="text-sm leading-relaxed text-red-700 [text-wrap:pretty] dark:text-red-300">{{ resume.reasoning|default:"AI screening didn’t complete (timeout or a transient error). Re-run it to try again." }}</p>
                     </div>
                 </div>
 
-                <!-- Right: meta + actions -->
-                <div style="flex:none; width:212px; border-left:1px solid #f1f0ec; padding-left:26px; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; gap:16px;">
-                    <div style="display:inline-flex; align-items:center; gap:7px; font-size:13.5px; color:#a1a1aa; white-space:nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>Added {{ resume.created_at|date:"M j, Y" }}</div>
-                    <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-                        <button type="button" @click="selected = ['{{ resume.uuid }}']; rescreen('selected')" style="display:flex; align-items:center; justify-content:center; gap:9px; width:100%; padding:12px 16px; border:none; border-radius:12px; background:#18181b; color:#fff; font-family:inherit; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 8px 16px -8px rgba(0,0,0,0.5);">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
+                <div class="flex w-[230px] flex-none flex-col items-end justify-center gap-4 border-l border-zinc-200 pl-6 dark:border-zinc-800">
+                    <div class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-zinc-400"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>Added {{ resume.created_at|date:"M j, Y" }}</div>
+                    <div class="flex w-full flex-col gap-3">
+                        <button type="button" @click="selected = ['{{ resume.uuid }}']; rescreen('selected')" class="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-bold text-white shadow-md hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
                             Re-screen
                         </button>
-                        <a href="{% url 'core:resume_detail' resume.uuid %}" style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:12px 16px; border:1px solid #e7e5e0; border-radius:12px; background:#fff; color:#3f3f46; font-size:15px; font-weight:600; text-decoration:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"></path><circle cx="12" cy="12" r="3"></circle></svg>View</a>
+                        <a href="{% url 'core:resume_detail' resume.uuid %}" class="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 no-underline transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"></path><circle cx="12" cy="12" r="3"></circle></svg>View</a>
                     </div>
                 </div>
             </div>
@@ -122,25 +119,31 @@
     </form>
 
     {% if page_obj.has_other_pages %}
-    <div style="margin-top:24px; display:flex; align-items:center; justify-content:center; gap:12px; font-size:14px; color:#71717a;">
-        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}" style="border:1px solid #e7e5e0; border-radius:12px; padding:8px 16px; font-weight:600; color:#3f3f46; text-decoration:none; background:#fff;">Previous</a>{% endif %}
-        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}" style="border:1px solid #e7e5e0; border-radius:12px; padding:8px 16px; font-weight:600; color:#3f3f46; text-decoration:none; background:#fff;">Next</a>{% endif %}
+    <div class="mt-6 flex items-center justify-center gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}"
+           class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Previous</a>
+        {% endif %}
+        <span class="text-sm text-zinc-500">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}"
+           class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Next</a>
+        {% endif %}
     </div>
     {% endif %}
 
     {% else %}
-    <!-- Empty state -->
-    <div style="margin-top:34px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#fff; border:1px dashed #e7e5e0; border-radius:20px; padding:64px 24px; text-align:center;">
-        <div style="width:56px; height:56px; border-radius:50%; background:#dcfce7; display:flex; align-items:center; justify-content:center; margin-bottom:16px;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+
+    <div class="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
+        <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+            <svg class="h-7 w-7 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
         </div>
         {% if search_q %}
-        <p style="margin:0; font-size:15px; font-weight:600; color:#71717a;">No failed screenings match “{{ search_q }}”</p>
-        <a href="{% url 'core:screening_failed' %}" style="margin-top:8px; font-size:13px; font-weight:600; color:#dc2626; text-decoration:none;">Clear search</a>
+        <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No failed screenings match “{{ search_q }}”</p>
+        <a href="{% url 'core:screening_failed' %}" class="mt-2 text-xs font-semibold text-red-600 no-underline hover:text-red-700 dark:text-red-400">Clear search</a>
         {% else %}
-        <p style="margin:0; font-size:15px; font-weight:600; color:#71717a;">All screenings are healthy</p>
-        <p style="margin:4px 0 0; font-size:13px; color:#a1a1aa;">No candidates have failed AI screening.</p>
+        <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">All screenings are healthy</p>
+        <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-600">No candidates have failed AI screening.</p>
         {% endif %}
     </div>
     {% endif %}

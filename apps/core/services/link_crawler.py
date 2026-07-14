@@ -9,15 +9,14 @@ from urllib.parse import urljoin
 
 import httpx
 
-from apps.core.services.url_safety import is_safe_public_http_url
+from apps.core.services.url_safety import is_safe_public_http_url, validate_and_pin
 
 logger = logging.getLogger(__name__)
 
-# Timeout for all requests
-REQUEST_TIMEOUT = 15  # seconds
-MAX_CONTENT_LENGTH = 50_000  # chars
+REQUEST_TIMEOUT = 15
+MAX_CONTENT_LENGTH = 50_000
+MAX_CONTENT_BYTES = 2 * 1024 * 1024
 MAX_REDIRECTS = 5
-
 
 @dataclass
 class CrawlResult:
@@ -28,7 +27,6 @@ class CrawlResult:
     status_code: int = 0
     error: str = ""
 
-
 class LinkCrawler:
 
     HEADERS = {
@@ -38,7 +36,6 @@ class LinkCrawler:
         )
     }
 
-    # Sites that need JS rendering
     JS_REQUIRED_DOMAINS = {'github.com', 'linkedin.com'}
 
     @classmethod
@@ -76,17 +73,12 @@ class LinkCrawler:
                     results.append(CrawlResult(url=url, success=False, error=str(result)))
                 else:
                     results.append(result)
-            # Polite delay between batches to avoid hammering servers
             if idx < len(batches) - 1:
                 await asyncio.sleep(2)
         return results
 
     @classmethod
     async def _crawl_with_httpx(cls, url: str) -> CrawlResult:
-        # SSRF hardening: do NOT let httpx auto-follow redirects. A validated
-        # public URL can 3xx-redirect to an internal/metadata address; following
-        # blindly would bypass the guard. Instead follow manually and re-run the
-        # SSRF check (which re-resolves DNS) on every hop before each request.
         async with httpx.AsyncClient(
             headers=cls.HEADERS,
             timeout=REQUEST_TIMEOUT,
@@ -95,27 +87,41 @@ class LinkCrawler:
         ) as client:
             current = url
             for _ in range(MAX_REDIRECTS + 1):
-                safe, reason = is_safe_public_http_url(current)
+                safe, reason, pinned_ip, host, port = validate_and_pin(current)
                 if not safe:
                     logger.info('Blocked crawl hop (SSRF guard): %s — %s', current, reason)
                     return CrawlResult(url=url, success=False, error=f'blocked: {reason}')
 
-                response = await client.get(current)
+                parsed = httpx.URL(current)
+                connect_url = parsed.copy_with(host=pinned_ip)
+                host_header = host if port in (80, 443) else f'{host}:{port}'
 
-                if response.is_redirect and response.headers.get('location'):
-                    nxt = response.next_request
-                    current = str(nxt.url) if nxt is not None else urljoin(current, response.headers['location'])
-                    continue
+                async with client.stream(
+                    'GET', connect_url,
+                    headers={'Host': host_header},
+                    extensions={'sni_hostname': host},
+                ) as response:
+                    if response.is_redirect and response.headers.get('location'):
+                        current = urljoin(current, response.headers['location'])
+                        continue
 
-                content = response.text[:MAX_CONTENT_LENGTH]
-                title = cls._extract_title(content)
-                return CrawlResult(
-                    url=url,
-                    success=response.status_code < 400,
-                    content=content,
-                    title=title,
-                    status_code=response.status_code
-                )
+                    chunks, total = [], 0
+                    async for chunk in response.aiter_bytes():
+                        chunks.append(chunk)
+                        total += len(chunk)
+                        if total >= MAX_CONTENT_BYTES:
+                            break
+                    raw = b''.join(chunks)
+                    text = raw.decode(response.encoding or 'utf-8', errors='ignore')
+                    content = text[:MAX_CONTENT_LENGTH]
+                    title = cls._extract_title(content)
+                    return CrawlResult(
+                        url=url,
+                        success=response.status_code < 400,
+                        content=content,
+                        title=title,
+                        status_code=response.status_code
+                    )
 
             return CrawlResult(url=url, success=False, error='too many redirects')
 
@@ -135,9 +141,6 @@ class LinkCrawler:
                         user_agent=cls.HEADERS['User-Agent']
                     )
 
-                    # Re-check SSRF on every navigation request so that
-                    # redirects (e.g. github.com → internal IP) can't bypass
-                    # the guard that was applied to the original URL in crawl().
                     async def _ssrf_guard(route, request):
                         if request.is_navigation_request():
                             safe, reason = is_safe_public_http_url(request.url)

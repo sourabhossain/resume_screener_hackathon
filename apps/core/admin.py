@@ -2,7 +2,6 @@ from django.contrib import admin
 from django.db.models import Count, Q
 from .models import Job, Resume
 
-
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
     list_display = ('title', 'status', 'posted_date', 'closing_date', 'resume_count', 'is_deleted')
@@ -42,13 +41,12 @@ class JobAdmin(admin.ModelAdmin):
     resume_count.short_description = 'Resumes'
     resume_count.admin_order_field = '_resume_count'
 
-
 @admin.register(Resume)
 class ResumeAdmin(admin.ModelAdmin):
     list_display = ('candidate_name', 'job', 'final_score', 'tier', 'recommendation', 'created_at', 'is_deleted')
     list_filter = ('tier', 'recommendation', 'job', 'is_deleted')
     search_fields = ('candidate_name', 'job__title')
-    list_select_related = ('job',)  # Prevents N+1 query for job
+    list_select_related = ('job',)
     date_hierarchy = 'created_at'
     ordering = ('-final_score', '-created_at')
     list_per_page = 25

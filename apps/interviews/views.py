@@ -1,14 +1,19 @@
 import uuid
+from datetime import datetime, timedelta, timezone as dt_timezone
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from django.db.models import Count, Q
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.contrib import messages
 
 from apps.core.views import form_errors_to_messages
 from apps.core.models import Resume
+from apps.core.services import audit_log
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
 from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
-
 
 def _can_access_interview(user, interview):
     """Single-company internal tool: every authenticated recruiter can access all
@@ -16,7 +21,6 @@ def _can_access_interview(user, interview):
     (Views are @login_required, so this is True for any logged-in user.)
     """
     return user.is_authenticated
-
 
 @login_required
 def interview_create(request, resume_uuid):
@@ -36,12 +40,16 @@ def interview_create(request, resume_uuid):
                 interview = form.save(commit=False)
                 interview.resume = resume
                 interview.save()
+                details = f'phase={interview.phase} resume={resume.uuid}'
+                if interview.scheduled_time is not None:
+                    details += f' time={interview.scheduled_time.strftime("%H:%M")}'
+                audit_log(request.user, 'interview.created', interview,
+                          details=details, request=request)
                 messages.success(request, 'Interview scheduled.')
                 return redirect('interviews:detail', pk=interview.pk)
         if form.errors:
             form_errors_to_messages(request, form)
     return render(request, 'interviews/create.html', {'form': form, 'resume': resume})
-
 
 @login_required
 def interview_detail(request, pk):
@@ -68,6 +76,238 @@ def interview_detail(request, pk):
         'criteria': EVALUATION_CRITERIA,
     })
 
+def _calendar_interviews(start, end):
+    """Shared calendar queryset for both the week and month views: all live
+    interviews (excluding soft-deleted interviews and those of soft-deleted
+    resumes/jobs) whose scheduled_date is in [start, end], with pending/submitted
+    evaluation counts annotated in a single query. select_related keeps card
+    rendering off the DB. Ordered by date then phase; intra-day time ordering is
+    applied in Python by the caller via _sort_intraday."""
+    return list(
+        Interview.objects
+        .filter(scheduled_date__range=(start, end),
+                resume__is_deleted=False, resume__job__is_deleted=False)
+        .select_related('resume', 'resume__job')
+        .annotate(
+            n_pending=Count('evaluations',
+                            filter=Q(evaluations__is_submitted=False,
+                                     evaluations__is_deleted=False)),
+            n_submitted=Count('evaluations',
+                              filter=Q(evaluations__is_submitted=True,
+                                       evaluations__is_deleted=False)),
+        )
+        .order_by('scheduled_date', 'phase')
+    )
+
+
+def _sort_intraday(ivs):
+    """Timed interviews first in ascending time order; untimed (all-day) last.
+    In-place, on the already-fetched list -- no extra DB ordering."""
+    ivs.sort(key=lambda iv: (iv.scheduled_time is None, iv.scheduled_time))
+
+
+def _short_last_name(name):
+    """Compact label for a month cell: the candidate's last name (or a short
+    single token), title-cased. Falls back to 'Candidate' for blank names."""
+    parts = str(name or '').split()
+    return (parts[-1].title() if parts else '') or 'Candidate'
+
+
+@login_required
+def interview_calendar(request):
+    """Week (Mon-Sun) calendar of scheduled interviews. Navigate with
+    ?week=YYYY-MM-DD (any date in the target week). ?view=month switches to the
+    month overview (same shared queryset). Single-company: every authenticated
+    recruiter sees all interviews (matching the rest of the app). Soft-deleted
+    interviews, and interviews of soft-deleted resumes/jobs, are hidden -- same
+    visibility as the evaluate/rank-report querysets.
+    """
+    if request.GET.get('view') == 'month':
+        return _interview_calendar_month(request)
+
+    base_day = parse_date(request.GET.get('week', '') or '') or timezone.localdate()
+    monday = base_day - timedelta(days=base_day.weekday())
+    sunday = monday + timedelta(days=6)
+
+    interviews = _calendar_interviews(monday, sunday)
+
+    by_day = {monday + timedelta(days=i): [] for i in range(7)}
+    for iv in interviews:
+        by_day[iv.scheduled_date].append(iv)
+    for ivs in by_day.values():
+        _sort_intraday(ivs)
+
+    today = timezone.localdate()
+    days = [{'date': d, 'interviews': ivs, 'is_today': d == today}
+            for d, ivs in by_day.items()]
+
+    return render(request, 'interviews/calendar.html', {
+        'days': days,
+        'week_start': monday,
+        'week_end': sunday,
+        'interview_count': len(interviews),
+        'prev_week': (monday - timedelta(days=7)).isoformat(),
+        'next_week': (monday + timedelta(days=7)).isoformat(),
+        'is_current_week': monday <= today <= sunday,
+        # Month to land on when the header's Week|Month toggle switches to month.
+        'to_month': monday.strftime('%Y-%m'),
+    })
+
+
+# Month cells show at most this many interviews; the rest collapse to "+N more".
+_MONTH_CELL_CAP = 3
+
+
+def _interview_calendar_month(request):
+    """Month overview grid: weeks as rows, 7 columns Mon-Sun, leading/trailing
+    days from adjacent months rendered muted. The query window is the month
+    itself, so adjacent-month cells never show interviews -- the week view stays
+    the detail surface (clicking a day or "+N more" navigates there). Reuses the
+    shared _calendar_interviews queryset and _sort_intraday ordering.
+    """
+    today = timezone.localdate()
+    raw = request.GET.get('month', '') or ''
+    anchor = parse_date(raw + '-01') if len(raw) == 7 else None
+    first = (anchor or today).replace(day=1)
+
+    if first.month == 12:
+        next_first = first.replace(year=first.year + 1, month=1)
+    else:
+        next_first = first.replace(month=first.month + 1)
+    last = next_first - timedelta(days=1)
+
+    grid_start = first - timedelta(days=first.weekday())        # Monday on/before the 1st
+    grid_end = last + timedelta(days=6 - last.weekday())        # Sunday on/after the last
+
+    interviews = _calendar_interviews(first, last)              # month only -> ONE query
+    by_day = {}
+    for iv in interviews:
+        by_day.setdefault(iv.scheduled_date, []).append(iv)
+    for ivs in by_day.values():
+        _sort_intraday(ivs)
+        for iv in ivs:
+            iv.short_name = _short_last_name(iv.resume.candidate_name)
+
+    weeks, cursor = [], grid_start
+    while cursor <= grid_end:
+        row = []
+        for _ in range(7):
+            day_ivs = by_day.get(cursor, [])
+            row.append({
+                'date': cursor,
+                'in_month': cursor.month == first.month,
+                'is_today': cursor == today,
+                'interviews': day_ivs[:_MONTH_CELL_CAP],
+                'overflow': max(0, len(day_ivs) - _MONTH_CELL_CAP),
+                # Any day links to the week view of the week that contains it.
+                'week_param': (cursor - timedelta(days=cursor.weekday())).isoformat(),
+            })
+            cursor += timedelta(days=1)
+        weeks.append(row)
+
+    return render(request, 'interviews/calendar_month.html', {
+        'weeks': weeks,
+        'weekday_headers': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        'month_label': first.strftime('%B %Y'),
+        'interview_count': len(interviews),
+        'prev_month': (first - timedelta(days=1)).strftime('%Y-%m'),
+        'next_month': next_first.strftime('%Y-%m'),
+        'is_current_month': (first.year, first.month) == (today.year, today.month),
+        # Week to land on when the toggle switches back to week: the one holding the 1st.
+        'to_week': first.isoformat(),
+    })
+
+
+def _ics_escape(text):
+    """Escape a value for an RFC 5545 TEXT field. Candidate names are untrusted
+    input, so commas/semicolons/backslashes/newlines must be escaped."""
+    return (
+        str(text or '')
+        .replace('\\', '\\\\')
+        .replace(';', '\\;')
+        .replace(',', '\\,')
+        .replace('\r\n', '\\n')
+        .replace('\r', '\\n')
+        .replace('\n', '\\n')
+    )
+
+
+def _ics_fold(line):
+    """Fold a content line to <=75 octets per RFC 5545, without splitting a
+    multi-byte UTF-8 character. Continuation lines start with a single space."""
+    if len(line.encode('utf-8')) <= 75:
+        return line
+    chunks, current, limit = [], b'', 75
+    for ch in line:
+        b = ch.encode('utf-8')
+        if len(current) + len(b) > limit:
+            chunks.append(current)
+            current, limit = b, 74  # continuation lines carry a leading space
+        else:
+            current += b
+    if current:
+        chunks.append(current)
+    return '\r\n '.join(c.decode('utf-8') for c in chunks)
+
+
+@login_required
+def interview_ics(request, pk):
+    """Download a single interview as an .ics (RFC 5545) calendar event. Same
+    access rules as interview_detail. Read-only export -- deliberately NOT
+    audit-logged (consistent with not logging 'Viewed'). The event carries no
+    resume content, scores, email or phone -- only the candidate name, job
+    title and phase.
+    """
+    interview = get_object_or_404(Interview.objects.select_related('resume__job'), pk=pk)
+    if not _can_access_interview(request.user, interview):
+        raise Http404
+
+    name = interview.resume.candidate_name
+    summary = f'Interview - {name} - Phase {interview.phase}'
+    description = f'{interview.resume.job.title} - {interview.get_phase_display()}'
+    dtstamp = timezone.now().strftime('%Y%m%dT%H%M%SZ')
+
+    if interview.scheduled_time is not None:
+        # Timed VEVENT. Emit UTC instants (DTSTART:...Z) rather than a TZID with
+        # a hand-written VTIMEZONE: converting to UTC is unambiguous and needs no
+        # VTIMEZONE block, so it can't drift out of sync. Combine the local
+        # date+time in the project timezone, then convert to UTC.
+        local = timezone.make_aware(
+            datetime.combine(interview.scheduled_date, interview.scheduled_time),
+            timezone.get_current_timezone(),
+        )
+        start_utc = local.astimezone(dt_timezone.utc)
+        end_utc = start_utc + timedelta(hours=1)  # default 1h duration (future setting)
+        dtstart_line = f'DTSTART:{start_utc.strftime("%Y%m%dT%H%M%SZ")}'
+        dtend_line = f'DTEND:{end_utc.strftime("%Y%m%dT%H%M%SZ")}'
+    else:
+        # All-day VEVENT: no time component, so DTSTART/DTEND use VALUE=DATE and
+        # DTEND is the exclusive next day.
+        dtstart_line = f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}'
+        dtend_line = f'DTEND;VALUE=DATE:{(interview.scheduled_date + timedelta(days=1)).strftime("%Y%m%d")}'
+
+    lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Career//Interview Calendar//EN',
+        'CALSCALE:GREGORIAN',
+        'BEGIN:VEVENT',
+        f'UID:interview-{interview.pk}@{request.get_host()}',
+        f'DTSTAMP:{dtstamp}',
+        dtstart_line,
+        dtend_line,
+        f'SUMMARY:{_ics_escape(summary)}',
+        f'DESCRIPTION:{_ics_escape(description)}',
+        'STATUS:CONFIRMED',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ]
+    body = '\r\n'.join(_ics_fold(line) for line in lines) + '\r\n'
+
+    resp = HttpResponse(body, content_type='text/calendar; charset=utf-8')
+    resp['Content-Disposition'] = f'attachment; filename="interview-{interview.pk}.ics"'
+    return resp
+
 
 @login_required
 def interview_delete(request, pk):
@@ -78,9 +318,10 @@ def interview_delete(request, pk):
     resume_uuid = interview.resume.uuid
     if request.method == 'POST':
         interview.soft_delete()
+        audit_log(request.user, 'interview.deleted', interview,
+                  details=f'resume={resume_uuid}', request=request)
         messages.success(request, 'Interview deleted.')
     return redirect('core:resume_detail', uuid=resume_uuid)
-
 
 @login_required
 def evaluation_delete(request, token):
@@ -90,10 +331,12 @@ def evaluation_delete(request, token):
         return redirect('core:dashboard')
     interview_pk = ev.interview_id
     if request.method == 'POST':
+        # Log BEFORE the hard delete so the evaluation pk is still set.
+        audit_log(request.user, 'interview.eval_link_deleted', ev,
+                  details=f'interviewer={ev.interviewer_name} interview={interview_pk}', request=request)
         ev.delete()
         messages.success(request, 'Evaluation slot removed.')
     return redirect('interviews:detail', pk=interview_pk)
-
 
 @login_required
 def evaluation_renew(request, token):
@@ -106,12 +349,18 @@ def evaluation_renew(request, token):
         ev.token = uuid.uuid4()
         ev.token_expires_at = timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS)
         ev.save(update_fields=['token', 'token_expires_at'])
+        audit_log(request.user, 'interview.eval_link_renewed', ev,
+                  details=f'interviewer={ev.interviewer_name} interview={ev.interview_id}', request=request)
         messages.success(request, f'New link generated for {ev.interviewer_name}.')
     return redirect('interviews:detail', pk=ev.interview_id)
 
-
 def evaluate(request, token):
-    ev = get_object_or_404(InterviewEvaluation, token=token)
+    ev = get_object_or_404(
+        InterviewEvaluation.objects.select_related('interview__resume__job'), token=token
+    )
+
+    if ev.interview.is_deleted or ev.interview.resume.is_deleted or ev.interview.resume.job.is_deleted:
+        raise Http404
 
     if ev.is_submitted:
         return render(request, 'interviews/already_submitted.html', {'ev': ev})
@@ -125,27 +374,35 @@ def evaluate(request, token):
         if form.is_valid():
             d = form.cleaned_data
 
-            # Collect scores
-            ev.scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
-            ev.additional_notes = d.get('additional_notes', '')
-            ev.another_phase_required = d.get('another_phase_required', False)
-            ev.hard_negotiation = d.get('hard_negotiation', False)
-            ev.suitable_other_dept = d.get('suitable_other_dept', False)
-            ev.suitable_higher_position = d.get('suitable_higher_position', False)
-            ev.suitable_junior_position = d.get('suitable_junior_position', False)
-
-            # Use manual recommendation if given, otherwise auto-calculate
+            scores = {key: int(d[f'score_{key}']) for key in CRITERIA_KEYS}
             manual_rec = d.get('recommendation', '')
             if manual_rec:
-                ev.recommendation = manual_rec
+                recommendation = manual_rec
             else:
-                total = sum(ev.scores.values())
-                pct = round((total / MAX_SCORE) * 100)
-                ev.recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
-            ev.is_submitted = True
-            ev.submitted_at = timezone.now()
-            ev.save()
+                pct = round((sum(scores.values()) / MAX_SCORE) * 100)
+                recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
 
+            submitted_now = False
+            with transaction.atomic():
+                locked = InterviewEvaluation.objects.select_for_update().get(pk=ev.pk)
+                if not locked.is_submitted and not locked.is_expired:
+                    locked.scores = scores
+                    locked.additional_notes = d.get('additional_notes', '')
+                    locked.another_phase_required = d.get('another_phase_required', False)
+                    locked.hard_negotiation = d.get('hard_negotiation', False)
+                    locked.suitable_other_dept = d.get('suitable_other_dept', False)
+                    locked.suitable_higher_position = d.get('suitable_higher_position', False)
+                    locked.suitable_junior_position = d.get('suitable_junior_position', False)
+                    locked.recommendation = recommendation
+                    locked.is_submitted = True
+                    locked.submitted_at = timezone.now()
+                    locked.save()
+                    submitted_now = True
+
+            if submitted_now:
+                # Public token form: no authenticated actor (actor=None).
+                audit_log(None, 'interview.evaluation_submitted', locked,
+                          details=f'interview={locked.interview_id} recommendation={recommendation}')
             return redirect('interviews:evaluate_done', token=token)
         else:
             form_errors_to_messages(request, form)
@@ -157,11 +414,9 @@ def evaluate(request, token):
         'score_range': range(1, 6),
     })
 
-
 def evaluate_done(request, token):
     ev = get_object_or_404(InterviewEvaluation, token=token)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
-
 
 @login_required
 def rank_report(request, job_slug):
@@ -210,8 +465,6 @@ def rank_report(request, job_slug):
         ai = d['resume'].final_score
         iv_pct = d['interview_pct']
         v_score = d['resume'].verification_score
-        # Composite: interview 65%, AI score 25%, link-verification 10%.
-        # Gracefully degrades when verification is absent (skipped/failed).
         if iv_pct is not None and ai is not None and v_score is not None:
             d['composite'] = round(iv_pct * 0.65 + float(ai) * 0.25 + float(v_score) * 0.10)
         elif iv_pct is not None and ai is not None:
@@ -225,7 +478,6 @@ def rank_report(request, job_slug):
         if total_votes == 0:
             d['verdict'] = 'pending'
         elif d['yes'] > d['no'] and d['yes'] > d['maybe'] and d['yes'] > 0:
-            # Strict majority: tied votes go to 'review', not 'hire'
             d['verdict'] = 'hire'
         elif d['no'] > d['yes']:
             d['verdict'] = 'reject'
@@ -240,7 +492,6 @@ def rank_report(request, job_slug):
     for i, c in enumerate(candidates, 1):
         c['rank'] = i
 
-    # Available phases for filter tabs
     all_phases = (
         Interview.objects
         .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,

@@ -587,6 +587,7 @@
         padding: 0.5rem 1rem;
         border-radius: 0.75rem;
         font-weight: 500;
+        white-space: nowrap;
         transition: all 0.2s ease;
     }
     .nav-link:focus-visible {

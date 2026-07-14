@@ -1,10 +1,15 @@
 """
 Unit tests for views.
 """
+import importlib
+
 import pytest
 from django.urls import reverse
 from apps.core.models import Job, Resume
 
+# apps.core.views re-exports `dashboard` (the view fn), shadowing the submodule,
+# so import the module explicitly to monkeypatch its health probes.
+_dashboard = importlib.import_module('apps.core.views.dashboard')
 
 @pytest.mark.django_db
 class TestErrorPages:
@@ -19,9 +24,10 @@ class TestErrorPages:
         assert b'404' in response.content
         assert b'Page not found' in response.content or b'page not found' in response.content.lower()
 
-    def test_404_page_has_dashboard_link(self, client):
+    def test_404_page_has_working_cta_for_anonymous(self, client):
         response = client.get('/404/')
-        assert b'Go to Dashboard' in response.content
+        assert b'Browse open positions' in response.content
+        assert b'/careers/' in response.content
 
     def test_404_page_has_go_back_link(self, client):
         response = client.get('/404/')
@@ -38,29 +44,32 @@ class TestErrorPages:
         assert b'500' in response.content
         assert b'Something went wrong' in response.content
 
-    def test_500_page_has_dashboard_link(self, rf):
+    def test_500_page_has_working_cta(self, rf):
         from config.urls import custom_500
         response = custom_500(rf.get('/'))
-        assert b'Go to Dashboard' in response.content
+        assert b'/careers/' in response.content
+        assert b'Browse open positions' in response.content
 
     def test_500_page_has_notification_message(self, rf):
         from config.urls import custom_500
         response = custom_500(rf.get('/'))
         assert b'notified' in response.content
 
-
 @pytest.mark.django_db
 class TestHealthCheck:
     """Tests for health check endpoint."""
     
-    def test_health_check_success(self, client):
-        """Test health check returns 200 and healthy status."""
+    def test_health_check_success(self, client, monkeypatch):
+        """Health check returns 200 / status 'ok' when all components pass.
+        (Redis + Celery probes are stubbed; a real test worker never replies to
+        the broker ping. Full component matrix lives in test_health.py.)"""
+        monkeypatch.setattr(_dashboard, '_probe_redis', lambda: True)
+        monkeypatch.setattr(_dashboard, '_probe_celery', lambda: True)
         response = client.get(reverse('core:health_check'))
         assert response.status_code == 200
         data = response.json()
-        assert data['status'] == 'healthy'
-        assert data['database'] == 'connected'
-
+        assert data['status'] == 'ok'
+        assert data['components']['db']['ok'] is True
 
 @pytest.mark.django_db
 class TestDashboardView:
@@ -89,24 +98,18 @@ class TestDashboardView:
         Resume.objects.create(job=sample_job, candidate_name="Pat", screening_status="needs_review")
         response = authenticated_client.get(reverse('core:dashboard'))
         assert response.context['needs_review_count'] == 1
-        assert b'Needs review' in response.content  # surfaced in the attention panel
+        assert b'Needs review' in response.content
 
     def test_dashboard_stats_deleted_job_resumes(self, authenticated_client, sample_job, sample_resume):
         """Test dashboard counts exclude resumes from deleted jobs."""
-        # Initial check
         response = authenticated_client.get(reverse('core:dashboard'))
         assert response.context['total_resumes'] == 1
         
-        # Soft delete the job
         sample_job.soft_delete()
         
-        # Check again - currently this will fail if my hypothesis is correct (it will still be 1)
         response = authenticated_client.get(reverse('core:dashboard'))
         
-        # We EXPECT resumes from deleted jobs to be excluded? 
-        # Usually yes. If the job is deleted, we shouldn't count its resumes as "active" in the system overview.
         assert response.context['total_resumes'] == 0
-
 
 @pytest.mark.django_db
 class TestJobViews:
@@ -133,12 +136,10 @@ class TestJobViews:
     
     def test_job_list_default_active(self, authenticated_client, sample_job):
         """Bare /jobs/ defaults to the 'active' filter — only active jobs are shown."""
-        # Create a draft job
         Job.objects.create(title='Draft Job', status='draft', owner=sample_job.owner)
 
         response = authenticated_client.get(reverse('core:job_list'))
 
-        # Should only contain the active job (draft is filtered out by default)
         assert len(response.context['jobs']) == 1
         assert response.context['jobs'][0] == sample_job
         assert response.context['status_filter'] == 'active'
@@ -149,7 +150,6 @@ class TestJobViews:
         
         response = authenticated_client.get(reverse('core:job_list'), {'status': 'all'})
         
-        # Should contain both jobs
         assert len(response.context['jobs']) == 2
         assert response.context['status_filter'] == 'all'
         
@@ -176,7 +176,7 @@ class TestJobViews:
             'status': 'draft'
         }
         response = authenticated_client.post(reverse('core:job_create'), data)
-        assert response.status_code == 302  # Redirect after success
+        assert response.status_code == 302
         assert Job.objects.filter(title='New Job').exists()
     
     def test_job_detail(self, authenticated_client, sample_job):
@@ -229,7 +229,6 @@ class TestJobViews:
         assert response.status_code == 302
         assert Job.objects.filter(pk=sample_job.pk).count() == 0
 
-
 @pytest.mark.django_db
 class TestResumeViews:
     """Tests for resume CRUD views."""
@@ -242,7 +241,6 @@ class TestResumeViews:
         response = authenticated_client.get(
             reverse('core:resume_create', kwargs={'job_slug': sample_job.slug})
         )
-        # Should redirect with error message
         assert response.status_code == 302
     
     def test_resume_detail(self, authenticated_client, sample_resume):
@@ -260,7 +258,7 @@ class TestResumeViews:
         assert resp.status_code == 200
         names = [r.candidate_name for r in resp.context['page_obj']]
         assert "Uncertain Uma" in names
-        assert sample_resume.candidate_name not in names  # completed one excluded
+        assert sample_resume.candidate_name not in names
 
     def test_pipeline_row_shows_needs_review_badge(self, authenticated_client, sample_job):
         from apps.core.models import Resume
@@ -268,7 +266,7 @@ class TestResumeViews:
         body = authenticated_client.get(
             reverse('core:resume_row_fragment', kwargs={'uuid': nr.uuid})
         ).content.decode()
-        assert "Needs review" in body  # distinguishable from a plain unscored row
+        assert "Needs review" in body
 
     def test_detail_disables_screening_button_while_processing(self, authenticated_client, sample_resume):
         """While screening is running, the action shows a disabled state and NO
@@ -280,7 +278,6 @@ class TestResumeViews:
         ).content.decode()
         assert 'Screening in progress' in body
         assert reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid}) not in body
-        # The header action must appear exactly once (no duplicate id on full page).
         assert body.count('id="screening-action"') == 1
 
     def test_status_fragment_oob_refreshes_action_button(self, authenticated_client, sample_resume):
@@ -315,7 +312,6 @@ class TestResumeViews:
         import io
         from unittest.mock import patch
 
-        # Stub Celery task so no real task is dispatched
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
             pdf_bytes = b'%PDF-1.4 fake content'
             fake_file = io.BytesIO(pdf_bytes)
@@ -356,11 +352,11 @@ class TestResumeViews:
                 HTTP_HX_REQUEST='true',
             )
 
-        assert response.status_code == 200  # fragment, not a 302 redirect
+        assert response.status_code == 200
         mock_delay.assert_called_once_with(sample_resume.id)
         body = response.content.decode()
-        assert 'id="screening-status"' in body          # status region swapped in place
-        assert 'hx-swap-oob="true"' in body             # action button OOB-refreshed
+        assert 'id="screening-status"' in body
+        assert 'hx-swap-oob="true"' in body
         sample_resume.refresh_from_db()
         assert sample_resume.screening_status == 'processing'
 
@@ -407,6 +403,7 @@ class TestResumeViews:
             'certification_score': '',
             'achievement_score': '',
             'final_score': 87,
+            'reason': 'manual adjustment after panel review',
         }
         response = authenticated_client.post(
             reverse('core:resume_edit', kwargs={'uuid': sample_resume.uuid}),
@@ -499,7 +496,6 @@ class TestResumeViews:
             reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
         assert b'hx-trigger="every 3s"' not in response.content
-
 
 @pytest.mark.django_db
 class TestLoginRatelimitFailsafe:

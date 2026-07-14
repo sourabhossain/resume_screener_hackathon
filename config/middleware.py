@@ -3,7 +3,6 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-
 class RequestCorrelationMiddleware:
     """Tags every request with a short ID so web and Celery logs can be correlated."""
 
@@ -17,7 +16,6 @@ class RequestCorrelationMiddleware:
         response['X-Request-ID'] = request_id
         return response
 
-
 class ContentSecurityPolicyMiddleware:
     """Emits a Content-Security-Policy header on every response.
 
@@ -30,10 +28,6 @@ class ContentSecurityPolicyMiddleware:
 
     _CSP = (
         "default-src 'self'; "
-        # 'unsafe-eval' is required by AlpineJS v3: it uses the Function()
-        # constructor internally to evaluate x-data/x-show/x-text expressions.
-        # Without it, Alpine silently drops all bindings (blank buttons, empty
-        # dropdowns, wrong visibility states).
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "

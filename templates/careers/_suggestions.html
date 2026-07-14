@@ -1,8 +1,4 @@
-{% comment %}
-Typeahead suggestions list. Carries the stable id so the live-search HTMX
-response can swap it out-of-band (oob=True). Visibility is controlled by the
-Alpine wrapper in job_list.html, not here.
-{% endcomment %}
+
 <div id="careers-suggestions"{% if oob %} hx-swap-oob="true"{% endif %}>
     {% if suggestions %}
     <ul class="overflow-hidden rounded-xl border border-zinc-200/90 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">

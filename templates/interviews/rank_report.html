@@ -31,7 +31,7 @@
                 </div>
             </div>
         </div>
-        {# Print-only generated stamp #}
+
         <div class="hidden text-right print:block">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Generated</p>
             <p class="text-sm font-medium text-zinc-700">{% now "M j, Y · g:i A" %}</p>
@@ -104,7 +104,6 @@
                 <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30
                            {% if c.rank == 1 %}bg-amber-50/40 dark:bg-amber-950/10{% elif c.rank == 2 %}bg-zinc-50/60 dark:bg-zinc-800/20{% elif c.rank == 3 %}bg-orange-50/30 dark:bg-orange-950/10{% endif %}">
 
-                    {# Rank badge #}
                     <td class="px-4 py-4 text-center">
                         {% if c.rank == 1 %}
                         <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-white shadow-sm">1</span>
@@ -117,7 +116,6 @@
                         {% endif %}
                     </td>
 
-                    {# Candidate #}
                     <td class="px-4 py-4">
                         <a href="{% url 'core:resume_detail' r.uuid %}" class="group/link">
                             <p class="font-semibold text-zinc-900 group-hover/link:text-primary-600 dark:text-zinc-100 dark:group-hover/link:text-primary-400">{{ r.candidate_name }}</p>
@@ -125,7 +123,6 @@
                         </a>
                     </td>
 
-                    {# Phases #}
                     <td class="hidden px-4 py-4 sm:table-cell print:table-cell">
                         <div class="flex flex-wrap gap-1">
                             {% for ph in c.phases %}
@@ -134,7 +131,6 @@
                         </div>
                     </td>
 
-                    {# Interview score bar #}
                     <td class="px-4 py-4">
                         {% if c.interview_pct is not None %}
                         <div class="flex items-center gap-2">
@@ -154,9 +150,8 @@
                         {% endif %}
                     </td>
 
-                    {# AI Score #}
                     <td class="hidden px-4 py-4 md:table-cell print:table-cell">
-                        {% if r.final_score %}
+                        {% if r.final_score is not None %}
                         <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{{ r.final_score }}</span>
                         <span class="text-xs text-zinc-400">/100</span>
                         {% else %}
@@ -164,7 +159,6 @@
                         {% endif %}
                     </td>
 
-                    {# Evaluator recommendations #}
                     <td class="hidden px-4 py-4 lg:table-cell print:table-cell">
                         <div class="flex items-center gap-1.5">
                             {% if c.yes > 0 %}
@@ -185,7 +179,6 @@
                         </div>
                     </td>
 
-                    {# Composite score #}
                     <td class="px-4 py-4 text-center">
                         {% if c.composite is not None %}
                         <span class="text-xl font-black
@@ -198,7 +191,6 @@
                         {% endif %}
                     </td>
 
-                    {# Verdict #}
                     <td class="px-4 py-4 text-center">
                         {% if c.verdict == 'hire' %}
                         <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
@@ -227,7 +219,7 @@
         Composite = Interview score × 70% + AI screening score × 30%
     </p>
 
-    <div class="mt-6 hidden items-center justify-between border-t border-zinc-200 pt-3 print:flex">
+    <div class="mt-6 hidden items-center justify-between border-t border-zinc-200 pt-3 dark:border-zinc-800 print:flex">
         <p class="text-[10px] text-zinc-500">Composite = Interview score × 70% + AI screening score × 30%</p>
         <p class="text-[10px] font-semibold text-zinc-500">SSL Wireless · Interview Rank Report</p>
     </div>
@@ -245,46 +237,37 @@
 
 <style>
 @media print {
-    /* A4 sheet with comfortable margins */
+
     @page {
         size: A4;
         margin: 14mm 12mm 15mm;
     }
 
-    /* Force the full design to render — backgrounds, gradients, badge fills,
-       progress bars and pills are stripped by browsers unless we force this. */
     *, *::before, *::after {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
 
-    /* Clean white sheet, even when the app is in dark mode */
     html, body,
     .dark body {
         background: #ffffff !important;
         color: #18181b !important;
     }
 
-    /* Drop chrome we don't want on paper */
     nav, footer { display: none !important; }
 
-    /* Use the full page width */
     main { padding: 0 !important; }
     .max-w-6xl { max-width: none !important; }
 
-    /* Softer on screen, crisp & flat on paper */
     .shadow-soft, .shadow-sm, .shadow-md { box-shadow: none !important; }
 
-    /* Keep the report on one tight block where possible */
     .mb-6 { margin-bottom: 0.9rem !important; }
 
-    /* Table: repeat the header on every page, never split a row */
     table { font-size: 10.5px; width: 100% !important; }
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; break-inside: avoid; }
     td, th { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
 
-    /* Avoid an orphaned stat row */
     .grid { break-inside: avoid; }
 }
 </style>

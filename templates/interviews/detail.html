@@ -19,7 +19,6 @@
                     <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ interview.scheduled_date|date:"F j, Y" }}</span>
                 </p>
 
-                {# Stat pills #}
                 <div class="mt-3 flex flex-wrap gap-2">
                     <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
@@ -41,7 +40,7 @@
 
                 {% if interview.notes %}
                 <div class="relative mt-4 max-w-xl overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-900/20">
-                    {# accent bar #}
+
                     <span class="absolute inset-y-0 left-0 w-1 bg-amber-400"></span>
                     <div class="flex items-start gap-3 pl-2">
                         <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
@@ -56,17 +55,25 @@
                 {% endif %}
             </div>
 
-            <form method="post" action="{% url 'interviews:delete' interview.pk %}"
-                  data-confirm
-                  data-confirm-title="Delete this interview?"
-                  data-confirm-text="The interview and <b>all its evaluations</b> will be permanently removed."
-                  data-confirm-button="Delete interview">
-                {% csrf_token %}
-                <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    Delete Interview
-                </button>
-            </form>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="{% url 'interviews:ics' interview.pk %}" hx-boost="false" download
+                   class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                   title="Add to calendar (.ics)">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    Add to calendar (.ics)
+                </a>
+                <form method="post" action="{% url 'interviews:delete' interview.pk %}"
+                      data-confirm
+                      data-confirm-title="Delete this interview?"
+                      data-confirm-text="The interview and <b>all its evaluations</b> will be permanently removed."
+                      data-confirm-button="Delete interview">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        Delete Interview
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -80,7 +87,7 @@
         <div class="divide-y divide-zinc-50 dark:divide-zinc-800/60">
             {% for ev in evaluations %}
             <div class="flex flex-col gap-3 px-6 py-4 transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 sm:flex-row sm:items-center sm:justify-between">
-                {# Left: avatar + info #}
+
                 <div class="flex items-center gap-3">
                     <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm
                         {% if ev.is_submitted %}bg-emerald-500{% else %}bg-zinc-400 dark:bg-zinc-600{% endif %}">
@@ -96,10 +103,9 @@
                     </div>
                 </div>
 
-                {# Right: status + actions #}
                 <div class="flex flex-wrap items-center gap-2">
                     {% if ev.is_submitted %}
-                    {# Submitted badges row #}
+
                     <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                         <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                         Submitted
@@ -123,7 +129,7 @@
                     </span>
                     {% endif %}
                     {% else %}
-                    {# Pending or Expired #}
+
                     {% if ev.is_expired %}
                     <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 dark:bg-rose-900/20 dark:text-rose-400">
                         <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -166,7 +172,6 @@
                     {% endif %}
                     {% endif %}
 
-                    {# Delete slot #}
                     <form method="post" action="{% url 'interviews:evaluation_delete' ev.token %}"
                           data-confirm
                           data-confirm-title="Remove this evaluator?"
@@ -174,7 +179,7 @@
                           data-confirm-text="This evaluator will be removed from the interview."
                           data-confirm-button="Remove">
                         {% csrf_token %}
-                        <button type="submit" class="rounded-lg p-1.5 text-zinc-300 transition hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
+                        <button type="submit" aria-label="Remove evaluator {{ ev.interviewer_name }}" title="Remove evaluator" class="rounded-lg p-1.5 text-zinc-300 transition hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </form>
@@ -218,7 +223,7 @@
 
     {% for ev in evaluations %}{% if ev.is_submitted %}
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
-        {# Card header #}
+
         <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <div class="flex items-center gap-3">
                 <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white">
@@ -244,7 +249,6 @@
             </div>
         </div>
 
-        {# Score grid #}
         <div class="grid grid-cols-2 gap-px bg-zinc-100 dark:bg-zinc-800 sm:grid-cols-4">
             {% for label, score in ev.scores_with_labels %}
             <div class="flex items-center justify-between bg-white px-4 py-3 dark:bg-zinc-900">
@@ -261,7 +265,6 @@
             {% endfor %}
         </div>
 
-        {# Suggestions row #}
         {% if ev.another_phase_required or ev.hard_negotiation or ev.suitable_other_dept or ev.suitable_higher_position or ev.suitable_junior_position %}
         <div class="border-t border-zinc-100 px-6 py-3 dark:border-zinc-800">
             <div class="flex flex-wrap gap-2">
@@ -274,7 +277,6 @@
         </div>
         {% endif %}
 
-        {# Notes #}
         {% if ev.additional_notes %}
         <div class="border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Notes</p>

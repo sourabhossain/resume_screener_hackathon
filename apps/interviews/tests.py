@@ -1,6 +1,6 @@
 """Tests for the interviews app: models, recruiter views, and the public
 token-based evaluation flow."""
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 from django.urls import reverse
@@ -14,23 +14,19 @@ from apps.interviews.models import (
     MAX_SCORE,
 )
 
-
 @pytest.fixture
 def interview(db, sample_resume):
     return Interview.objects.create(
         resume=sample_resume, phase='1', scheduled_date=date.today()
     )
 
-
 @pytest.fixture
 def evaluation(db, interview):
     return interview.evaluations.create(interviewer_name='Bob Reviewer')
 
-
 def _full_scores(value=4):
     """A complete, valid evaluation POST payload (all criteria scored)."""
     return {f'score_{k}': str(value) for k in CRITERIA_KEYS}
-
 
 @pytest.mark.django_db
 class TestInterviewModels:
@@ -46,15 +42,14 @@ class TestInterviewModels:
 
     def test_total_score_ignores_out_of_range_values(self, evaluation):
         evaluation.scores = {'educational_background': 9, 'enthusiasm': 3}
-        # only the in-range (1..5) value counts
         assert evaluation.total_score == 3
 
     def test_impression_label_bands(self, evaluation):
-        evaluation.scores = {k: 5 for k in CRITERIA_KEYS}   # 100%
+        evaluation.scores = {k: 5 for k in CRITERIA_KEYS}
         assert evaluation.impression_label == 'Good'
-        evaluation.scores = {k: 3 for k in CRITERIA_KEYS}   # 60%
+        evaluation.scores = {k: 3 for k in CRITERIA_KEYS}
         assert evaluation.impression_label == 'Satisfactory'
-        evaluation.scores = {k: 1 for k in CRITERIA_KEYS}   # 20%
+        evaluation.scores = {k: 1 for k in CRITERIA_KEYS}
         assert evaluation.impression_label == 'Unsatisfactory'
 
     def test_is_expired_logic(self, interview):
@@ -63,18 +58,16 @@ class TestInterviewModels:
         ev.token_expires_at = timezone.now() - timedelta(days=1)
         ev.save(update_fields=['token_expires_at'])
         assert ev.is_expired is True
-        # a submitted evaluation is never "expired"
         ev.is_submitted = True
         assert ev.is_expired is False
 
     def test_interview_avg_and_counts(self, interview):
         assert interview.avg_score() is None
         e1 = interview.evaluations.create(interviewer_name='A', scores={k: 4 for k in CRITERIA_KEYS}, is_submitted=True)
-        interview.evaluations.create(interviewer_name='B')  # pending
+        interview.evaluations.create(interviewer_name='B')
         assert interview.submitted_count == 1
         assert interview.pending_count == 1
         assert interview.avg_score() == e1.total_score
-
 
 @pytest.mark.django_db
 class TestInterviewerAddForm:
@@ -123,7 +116,6 @@ class TestInterviewerAddForm:
         assert form.cleaned_data['interviewer_name'] == 'Carol'
         assert form.cleaned_data['interviewer_position'] == 'Lead'
 
-
 @pytest.mark.django_db
 class TestRecruiterViews:
     def test_create_requires_login(self, client, sample_resume):
@@ -135,9 +127,35 @@ class TestRecruiterViews:
     def test_create_get_and_post(self, authenticated_client, sample_resume):
         url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
         assert authenticated_client.get(url).status_code == 200
-        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': '2026-07-01', 'notes': 'x'})
+        future = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': future, 'notes': 'x'})
         assert resp.status_code == 302
         assert Interview.objects.filter(resume=sample_resume).exists()
+
+    def test_create_rejects_past_date(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        past = (timezone.now().date() - timedelta(days=1)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': past, 'notes': 'x'})
+        assert resp.status_code == 200
+        assert resp.context['form'].errors['scheduled_date'] == ['Interview date cannot be in the past.']
+        assert not Interview.objects.filter(resume=sample_resume).exists()
+
+    def test_create_accepts_empty_time(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        future = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': future, 'scheduled_time': '', 'notes': ''})
+        assert resp.status_code == 302
+        iv = Interview.objects.get(resume=sample_resume)
+        assert iv.scheduled_time is None
+
+    def test_create_accepts_valid_time(self, authenticated_client, sample_resume):
+        url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
+        future = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': future, 'scheduled_time': '14:30', 'notes': ''})
+        assert resp.status_code == 302
+        iv = Interview.objects.get(resume=sample_resume)
+        assert iv.scheduled_time is not None
+        assert iv.scheduled_time.strftime('%H:%M') == '14:30'
 
     def test_detail_renders(self, authenticated_client, interview):
         resp = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
@@ -196,7 +214,6 @@ class TestRecruiterViews:
         resp = client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
         assert resp.status_code == 200
 
-
 @pytest.mark.django_db
 class TestPublicEvaluate:
     def test_evaluate_get_valid(self, client, evaluation):
@@ -210,7 +227,7 @@ class TestPublicEvaluate:
 
     def test_submit_auto_recommendation_yes(self, client, evaluation):
         url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
-        resp = client.post(url, _full_scores(4))  # 80% -> yes
+        resp = client.post(url, _full_scores(4))
         assert resp.status_code == 302
         evaluation.refresh_from_db()
         assert evaluation.is_submitted is True
@@ -219,18 +236,18 @@ class TestPublicEvaluate:
 
     def test_submit_auto_recommendation_maybe_and_no(self, client, interview):
         e_maybe = interview.evaluations.create(interviewer_name='M')
-        client.post(reverse('interviews:evaluate', kwargs={'token': e_maybe.token}), _full_scores(3))  # 60%
+        client.post(reverse('interviews:evaluate', kwargs={'token': e_maybe.token}), _full_scores(3))
         e_maybe.refresh_from_db()
         assert e_maybe.recommendation == 'maybe'
 
         e_no = interview.evaluations.create(interviewer_name='N')
-        client.post(reverse('interviews:evaluate', kwargs={'token': e_no.token}), _full_scores(1))  # 20%
+        client.post(reverse('interviews:evaluate', kwargs={'token': e_no.token}), _full_scores(1))
         e_no.refresh_from_db()
         assert e_no.recommendation == 'no'
 
     def test_manual_recommendation_overrides_score(self, client, evaluation):
         url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
-        data = _full_scores(1)  # would auto-calc 'no'
+        data = _full_scores(1)
         data['recommendation'] = 'yes'
         client.post(url, data)
         evaluation.refresh_from_db()
@@ -239,19 +256,382 @@ class TestPublicEvaluate:
     def test_resubmit_blocked(self, client, evaluation):
         url = reverse('interviews:evaluate', kwargs={'token': evaluation.token})
         client.post(url, _full_scores(4))
-        # second GET shows the already-submitted page, not the form
         resp = client.get(url)
         assert resp.status_code == 200
-        assert b'score-radio' not in resp.content  # form not rendered
+        assert b'score-radio' not in resp.content
 
     def test_expired_token_shows_expired_page(self, client, evaluation):
         evaluation.token_expires_at = timezone.now() - timedelta(days=1)
         evaluation.save(update_fields=['token_expires_at'])
         resp = client.get(reverse('interviews:evaluate', kwargs={'token': evaluation.token}))
         assert resp.status_code == 200
-        # the score form must not be served for an expired link
         assert b'score-radio' not in resp.content
 
     def test_evaluate_done_renders(self, client, evaluation):
         resp = client.get(reverse('interviews:evaluate_done', kwargs={'token': evaluation.token}))
         assert resp.status_code == 200
+
+
+def _monday(d=None):
+    d = d or timezone.localdate()
+    return d - timedelta(days=d.weekday())
+
+
+@pytest.mark.django_db
+class TestInterviewCalendar:
+    url = reverse('interviews:calendar')
+
+    def test_requires_login(self, client):
+        resp = client.get(self.url)
+        assert resp.status_code == 302
+        assert 'login' in resp.url
+
+    def test_shows_interview_in_correct_day_column(self, authenticated_client, sample_resume):
+        # Wednesday of the current week (offset 2 from Monday).
+        wednesday = _monday() + timedelta(days=2)
+        iv = Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=wednesday)
+        resp = authenticated_client.get(self.url)
+        assert resp.status_code == 200
+        assert resp.context['interview_count'] == 1
+        assert sample_resume.candidate_name.title().encode() in resp.content
+
+        days = resp.context['days']
+        assert len(days) == 7
+        for day in days:
+            if day['date'] == wednesday:
+                assert iv in day['interviews']
+            else:
+                assert iv not in day['interviews']
+
+    def test_renders_seven_day_columns_and_controls(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        resp = authenticated_client.get(self.url)
+        assert resp.content.count(b'data-day-column') == 7
+        assert b'?week=' in resp.content            # prev/next controls
+        assert b'Today' in resp.content
+        assert b'1 interview this week' in resp.content
+
+    def test_excludes_soft_deleted_interview(self, authenticated_client, sample_resume):
+        iv = Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        iv.soft_delete()
+        resp = authenticated_client.get(self.url)
+        assert resp.context['interview_count'] == 0
+
+    def test_excludes_interview_of_soft_deleted_resume(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        sample_resume.soft_delete()
+        resp = authenticated_client.get(self.url)
+        assert resp.context['interview_count'] == 0
+
+    def test_excludes_interview_of_soft_deleted_job(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        sample_resume.job.soft_delete()
+        resp = authenticated_client.get(self.url)
+        assert resp.context['interview_count'] == 0
+
+    def test_week_navigation_moves_window(self, authenticated_client, sample_resume):
+        next_monday = _monday() + timedelta(days=7)
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=next_monday)
+        # Not visible in the current week...
+        assert authenticated_client.get(self.url).context['interview_count'] == 0
+        # ...but visible when navigating to that week.
+        resp = authenticated_client.get(self.url, {'week': next_monday.isoformat()})
+        assert resp.context['interview_count'] == 1
+        assert resp.context['week_start'] == next_monday
+
+    def test_empty_week_renders_empty_state(self, authenticated_client):
+        far = (_monday() + timedelta(days=70)).isoformat()
+        resp = authenticated_client.get(self.url, {'week': far})
+        assert resp.context['interview_count'] == 0
+        assert b'No interviews scheduled this week' in resp.content
+
+    def test_query_count_does_not_grow_with_interviews(self, authenticated_client, sample_job):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from apps.core.models import Resume
+
+        def make(n, phase='1'):
+            r = Resume.objects.create(job=sample_job, candidate_name=f'Cand {n}', final_score=70)
+            Interview.objects.create(resume=r, phase=phase, scheduled_date=_monday())
+
+        make(1); make(2)
+        with CaptureQueriesContext(connection) as ctx_small:
+            assert authenticated_client.get(self.url).context['interview_count'] == 2
+        n_small = len(ctx_small)
+
+        for i in range(3, 11):
+            make(i)
+        with CaptureQueriesContext(connection) as ctx_large:
+            assert authenticated_client.get(self.url).context['interview_count'] == 10
+        n_large = len(ctx_large)
+
+        assert n_small == n_large, f'query count grew: {n_small} -> {n_large}'
+
+    def test_day_ordering_timed_before_untimed(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        d = _monday() + timedelta(days=1)
+
+        def mk(name, t):
+            r = Resume.objects.create(job=sample_job, candidate_name=name, final_score=70)
+            return Interview.objects.create(resume=r, phase='1', scheduled_date=d, scheduled_time=t)
+
+        untimed = mk('Untimed', None)
+        late = mk('Late', time(14, 0))
+        early = mk('Early', time(9, 0))
+
+        resp = authenticated_client.get(self.url, {'week': d.isoformat()})
+        day = next(x for x in resp.context['days'] if x['date'] == d)
+        # Timed ascending first, untimed last.
+        assert day['interviews'] == [early, late, untimed]
+
+    # --- Part B: rendered-HTML / presentation checks -----------------------
+
+    def test_desktop_seven_column_grid_markup(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        resp = authenticated_client.get(self.url)
+        assert b'lg:grid-cols-7' in resp.content          # single 7-col desktop grid
+        assert resp.content.count(b'data-day-column') == 7
+
+    def test_card_shows_time_job_title_and_ics_link(self, authenticated_client, sample_resume):
+        d = _monday() + timedelta(days=2)
+        iv = Interview.objects.create(resume=sample_resume, phase='2',
+                                      scheduled_date=d, scheduled_time=time(9, 30))
+        resp = authenticated_client.get(self.url, {'week': d.isoformat()})
+        content = resp.content.decode()
+        assert '09:30' in content                          # HH:MM on a timed card
+        assert sample_resume.job.title in content          # job title (line 3)
+        # Exactly one .ics affordance per card.
+        assert content.count(reverse('interviews:ics', kwargs={'pk': iv.pk})) == 1
+
+    def test_card_has_full_text_tooltips_for_name_and_job(self, authenticated_client, sample_resume):
+        """Truncated card text (name up to 2 lines, job single-line) exposes the
+        full value via a title attribute so hover reveals it on narrow columns."""
+        d = _monday() + timedelta(days=2)
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=d)
+        resp = authenticated_client.get(self.url, {'week': d.isoformat()})
+        content = resp.content.decode()
+        assert f'title="{sample_resume.candidate_name.title()}"' in content
+        assert f'title="{sample_resume.job.title}"' in content
+
+    def test_today_column_highlight_present_on_current_week(self, authenticated_client, sample_resume):
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=_monday())
+        resp = authenticated_client.get(self.url)          # defaults to current week
+        assert b'day-today' in resp.content
+
+    def test_today_column_highlight_absent_on_other_week(self, authenticated_client):
+        far = (_monday() + timedelta(days=70)).isoformat()
+        resp = authenticated_client.get(self.url, {'week': far})
+        assert b'day-today' not in resp.content
+
+    def test_day_header_is_static_and_precedes_card(self, authenticated_client, sample_resume):
+        # Regression for the sticky-header bug: the day header must be a plain
+        # static element rendered BEFORE its cards, so cards can never overlap
+        # or render above their own header.
+        thursday = _monday() + timedelta(days=3)
+        Interview.objects.create(resume=sample_resume, phase='1', scheduled_date=thursday)
+        resp = authenticated_client.get(self.url, {'week': thursday.isoformat()})
+        content = resp.content.decode()
+
+        # No sticky positioning classes on the day headers.
+        assert 'lg:sticky' not in content
+        assert 'lg:top-16' not in content
+
+        # Header (weekday label) precedes the interview card (candidate name).
+        weekday = thursday.strftime('%a')                # e.g. 'Thu'
+        name = sample_resume.candidate_name.title()      # 'John Doe'
+        assert weekday in content and name in content
+        assert content.index(weekday) < content.index(name)
+
+    def test_empty_week_shows_single_message_not_dashed_box(self, authenticated_client):
+        far = (_monday() + timedelta(days=70)).isoformat()
+        resp = authenticated_client.get(self.url, {'week': far})
+        content = resp.content.decode()
+        # Grid with day headers still renders (week structure stays visible)...
+        assert resp.content.count(b'data-day-column') == 7
+        # ...and the "No interviews" message appears exactly once (no duplicate box).
+        assert content.count('No interviews scheduled this week') == 1
+        assert 'border-dashed' not in content
+
+
+@pytest.mark.django_db
+class TestInterviewICS:
+    def test_requires_login(self, client, interview):
+        resp = client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 302
+        assert 'login' in resp.url
+
+    def test_content_type_and_disposition(self, authenticated_client, interview):
+        resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 200
+        assert resp['Content-Type'] == 'text/calendar; charset=utf-8'
+        assert resp['Content-Disposition'] == f'attachment; filename="interview-{interview.pk}.ics"'
+
+    def test_contains_vevent_name_and_date(self, authenticated_client, interview):
+        resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        body = resp.content.decode()
+        assert 'BEGIN:VCALENDAR' in body
+        assert 'BEGIN:VEVENT' in body
+        assert 'STATUS:CONFIRMED' in body
+        assert interview.resume.candidate_name in body
+        assert f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}' in body
+        assert '\r\n' in body                       # CRLF line endings
+        assert f'UID:interview-{interview.pk}@' in body
+
+    def test_special_characters_escaped(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(job=sample_job, candidate_name='Khan, Md; Test', final_score=80)
+        iv = Interview.objects.create(resume=r, phase='2', scheduled_date=timezone.localdate())
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': iv.pk})).content.decode()
+        assert 'Khan\\, Md\\; Test' in body          # comma + semicolon escaped
+        assert 'SUMMARY:Interview - Khan, Md; Test' not in body   # raw form must not appear
+
+    def test_no_pii_or_scores_in_output(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(
+            job=sample_job, candidate_name='Jane Roe',
+            email='secret.person@example.com', phone='01711223344', final_score=91,
+        )
+        iv = Interview.objects.create(resume=r, phase='1', scheduled_date=timezone.localdate())
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': iv.pk})).content.decode()
+        assert 'secret.person@example.com' not in body
+        assert '01711223344' not in body
+        assert 'score' not in body.lower()
+
+    def test_soft_deleted_interview_404(self, authenticated_client, interview):
+        interview.soft_delete()
+        resp = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk}))
+        assert resp.status_code == 404
+
+    def test_ics_timed_event(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(job=sample_job, candidate_name='Timed Person', final_score=70)
+        iv = Interview.objects.create(
+            resume=r, phase='1', scheduled_date=timezone.localdate(), scheduled_time=time(14, 30)
+        )
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': iv.pk})).content.decode()
+        day = iv.scheduled_date.strftime('%Y%m%d')
+        # TIME_ZONE is UTC, so 14:30 local == 14:30Z; DTEND is one hour later.
+        assert f'DTSTART:{day}T143000Z' in body
+        assert f'DTEND:{day}T153000Z' in body
+        assert 'VALUE=DATE' not in body
+
+    def test_ics_untimed_still_all_day(self, authenticated_client, interview):
+        # Regression: the `interview` fixture has scheduled_time=None.
+        body = authenticated_client.get(reverse('interviews:ics', kwargs={'pk': interview.pk})).content.decode()
+        assert f'DTSTART;VALUE=DATE:{interview.scheduled_date.strftime("%Y%m%d")}' in body
+        assert 'T143000Z' not in body
+
+
+@pytest.mark.django_db
+class TestInterviewCalendarMonth:
+    """Month overview grid (?view=month&month=YYYY-MM). Shares the week view's
+    queryset + soft-delete filters + intra-day ordering; adds the grid layout."""
+
+    url = reverse('interviews:calendar')
+
+    def _month(self, client, ym):
+        return client.get(self.url, {'view': 'month', 'month': ym})
+
+    def _cell(self, resp, d):
+        return next(c for week in resp.context['weeks'] for c in week if c['date'] == d)
+
+    def test_full_month_starting_monday_has_four_week_rows(self, authenticated_client):
+        # Feb 2021 began on a Monday and had 28 days -> exactly 4 week rows.
+        resp = self._month(authenticated_client, '2021-02')
+        assert resp.status_code == 200
+        assert resp.content.count(b'data-week-row') == 4
+
+    def test_month_spanning_six_weeks_has_six_rows(self, authenticated_client):
+        # May 2021 (starts Sat, ends Mon) spills into a 6-row grid.
+        resp = self._month(authenticated_client, '2021-05')
+        assert resp.content.count(b'data-week-row') == 6
+
+    def test_interview_lands_in_correct_in_month_cell(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        r = Resume.objects.create(job=sample_job, candidate_name='Jane Roe', final_score=80)
+        iv = Interview.objects.create(resume=r, phase='1',
+                                      scheduled_date=date(2021, 5, 15), scheduled_time=time(9, 30))
+        resp = self._month(authenticated_client, '2021-05')
+        assert resp.context['interview_count'] == 1
+
+        cell = self._cell(resp, date(2021, 5, 15))
+        assert cell['in_month'] is True
+        assert iv in cell['interviews']
+        content = resp.content.decode()
+        assert 'Roe' in content        # last-name-or-short label
+        assert '09:30' in content       # compact time
+
+    def test_adjacent_month_cells_are_muted_and_hold_no_interviews(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        # Apr 28 2021 shows as a leading (previous-month) cell in the May grid.
+        r = Resume.objects.create(job=sample_job, candidate_name='Outside Person', final_score=70)
+        Interview.objects.create(resume=r, phase='1', scheduled_date=date(2021, 4, 28))
+
+        resp = self._month(authenticated_client, '2021-05')
+        # The month query window is May only, so the April interview is excluded.
+        assert resp.context['interview_count'] == 0
+        cell = self._cell(resp, date(2021, 4, 28))
+        assert cell['in_month'] is False
+        assert cell['interviews'] == []
+        assert b'data-in-month="false"' in resp.content
+
+    def test_plus_n_more_appears_when_a_day_exceeds_the_cap(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+        d = date(2021, 5, 10)
+        for i in range(4):                                    # cap is 3 per cell
+            r = Resume.objects.create(job=sample_job, candidate_name=f'Cand{i} Nom', final_score=70)
+            Interview.objects.create(resume=r, phase='1', scheduled_date=d)
+
+        resp = self._month(authenticated_client, '2021-05')
+        cell = self._cell(resp, d)
+        assert len(cell['interviews']) == 3
+        assert cell['overflow'] == 1
+        assert '+1 more' in resp.content.decode()
+
+    def test_view_toggle_links_present_both_ways(self, authenticated_client):
+        week = authenticated_client.get(self.url).content.decode()
+        assert 'view=month' in week                            # Week page offers a Month toggle
+        month = self._month(authenticated_client, '2021-05').content.decode()
+        assert '?week=' in month                               # Month page toggles back to Week
+        assert 'view=month' in month                           # ...and has month prev/next nav
+
+    def test_month_excludes_soft_deleted(self, authenticated_client, sample_job):
+        from apps.core.models import Resume
+
+        def one(name):
+            r = Resume.objects.create(job=sample_job, candidate_name=name, final_score=70)
+            return r, Interview.objects.create(resume=r, phase='1', scheduled_date=date(2021, 5, 12))
+
+        r1, iv1 = one('A'); iv1.soft_delete()
+        r2, iv2 = one('B'); r2.soft_delete()
+        r3, iv3 = one('C'); r3.job.soft_delete()
+
+        assert self._month(authenticated_client, '2021-05').context['interview_count'] == 0
+
+    def test_month_query_count_does_not_grow_with_interviews(self, authenticated_client, sample_job):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from apps.core.models import Resume
+
+        def make(n):
+            r = Resume.objects.create(job=sample_job, candidate_name=f'C{n} Nom', final_score=70)
+            Interview.objects.create(resume=r, phase='1', scheduled_date=date(2021, 5, 12))
+
+        make(1); make(2)
+        with CaptureQueriesContext(connection) as ctx_small:
+            assert self._month(authenticated_client, '2021-05').context['interview_count'] == 2
+        n_small = len(ctx_small)
+
+        for i in range(3, 11):
+            make(i)
+        with CaptureQueriesContext(connection) as ctx_large:
+            assert self._month(authenticated_client, '2021-05').context['interview_count'] == 10
+        n_large = len(ctx_large)
+
+        assert n_small == n_large, f'query count grew: {n_small} -> {n_large}'
+
+    def test_empty_month_still_renders_full_grid(self, authenticated_client):
+        resp = self._month(authenticated_client, '2021-05')
+        assert resp.context['interview_count'] == 0
+        assert resp.content.count(b'data-week-row') == 6      # grid is never "empty"
+        assert b'data-day-cell' in resp.content

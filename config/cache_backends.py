@@ -15,9 +15,7 @@ from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-# Throttle the "redis down" warning so an outage doesn't flood the logs.
 _warned = False
-
 
 def _warn(exc):
     global _warned
@@ -25,11 +23,9 @@ def _warn(exc):
         logger.warning("Cache backend (Redis) unavailable; degrading gracefully: %s", exc)
         _warned = True
 
-
 def _reset_warned():
     global _warned
     _warned = False
-
 
 class ResilientRedisCache(RedisCache):
     def get(self, key, default=None, version=None):
@@ -56,8 +52,6 @@ class ResilientRedisCache(RedisCache):
             _reset_warned()
             return result
         except RedisError as e:
-            # Pretend the key was newly added so callers (e.g. django-ratelimit)
-            # treat usage as fresh/low and allow the request through.
             _warn(e)
             return True
 

@@ -6,7 +6,7 @@ from apps.core.form_utils import AriaInvalidMixin, clean_label_text, clean_perso
 class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
     class Meta:
         model = Interview
-        fields = ['phase', 'scheduled_date', 'notes']
+        fields = ['phase', 'scheduled_date', 'scheduled_time', 'notes']
         widgets = {
             'phase': forms.Select(attrs={
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
@@ -15,12 +15,24 @@ class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
                 'type': 'date',
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
             }),
+            'scheduled_time': forms.TimeInput(attrs={
+                'type': 'time',
+                'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
+            }),
             'notes': forms.Textarea(attrs={
                 'rows': 2,
                 'placeholder': 'Optional notes…',
                 'class': 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100',
             }),
         }
+
+    def clean_scheduled_date(self):
+        """Reject interviews scheduled in the past (today is allowed)."""
+        from django.utils import timezone
+        date = self.cleaned_data.get('scheduled_date')
+        if date and date < timezone.now().date():
+            raise forms.ValidationError('Interview date cannot be in the past.')
+        return date
 
 
 class InterviewerAddForm(AriaInvalidMixin, forms.ModelForm):

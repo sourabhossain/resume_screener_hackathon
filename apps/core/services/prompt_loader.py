@@ -23,10 +23,7 @@ PROMPTS_DIR = Path(__file__).parent.parent / 'prompts'
 BASE_DIR = PROMPTS_DIR / '_base'
 ROLES_DIR = PROMPTS_DIR / 'roles'
 
-# Defensive fragment fallback only (a valid family with a missing file).
-# Routing of uncertain jobs is handled upstream by flagging for manual review.
 DEFAULT_ROLE = FALLBACK_ROLE
-
 
 @lru_cache(maxsize=8)
 def _read_text(path: str) -> str:
@@ -35,14 +32,12 @@ def _read_text(path: str) -> str:
         raise FileNotFoundError(f"Prompt file not found: {p}")
     return p.read_text(encoding='utf-8')
 
-
 def _fragment_path(role: str) -> Path:
     """Role fragment path, falling back to the default role if absent."""
     candidate = ROLES_DIR / f"{role}.fragment.txt"
     if candidate.exists():
         return candidate
     return ROLES_DIR / f"{DEFAULT_ROLE}.fragment.txt"
-
 
 @lru_cache(maxsize=16)
 def parse_fragment(role: str) -> Dict[str, str]:
@@ -58,12 +53,10 @@ def parse_fragment(role: str) -> Dict[str, str]:
             sections[current].append(line)
     return {name: '\n'.join(lines).strip() for name, lines in sections.items()}
 
-
 def _inject(template: str, replacements: Dict[str, str]) -> str:
     for sentinel, value in replacements.items():
         template = template.replace(f"[[{sentinel}]]", value)
     return template
-
 
 def build_extraction_prompt(role: str, resume_text: str) -> str:
     """Compose the extraction prompt for a role."""
@@ -74,7 +67,6 @@ def build_extraction_prompt(role: str, resume_text: str) -> str:
         'ROLE_SKILL_TAXONOMY': frag.get('ROLE_SKILL_TAXONOMY', ''),
         'RESUME_TEXT': resume_text,
     })
-
 
 def build_matching_prompt(role: str, job_description: str, profile: Dict[str, Any]) -> str:
     """Compose the matching prompt for a role. The candidate profile is the
@@ -88,7 +80,6 @@ def build_matching_prompt(role: str, job_description: str, profile: Dict[str, An
         'PROFILE_JSON': json.dumps(profile, ensure_ascii=False, indent=2),
     })
 
-
 def build_detector_prompt(job_description: str) -> str:
     """Compose the job-type detector prompt, injecting the family catalog from
     the single source of truth so detector labels always match the fragments."""
@@ -98,13 +89,9 @@ def build_detector_prompt(job_description: str) -> str:
         'JOB_DESCRIPTION': job_description,
     })
 
-
-# --- Backward-compatible convenience wrappers (default role) -----------------
-
 def get_extraction_prompt(resume_text: str, role: str = DEFAULT_ROLE) -> str:
     """Formatted extraction prompt (defaults to the tech role)."""
     return build_extraction_prompt(role, resume_text)
-
 
 def get_matching_prompt(
     job_description: str,
@@ -126,7 +113,6 @@ def get_matching_prompt(
         'achievements': achievements,
     }
     return build_matching_prompt(role, job_description, profile)
-
 
 def get_reasoning_prompt(
     candidate_name: str,
@@ -152,7 +138,6 @@ def get_reasoning_prompt(
         certifications=certifications,
         achievements=achievements,
     )
-
 
 def clear_prompt_cache() -> None:
     """Clear prompt caches. Useful for development/testing."""

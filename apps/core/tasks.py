@@ -5,17 +5,25 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
-
 @shared_task(bind=True, max_retries=3, soft_time_limit=180, time_limit=210, acks_late=True)
-def screen_resume_task(self, resume_id: int):
+def screen_resume_task(self, resume_id: int, job_type: str = None):
+    """Screen a resume. When job_type is provided (a valid job-family key), the
+    detector is skipped and that family is used — this is how a needs-review
+    resolution re-runs screening with a recruiter-chosen family. Left as None
+    for the normal flow, so existing callers are unaffected."""
     from apps.core.models import Resume
     from apps.core.services.resume_service import ResumeService
 
     try:
         resume = Resume.objects.select_related('job').get(id=resume_id)
+
+        if resume.screening_status == 'completed':
+            logger.info(f"Resume {resume_id} already completed — skipping duplicate screening")
+            return {'success': True, 'resume_id': resume_id, 'skipped': 'already_completed'}
+
         logger.info(f"Starting screening for resume {resume_id}")
 
-        result = ResumeService.process_resume(resume)
+        result = ResumeService.process_resume(resume, job_type=job_type)
 
         if result.get('success'):
             logger.info(f"Completed screening for resume {resume_id}: Score={result.get('final_score')}, Tier={result.get('tier')}")
@@ -36,7 +44,6 @@ def screen_resume_task(self, resume_id: int):
 
     except Resume.DoesNotExist:
         logger.error(f"Resume {resume_id} not found — may have been deleted")
-        # all_objects reaches soft-deleted rows to prevent them staying 'processing'
         Resume.all_objects.filter(id=resume_id).update(screening_status='failed')
         return {'error': 'Resume not found'}
 
@@ -45,11 +52,10 @@ def screen_resume_task(self, resume_id: int):
 
         retries_left = self.max_retries - self.request.retries
         if retries_left > 0:
-            # Keep as pending so UI shows it queued, not failed, while retrying
             try:
-                Resume.objects.filter(id=resume_id).update(screening_status='pending')
+                Resume.objects.filter(id=resume_id).update(screening_status='processing')
             except Exception as update_err:
-                logger.warning(f"Could not reset status to pending for resume {resume_id}: {update_err}")
+                logger.warning(f"Could not keep status processing for resume {resume_id}: {update_err}")
         else:
             try:
                 Resume.objects.filter(id=resume_id).update(
@@ -61,7 +67,6 @@ def screen_resume_task(self, resume_id: int):
             logger.error(f"Resume {resume_id} permanently failed after {self.max_retries} retries")
 
         raise self.retry(exc=e, countdown=60)
-
 
 @shared_task(bind=True, max_retries=2, soft_time_limit=180, time_limit=210, acks_late=True)
 def verify_resume_links_task(self, resume_id: int):
@@ -111,18 +116,19 @@ def verify_resume_links_task(self, resume_id: int):
         return {'error': 'timeout'}
     except Exception as e:
         logger.exception(f"Link verification failed for resume {resume_id}: {e}")
+        retries_left = self.max_retries - self.request.retries
+        if retries_left > 0:
+            raise self.retry(exc=e, countdown=30)
         try:
             Resume.objects.filter(id=resume_id).update(verification_status='failed', verified_at=None)
         except Exception as update_err:
             logger.warning(f"Could not update verification status: {update_err}")
-        raise self.retry(exc=e, countdown=30)
-
+        return {'error': str(e), 'resume_id': resume_id}
 
 @shared_task
 def batch_screen_resumes(job_id: int):
     from apps.core.models import Resume
 
-    # skip_locked=True prevents concurrent calls from dispatching the same resumes twice
     with transaction.atomic():
         resume_ids = list(
             Resume.objects.select_for_update(skip_locked=True).filter(
@@ -142,7 +148,6 @@ def batch_screen_resumes(job_id: int):
 
     return {'queued': len(resume_ids)}
 
-
 @shared_task(ignore_result=True)
 def close_expired_jobs():
     """Auto-close active jobs whose application deadline (closing_date) has passed.
@@ -153,13 +158,22 @@ def close_expired_jobs():
     """
     from django.utils import timezone
     from apps.core.models import Job
+    from apps.core.services.audit import audit_log
 
     today = timezone.now().date()
+    expiring = list(Job.objects.filter(
+        status='active',
+        closing_date__isnull=False,
+        closing_date__lt=today,
+    ))
     count = Job.objects.filter(
         status='active',
         closing_date__isnull=False,
         closing_date__lt=today,
     ).update(status='closed', updated_at=timezone.now())
+
+    for job in expiring:
+        audit_log(None, 'job.auto_closed', job, details=f'title={job.title}')
 
     if count:
         logger.info("Auto-closed %d expired job(s) past their closing date", count)

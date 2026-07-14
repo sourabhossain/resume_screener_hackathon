@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% load humanize audit_extras %}
+
+{% block title %}Audit Trail{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div>
+        <h1 class="mb-2 text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">Audit Trail</h1>
+        <p class="text-zinc-600 dark:text-zinc-400">Append-only record of recruiter and system actions.</p>
+    </div>
+    <a href="{% url 'core:audit_log_export' %}{% if querystring %}?{{ querystring }}{% endif %}" hx-boost="false"
+       class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export CSV
+    </a>
+</div>
+
+<form method="get" action="{% url 'core:audit_log' %}"
+      class="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-2 lg:grid-cols-6">
+    <select name="actor" class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+        <option value="">All actors</option>
+        <option value="system" {% if filters.actor == 'system' %}selected{% endif %}>System</option>
+        {% for a in actors %}
+        <option value="{{ a.pk }}" {% if filters.actor == a.pk|stringformat:'s' %}selected{% endif %}>{{ a.username }}</option>
+        {% endfor %}
+    </select>
+    <select name="action" class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+        <option value="">All actions</option>
+        {% for value, label in action_choices %}
+        <option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <input type="date" name="from" value="{{ filters.from }}" aria-label="From date"
+           class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+    <input type="date" name="to" value="{{ filters.to }}" aria-label="To date"
+           class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="Search details / entity id" aria-label="Search audit details or entity id"
+           class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+    <div class="flex gap-2">
+        <button type="submit" class="flex-1 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700">Filter</button>
+        <a href="{% url 'core:audit_log' %}" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Clear</a>
+    </div>
+</form>
+
+{% if page_obj.object_list %}
+<div class="overflow-x-auto rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-zinc-200 bg-zinc-50 text-left dark:border-zinc-800 dark:bg-zinc-800/60">
+                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">When</th>
+                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Actor</th>
+                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Action</th>
+                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Entity</th>
+                <th class="px-5 py-3 font-semibold text-zinc-500 dark:text-zinc-400">Details</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {% for row in page_obj %}
+            {% if row.date_group %}
+            <tr class="bg-zinc-50/80 dark:bg-zinc-800/40">
+                <td colspan="5" class="px-5 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{{ row.date_group }}</td>
+            </tr>
+            {% endif %}
+            {# row.pk retained as a data-attribute for debugging; deliberately not shown as a column. #}
+            <tr data-audit-id="{{ row.pk }}" class="align-top transition hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                <td class="whitespace-nowrap px-5 py-3 text-zinc-500 dark:text-zinc-400" title="{{ row.created_at|date:'Y-m-d H:i:s' }}">{{ row.created_at|naturaltime }}</td>
+                <td class="whitespace-nowrap px-5 py-3">
+                    {% if row.actor %}
+                    <span class="font-semibold text-zinc-900 dark:text-white">{{ row.actor.username }}</span>
+                    {% else %}
+                    <span class="inline-flex whitespace-nowrap rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold leading-5 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">System</span>
+                    {% endif %}
+                </td>
+                <td class="whitespace-nowrap px-5 py-3">
+                    <span class="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold leading-5 {{ row.action|audit_badge }}" title="{{ row.action }}">{{ row.get_action_display }}</span>
+                </td>
+                <td class="px-5 py-3">
+                    {% if row.entity_type %}
+                        {% if row.entity_url %}
+                        <a href="{{ row.entity_url }}" class="font-semibold text-primary-600 hover:underline dark:text-primary-400">{{ row.entity_label }}</a>
+                        {% else %}
+                        <span class="font-medium text-zinc-700 dark:text-zinc-200">{{ row.entity_label }}</span>
+                        {% endif %}
+                        <span class="block text-xs text-zinc-400">{{ row.get_entity_type_display }}</span>
+                    {% else %}
+                    <span class="text-zinc-400 dark:text-zinc-600">—</span>
+                    {% endif %}
+                </td>
+                <td class="px-5 py-3 text-zinc-600 dark:text-zinc-300">
+                    {% if row.details %}
+                    <span class="block max-w-md break-words">{{ row.details|audit_details }}</span>
+                    {% else %}
+                    <span class="text-zinc-400 dark:text-zinc-600">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row">
+    <p class="text-sm text-zinc-500 dark:text-zinc-400">
+        Showing <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ page_obj.start_index }}</span>–<span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ page_obj.end_index }}</span>
+        of <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ page_obj.paginator.count }}</span> {{ page_obj.paginator.count|pluralize:'entry,entries' }}
+    </p>
+
+    {% if page_obj.has_other_pages %}
+    <nav class="flex flex-wrap items-center justify-center gap-1.5" aria-label="Pagination">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}"
+           rel="prev" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Previous</a>
+        {% else %}
+        <span aria-disabled="true" class="cursor-not-allowed rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-300 dark:border-zinc-800 dark:text-zinc-600">Previous</span>
+        {% endif %}
+
+        {% for num in page_range %}
+            {% if num == ellipsis %}
+            <span class="px-2 py-2 text-sm font-semibold text-zinc-400 dark:text-zinc-600">{{ ellipsis }}</span>
+            {% elif num == page_obj.number %}
+            <span aria-current="page" class="rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white">{{ num }}</span>
+            {% else %}
+            <a href="?page={{ num }}{% if querystring %}&{{ querystring }}{% endif %}"
+               class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}"
+           rel="next" class="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Next</a>
+        {% else %}
+        <span aria-disabled="true" class="cursor-not-allowed rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-300 dark:border-zinc-800 dark:text-zinc-600">Next</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+
+{% else %}
+<div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-white py-16 dark:border-zinc-700 dark:bg-zinc-900">
+    <svg class="mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+    </svg>
+    {% if filters.actor or filters.action or filters.from or filters.to or filters.q %}
+    <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No audit entries match these filters</p>
+    <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-600">Try widening the date range or clearing the search.</p>
+    {% else %}
+    <p class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No activity recorded yet</p>
+    <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-600">Actions like posting a job, uploading a résumé or scheduling an interview will appear here.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

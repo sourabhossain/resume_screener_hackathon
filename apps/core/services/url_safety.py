@@ -19,7 +19,6 @@ _METADATA_AND_LOCAL_HOSTS = frozenset({
     '169.254.169.254',
 })
 
-# Hostnames that parsers often derive from bullets like "Node.js → https://node.js".
 _GARBAGE_EXTRACTED_HOSTS = frozenset({
     'node.js',
     'react.js',
@@ -35,9 +34,7 @@ _GARBAGE_EXTRACTED_HOSTS = frozenset({
     'typescript.js',
 })
 
-
 _NAT64_PREFIX = ipaddress.ip_network('64:ff9b::/96')
-
 
 def _effective_ip(ip):
     """Unwrap IPv6 forms that embed an IPv4 so we judge the REAL destination.
@@ -55,7 +52,6 @@ def _effective_ip(ip):
             return ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
     return ip
 
-
 def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     ip = _effective_ip(ip)
     if ip == ipaddress.ip_address('169.254.169.254'):
@@ -69,7 +65,6 @@ def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
         or ip.is_unspecified
     )
 
-
 def _resolved_ips(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
     out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
@@ -77,7 +72,6 @@ def _resolved_ips(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6A
         addr = info[4][0]
         out.append(ipaddress.ip_address(addr))
     return out
-
 
 def is_safe_public_http_url(url: str, *, resolve_dns: bool = True) -> tuple[bool, str]:
     """
@@ -134,3 +128,48 @@ def is_safe_public_http_url(url: str, *, resolve_dns: bool = True) -> tuple[bool
             return False, 'blocked resolved ip'
 
     return True, ''
+
+def validate_and_pin(url: str) -> tuple[bool, str, str | None, str | None, int | None]:
+    """
+    Validate a URL for outbound fetching AND return a single resolved IP to pin.
+
+    Returns (allowed, reason, pinned_ip, host, port).
+
+    The crawler must connect to the EXACT IP validated here. If it instead let
+    httpx resolve the hostname again at connect time, an attacker controlling DNS
+    could answer the guard's lookup with a public IP and the connection's lookup
+    with 127.0.0.1 / 169.254.169.254 / 10.x (DNS rebinding / TOCTOU), bypassing
+    the whole SSRF check. Resolving once and pinning closes that window.
+    """
+    ok, reason = is_safe_public_http_url(url, resolve_dns=False)
+    if not ok:
+        return False, reason, None, None, None
+
+    parsed = urlparse(url.strip())
+    host = parsed.hostname
+    scheme = parsed.scheme
+    port = parsed.port or (443 if scheme == 'https' else 80)
+
+    try:
+        ipaddress.ip_address(host)
+        return True, '', host, host, port
+    except ValueError:
+        pass
+
+    try:
+        ips = _resolved_ips(host)
+    except socket.gaierror as e:
+        logger.debug('DNS resolution failed for %s: %s', host, e)
+        return False, 'dns resolution failed', None, None, None
+
+    if not ips:
+        return False, 'no resolved addresses', None, None, None
+
+    safe_ip = None
+    for ip in ips:
+        if _blocked_ip(ip):
+            return False, 'blocked resolved ip', None, None, None
+        if safe_ip is None:
+            safe_ip = ip
+
+    return True, '', str(safe_ip), host, port

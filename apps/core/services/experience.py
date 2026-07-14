@@ -18,16 +18,15 @@ _MONTHS = {
     'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12,
 }
 
-# Words that mean "still employed" -> treat the end as today.
 _PRESENT = {'present', 'current', 'ongoing', 'now', 'till date', 'to date', 'date'}
 
 _YEAR_RE = re.compile(r'(19|20)\d{2}')
 
+_BENGALI_DIGITS = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
 
 def _abs_month(year: int, month: int) -> int:
     """Absolute month index so durations are simple subtraction."""
     return year * 12 + (month - 1)
-
 
 def _parse_endpoint(raw: Optional[str], *, is_end: bool, today: datetime.date) -> Optional[int]:
     """
@@ -39,7 +38,7 @@ def _parse_endpoint(raw: Optional[str], *, is_end: bool, today: datetime.date) -
     """
     if raw is None:
         return None
-    text = str(raw).strip().lower()
+    text = str(raw).strip().lower().translate(_BENGALI_DIGITS)
     if not text:
         return None
 
@@ -57,23 +56,29 @@ def _parse_endpoint(raw: Optional[str], *, is_end: bool, today: datetime.date) -
             month = num
             break
     if month is None:
-        # Numeric month forms: "2020-03", "03/2020", "2020.03".
-        numeric = re.findall(r'\d{1,2}', re.sub(_YEAR_RE, ' ', text))
-        for token in numeric:
-            value = int(token)
+        year_start, year_end = year_match.span()
+        candidates = []
+        for m in re.finditer(r'\d{1,2}', text):
+            s, e = m.span()
+            if s >= year_start and e <= year_end:
+                continue
+            value = int(m.group(0))
             if 1 <= value <= 12:
-                month = value
-                break
+                distance = year_start - e if e <= year_start else s - year_end
+                candidates.append((distance, value))
+        if candidates:
+            candidates.sort(key=lambda c: c[0])
+            month = candidates[0][1]
     if month is None:
-        month = 1  # year-only -> anchor to January
+        month = 1
 
     return _abs_month(year, month)
-
 
 def _intervals(work_history, today: datetime.date) -> List[Tuple[int, int]]:
     intervals: List[Tuple[int, int]] = []
     if not isinstance(work_history, list):
         return intervals
+    today_idx = _abs_month(today.year, today.month)
     for entry in work_history:
         if not isinstance(entry, dict):
             continue
@@ -81,14 +86,15 @@ def _intervals(work_history, today: datetime.date) -> List[Tuple[int, int]]:
         end = _parse_endpoint(entry.get('end'), is_end=True, today=today)
         if start is None:
             continue
+        if start > today_idx:
+            continue
         if end is None:
-            # Start with no parseable end: assume ongoing through today.
-            end = _abs_month(today.year, today.month)
+            end = today_idx
+        end = min(end, today_idx)
         if end < start:
-            continue  # malformed span, skip rather than count negatively
+            continue
         intervals.append((start, end))
     return intervals
-
 
 def _merge(intervals: List[Tuple[int, int]]) -> int:
     """Total months covered by the union of intervals (overlaps counted once)."""
@@ -105,7 +111,6 @@ def _merge(intervals: List[Tuple[int, int]]) -> int:
             cur_start, cur_end = start, end
     total += cur_end - cur_start
     return total
-
 
 def compute_experience_years(work_history, today: Optional[datetime.date] = None) -> float:
     """

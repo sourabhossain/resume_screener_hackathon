@@ -1,7 +1,5 @@
-# Generated manually for achievements persistence
 
 from django.db import migrations, models
-
 
 class Migration(migrations.Migration):
 

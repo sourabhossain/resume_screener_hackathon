@@ -10,7 +10,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from apps.core.models import Resume
 
-
 @pytest.mark.django_db
 class TestScreenResumeTaskSuccess:
 
@@ -40,7 +39,28 @@ class TestScreenResumeTaskSuccess:
                    return_value={'success': True}) as mock_process:
             screen_resume_task(sample_resume.id)
 
-        mock_process.assert_called_once_with(sample_resume)
+        mock_process.assert_called_once_with(sample_resume, job_type=None)
+
+    def test_default_job_type_is_none_backward_compatible(self, sample_resume):
+        """Existing callers dispatch without job_type; the task defaults it to
+        None and passes that through unchanged."""
+        from apps.core.tasks import screen_resume_task
+
+        with patch('apps.core.services.resume_service.ResumeService.process_resume',
+                   return_value={'success': True}) as mock_process:
+            screen_resume_task(sample_resume.id)
+
+        mock_process.assert_called_once_with(sample_resume, job_type=None)
+
+    def test_job_type_threaded_to_process_resume(self, sample_resume):
+        """A supplied job_type (needs-review resolution) reaches process_resume."""
+        from apps.core.tasks import screen_resume_task
+
+        with patch('apps.core.services.resume_service.ResumeService.process_resume',
+                   return_value={'success': True}) as mock_process:
+            screen_resume_task(sample_resume.id, job_type='data_ai')
+
+        mock_process.assert_called_once_with(sample_resume, job_type='data_ai')
 
     def test_failure_result_logged_but_returned(self, sample_resume):
         from apps.core.tasks import screen_resume_task
@@ -52,6 +72,25 @@ class TestScreenResumeTaskSuccess:
         assert result['success'] is False
         assert 'LLM error' in result['error']
 
+@pytest.mark.django_db
+class TestScreenResumeTaskIdempotency:
+
+    def test_already_completed_is_skipped(self, sample_resume):
+        """A resume already in 'completed' state is skipped: no reprocessing and
+        no duplicate audit row (guards against a re-dispatched/duplicate task)."""
+        from apps.core.tasks import screen_resume_task
+        from apps.core.models import AuditLog
+
+        sample_resume.screening_status = 'completed'
+        sample_resume.save(update_fields=['screening_status'])
+        audit_before = AuditLog.objects.count()
+
+        with patch('apps.core.services.resume_service.ResumeService.process_resume') as mock_process:
+            result = screen_resume_task(sample_resume.id)
+
+        mock_process.assert_not_called()                       # no reprocessing
+        assert result.get('skipped') == 'already_completed'
+        assert AuditLog.objects.count() == audit_before        # no duplicate audit row
 
 @pytest.mark.django_db
 class TestScreenResumeTaskNotFound:
@@ -67,14 +106,11 @@ class TestScreenResumeTaskNotFound:
         from apps.core.tasks import screen_resume_task
 
         sample_resume.soft_delete()
-        # all_objects reaches soft-deleted; using an ID that exists only in all_objects
         result = screen_resume_task(sample_resume.id)
         sample_resume.refresh_from_db()
-        # The task raises DoesNotExist for soft-deleted (SoftDeleteManager hides it)
         assert result['error'] == 'Resume not found'
         sample_resume_in_db = Resume.all_objects.get(pk=sample_resume.pk)
         assert sample_resume_in_db.screening_status == 'failed'
-
 
 @pytest.mark.django_db
 class TestScreenResumeTaskTimeout:
@@ -99,14 +135,15 @@ class TestScreenResumeTaskTimeout:
 
         assert result['resume_id'] == sample_resume.id
 
-
 @pytest.mark.django_db
 class TestScreenResumeTaskRetry:
 
-    def test_general_exception_sets_pending_status_before_retry(self, sample_resume):
-        """On first failure (retries_left > 0), status is set to 'pending' before the retry
-        so the UI shows the task as queued rather than failed while it retries.
-        In CELERY_TASK_ALWAYS_EAGER mode, self.retry() re-raises immediately without looping."""
+    def test_general_exception_keeps_processing_status_before_retry(self, sample_resume):
+        """On first failure (retries_left > 0), the row stays 'processing' (NOT 'pending')
+        while it retries. Resetting to 'pending' would let batch_screen_resumes — which
+        claims status='pending' rows — re-dispatch a duplicate task for the same resume
+        (double-screening race). In CELERY_TASK_ALWAYS_EAGER mode, self.retry() re-raises
+        immediately without looping."""
         from apps.core.tasks import screen_resume_task
 
         with patch('apps.core.services.resume_service.ResumeService.process_resume',
@@ -115,8 +152,7 @@ class TestScreenResumeTaskRetry:
                 screen_resume_task(sample_resume.id)
 
         sample_resume.refresh_from_db()
-        # retries_left = max_retries(3) - request.retries(0) = 3 > 0 → pending
-        assert sample_resume.screening_status == 'pending'
+        assert sample_resume.screening_status == 'processing'
 
     def test_max_retries_sets_failed_status(self, sample_resume):
         """When retries_left == 0 (max_retries=0), status is set to 'failed'.
@@ -131,9 +167,7 @@ class TestScreenResumeTaskRetry:
                     screen_resume_task(sample_resume.id)
 
         sample_resume.refresh_from_db()
-        # retries_left = 0 - 0 = 0 → 'failed'
         assert sample_resume.screening_status == 'failed'
-
 
 @pytest.mark.django_db
 class TestBatchScreenResumes:
@@ -144,7 +178,6 @@ class TestBatchScreenResumes:
 
         r1 = Resume.objects.create(job=sample_job, candidate_name='A', screening_status='pending')
         r2 = Resume.objects.create(job=sample_job, candidate_name='B', screening_status='pending')
-        # completed resume should not be re-queued
         Resume.objects.create(job=sample_job, candidate_name='C', screening_status='completed')
 
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:

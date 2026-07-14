@@ -102,8 +102,31 @@
                         {{ form.closing_date }}
                     </div>
                 </div>
+
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50/60 p-5 dark:border-zinc-800 dark:bg-zinc-900/40">
+                    <p class="mb-4 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                        AI screening criteria <span class="font-normal text-zinc-500 dark:text-zinc-400">(optional — improves match accuracy)</span>
+                    </p>
+                    <div class="space-y-5">
+                        <div>
+                            <label for="id_required_skills_text" class="block mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">Required skills</label>
+                            {{ form.required_skills_text }}
+                            <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{{ form.required_skills_text.help_text }}</p>
+                        </div>
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div>
+                                <label for="id_required_experience" class="block mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">Required experience (years)</label>
+                                {{ form.required_experience }}
+                            </div>
+                            <div>
+                                <label for="id_required_education_text" class="block mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">Required education</label>
+                                {{ form.required_education_text }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
+
 
             <div class="mt-10 flex flex-col-reverse gap-3 border-t border-zinc-100 pt-8 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:justify-end">
                 <a href="{% if job %}{% url 'core:job_detail' job.slug %}{% else %}{% url 'core:job_list' %}{% endif %}" 

@@ -12,7 +12,6 @@ from apps.core.services.golden_checks import (
     check_reasoning,
 )
 
-
 class TestExtractionChecks:
     CLEAN = {
         "candidate_name": "Robert King", "candidate_email": "", "candidate_phone": "",
@@ -29,7 +28,6 @@ class TestExtractionChecks:
         assert any("FABRICATION" in x for x in check_extraction(bad, self.EXP))
 
     def test_absent_skill_no_substring_false_positive(self):
-        # "Go" must NOT match inside "Django" (whole-token boundary).
         out = {"skills": ["Python", "Django", "Docker"]}
         assert check_extraction(out, {"absent_skills": ["Go"]}) == []
 
@@ -38,19 +36,16 @@ class TestExtractionChecks:
         assert any("FABRICATION" in x for x in check_extraction(out, {"absent_skills": ["Go"]}))
 
     def test_pii_photo_not_matched_in_photoshop(self):
-        # "photo" must NOT trigger on the legitimate skill "Adobe Photoshop".
         out = {"candidate_name": "X", "skills": ["Adobe Photoshop"]}
         assert check_extraction(out, {"pii_terms": ["photo"]}) == []
 
     def test_punctuated_skills_matched_exactly(self):
-        # C++, C#, .NET, Node.js are normal skills: caught when actually present.
         for skill in ["C++", "C#", ".NET", "Node.js"]:
             out = {"skills": ["Python", skill]}
             assert any("FABRICATION" in x for x in
                        check_extraction(out, {"absent_skills": [skill]})), skill
 
     def test_bare_c_does_not_match_cpp_or_csharp(self):
-        # absent "C" must NOT false-trigger on "C++" / "C#" (distinct tokens).
         out = {"skills": ["C++", "C#"]}
         assert check_extraction(out, {"absent_skills": ["C"]}) == []
 
@@ -77,7 +72,6 @@ class TestExtractionChecks:
         clean = {"candidate_name": "Maria Gomez", "skills": ["Figma", "UX research"]}
         assert check_extraction(clean, exp) == []
 
-
 class TestMatchingChecks:
     PROFILE = {"skills": ["Python", "Django"]}
 
@@ -103,7 +97,6 @@ class TestMatchingChecks:
         exp = {"injection_present": True, "max_any_score": 80}
         assert any("INJECTION" in x for x in check_matching(out, self.PROFILE, exp))
 
-
 class TestDetectionChecks:
     def test_clean_passes(self):
         out = {"job_type": "sales", "_resolved_by_code": "sales"}
@@ -120,7 +113,6 @@ class TestDetectionChecks:
     def test_ambiguous_none_passes(self):
         out = {"job_type": "uncertain", "_resolved_by_code": None}
         assert check_detection(out, {"ambiguous": True}) == []
-
 
 class TestReasoningChecks:
     def test_low_tier_praise_caught(self):

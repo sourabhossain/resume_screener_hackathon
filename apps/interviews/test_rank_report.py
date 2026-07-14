@@ -19,7 +19,6 @@ from django.urls import reverse
 from apps.core.models import Job, Resume
 from apps.interviews.models import Interview, CRITERIA_KEYS
 
-
 @pytest.fixture
 def job_with_interview(db, user):
     job = Job.objects.create(owner=user, title='Dev Role', status='active')
@@ -32,7 +31,6 @@ def job_with_interview(db, user):
     iv = Interview.objects.create(resume=resume, phase='1', scheduled_date=date.today())
     return job, resume, iv
 
-
 def _submit_eval(interview, scores_value=4):
     ev = interview.evaluations.create(interviewer_name='Reviewer')
     ev.scores = {k: scores_value for k in CRITERIA_KEYS}
@@ -40,7 +38,6 @@ def _submit_eval(interview, scores_value=4):
     ev.is_submitted = True
     ev.save()
     return ev
-
 
 @pytest.mark.django_db
 class TestRankReportAccess:
@@ -67,14 +64,12 @@ class TestRankReportAccess:
         assert resp.status_code == 200
         assert resp.context['candidates'] == []
 
-
 @pytest.mark.django_db
 class TestRankReportCompositeScore:
 
     def test_composite_uses_all_three_components(self, authenticated_client, job_with_interview):
         """Composite = interview_pct * 0.65 + ai_score * 0.25 + v_score * 0.10"""
         job, resume, iv = job_with_interview
-        # scores_value=4 → percentage = round((4*20 / 100) * 100) = 80
         _submit_eval(iv, scores_value=4)
 
         resp = authenticated_client.get(
@@ -91,7 +86,7 @@ class TestRankReportCompositeScore:
             job=job, candidate_name='Cand', final_score=70, verification_score=None
         )
         iv = Interview.objects.create(resume=resume, phase='1', scheduled_date=date.today())
-        _submit_eval(iv, scores_value=4)  # 80%
+        _submit_eval(iv, scores_value=4)
 
         resp = authenticated_client.get(
             reverse('interviews:rank_report', kwargs={'job_slug': job.slug})
@@ -107,14 +102,10 @@ class TestRankReportCompositeScore:
             job=job, candidate_name='Cand', final_score=65, verification_score=None
         )
         Interview.objects.create(resume=resume, phase='1', scheduled_date=date.today())
-        # No submitted evaluations → avg_score() returns None
-        # rank_report skips candidates with no submitted evals, so nothing in context
         resp = authenticated_client.get(
             reverse('interviews:rank_report', kwargs={'job_slug': job.slug})
         )
-        # No submitted evals → no candidates in report
         assert resp.context['candidates'] == []
-
 
 @pytest.mark.django_db
 class TestRankReportVerdict:
@@ -172,7 +163,6 @@ class TestRankReportVerdict:
         )
         assert resp.context['candidates'][0]['verdict'] == 'review'
 
-
 @pytest.mark.django_db
 class TestRankReportPhaseFilter:
 
@@ -208,7 +198,6 @@ class TestRankReportPhaseFilter:
         names = [c['resume'].candidate_name for c in resp.context['candidates']]
         assert 'Alpha' in names
         assert 'Beta' in names
-
 
 @pytest.mark.django_db
 class TestRankReportOrder:

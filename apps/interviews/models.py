@@ -29,18 +29,23 @@ EVALUATION_CRITERIA = [
 ]
 
 CRITERIA_KEYS = [k for k, _ in EVALUATION_CRITERIA]
-MAX_SCORE = len(CRITERIA_KEYS) * 5  # 100
-
+MAX_SCORE = len(CRITERIA_KEYS) * 5
 
 class Interview(SoftDeleteModel):
     PHASE_CHOICES = [('1', 'Interview 1'), ('2', 'Interview 2'), ('3', 'Interview 3')]
     STATUS_CHOICES = [('scheduled', 'Scheduled'), ('completed', 'Completed'), ('cancelled', 'Cancelled')]
+
+    SOFT_DELETE_CASCADE = ('evaluations',)
 
     resume = models.ForeignKey(
         'core.Resume', on_delete=models.CASCADE, related_name='interviews'
     )
     phase = models.CharField(max_length=5, choices=PHASE_CHOICES, default='1')
     scheduled_date = models.DateField()
+    scheduled_time = models.TimeField(
+        null=True, blank=True,
+        help_text='Optional. Leave empty for an all-day/unspecified slot.'
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -66,8 +71,7 @@ class Interview(SoftDeleteModel):
         totals = [e.total_score for e in evals if e.total_score is not None]
         return round(sum(totals) / len(totals)) if totals else None
 
-
-class InterviewEvaluation(models.Model):
+class InterviewEvaluation(SoftDeleteModel):
     RECOMMENDATION_CHOICES = [
         ('yes', 'Yes - Hire'),
         ('no', 'No - Reject'),
@@ -80,20 +84,16 @@ class InterviewEvaluation(models.Model):
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
-    # Interviewer info
     interviewer_name = models.CharField(max_length=200)
     interviewer_position = models.CharField(max_length=200, blank=True)
     interviewer_department = models.CharField(max_length=200, blank=True)
 
-    # Scores: {"educational_background": 4, "job_related_knowledge": 3, ...}
     scores = models.JSONField(default=dict, blank=True)
 
-    # Summary
     impression = models.CharField(max_length=200, blank=True)
     recommendation = models.CharField(max_length=10, choices=RECOMMENDATION_CHOICES, blank=True)
     priority_rank = models.PositiveSmallIntegerField(null=True, blank=True)
 
-    # Suggestions (checkboxes)
     another_phase_required = models.BooleanField(default=False)
     hard_negotiation = models.BooleanField(default=False)
     suitable_other_dept = models.BooleanField(default=False)
@@ -139,8 +139,12 @@ class InterviewEvaluation(models.Model):
 
     @property
     def percentage(self):
-        ts = self.total_score
-        return round((ts / MAX_SCORE) * 100) if ts is not None else None
+        if not self.scores:
+            return None
+        vals = [v for v in self.scores.values() if isinstance(v, int) and 1 <= v <= 5]
+        if not vals:
+            return None
+        return round((sum(vals) / (len(vals) * 5)) * 100)
 
     @property
     def impression_label(self):

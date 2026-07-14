@@ -4,7 +4,6 @@ Tests for CV Link Verification: LinkExtractor, LinkVerifier scoring, and the Cel
 import pytest
 from unittest.mock import patch
 
-
 class TestLinkExtractor:
 
     def test_extracts_github_url(self):
@@ -84,7 +83,6 @@ class TestLinkExtractor:
         links = le.LinkExtractor.extract('https://public.example/foo')
         assert links == []
 
-
 class TestLinkVerifierScore:
 
     def test_full_verification_score(self):
@@ -140,7 +138,6 @@ class TestLinkVerifierScore:
         assert 'Hello World' in result
         assert '<' not in result
         assert 'var x=1' not in result
-
 
 @pytest.mark.django_db
 class TestVerifyResumeLinksTask:
@@ -218,7 +215,6 @@ class TestVerifyResumeLinksTask:
         statuses = []
 
         def capture_and_return(resume):
-            # Capture status mid-execution by reading from DB
             r = Resume.objects.get(id=resume.id)
             statuses.append(r.verification_status)
             return {

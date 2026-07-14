@@ -20,7 +20,6 @@ from django.urls import reverse
 
 from apps.core.models import Job, Resume
 
-
 @pytest.fixture
 def scored_resume(db, sample_job):
     """A fully-screened candidate with a final score (gets a rank)."""
@@ -35,7 +34,6 @@ def scored_resume(db, sample_job):
         recommendation='interview',
     )
 
-
 @pytest.fixture
 def pending_resume(db, sample_job):
     """An unscored candidate (screening not done) — must NOT get a rank number."""
@@ -43,40 +41,35 @@ def pending_resume(db, sample_job):
         job=sample_job,
         candidate_name='Pending Candidate',
         email='pending@example.com',
-        screening_status='failed',       # failed screening, no score
-        verification_status='processing',  # still verifying → row polls
+        screening_status='failed',
+        verification_status='processing',
         final_score=None,
     )
 
-
 def _rank_cell(row_html):
-    """Return just the first <td> (the Rank cell) from a rendered row."""
-    return row_html.split('</td>', 1)[0]
-
+    """Return the Rank cell from a rendered row. A compare-selection checkbox
+    cell now precedes it, so the Rank cell is the second <td>."""
+    return row_html.split('</td>')[1]
 
 @pytest.mark.django_db
 class TestRankDisplay:
-    # 'h-7 w-7' is the class unique to the numeric rank badge; its absence means
-    # the cell fell through to the "—" dash branch.
     RANK_BADGE = 'h-7 w-7'
 
     def test_scored_resume_shows_rank_number(self, scored_resume):
         cell = _rank_cell(render_to_string(
             'core/partials/resume_row.html', {'resume': scored_resume, 'rank': 1},
         ))
-        assert self.RANK_BADGE in cell      # numeric rank badge rendered
-        assert '>1<' in cell                # showing the rank number 1
+        assert self.RANK_BADGE in cell
+        assert '>1<' in cell
 
     def test_pending_resume_shows_dash_not_number(self, pending_resume):
-        # final_score is None → rank cell must be a dash even though rank=5 is passed
         cell = _rank_cell(render_to_string(
             'core/partials/resume_row.html', {'resume': pending_resume, 'rank': 5},
         ))
         assert '—' in cell
-        assert self.RANK_BADGE not in cell  # NO numeric rank badge
+        assert self.RANK_BADGE not in cell
 
     def test_zero_score_still_ranks(self, sample_job):
-        # final_score == 0 is a real score (is not None) → should rank, not dash
         zero = Resume.objects.create(
             job=sample_job, candidate_name='Zero', screening_status='completed',
             final_score=0,
@@ -86,7 +79,6 @@ class TestRankDisplay:
         ))
         assert self.RANK_BADGE in cell
 
-
 @pytest.mark.django_db
 class TestPipelineOrdering:
     def test_scored_sorts_before_unscored(self, sample_job, scored_resume, pending_resume):
@@ -94,7 +86,6 @@ class TestPipelineOrdering:
         ordered = list(_ordered_active_resumes_queryset(sample_job.resumes))
         assert ordered[0] == scored_resume
         assert ordered[-1] == pending_resume
-
 
 @pytest.mark.django_db
 class TestPollingRowFragment:
@@ -112,15 +103,13 @@ class TestPollingRowFragment:
     def test_fragment_carries_oob_badge_and_stats(self, authenticated_client, pending_resume):
         url = reverse('core:resume_row_fragment', args=[pending_resume.uuid])
         body = authenticated_client.get(url).content.decode()
-        assert 'hx-swap-oob' in body  # OOB refresh of pending badge / stat cards
+        assert 'hx-swap-oob' in body
 
     def test_fragment_keeps_rank_for_scored_row(self, authenticated_client, scored_resume):
-        # A completed row polled once must keep its rank badge, not fall back to "—".
         url = reverse('core:resume_row_fragment', args=[scored_resume.uuid])
         cell = _rank_cell(authenticated_client.get(url).content.decode())
-        assert 'h-7 w-7' in cell  # numeric rank badge present (not the "—" dash)
-        assert '>1<' in cell  # sole scored resume → rank 1
-
+        assert 'h-7 w-7' in cell
+        assert '>1<' in cell
 
 @pytest.mark.django_db
 class TestJobDetailHtmxSafety:
@@ -130,8 +119,6 @@ class TestJobDetailHtmxSafety:
         body = authenticated_client.get(
             reverse('core:job_detail', args=[sample_job.slug])
         ).content.decode()
-        # the tbody must disinherit so polling rows don't inherit body's
-        # hx-select="#main-content" (which would blank them)
         assert 'id="pipeline-tbody"' in body
         tbody_tag = body.split('id="pipeline-tbody"', 1)[1].split('>', 1)[0]
         assert 'hx-disinherit' in tbody_tag
@@ -140,10 +127,7 @@ class TestJobDetailHtmxSafety:
         body = authenticated_client.get(
             reverse('core:job_detail', args=[sample_job.slug])
         ).content.decode()
-        # candidate detail links must not be boosted (boosted + disinherit =
-        # whole resume_detail document dumped into <body>)
         assert 'hx-boost="false"' in body
-
 
 @pytest.mark.django_db
 class TestSecurityHeaders:
@@ -151,18 +135,16 @@ class TestSecurityHeaders:
         resp = authenticated_client.get(reverse('core:job_list'))
         csp = resp.headers.get('Content-Security-Policy', '')
         assert csp, 'CSP header missing'
-        assert "'unsafe-eval'" in csp   # AlpineJS needs Function() eval
+        assert "'unsafe-eval'" in csp
         assert "'unsafe-inline'" in csp
 
     def test_request_id_header_present(self, authenticated_client):
         resp = authenticated_client.get(reverse('core:job_list'))
         assert resp.headers.get('X-Request-ID')
 
-
 @pytest.mark.django_db
 class TestBaseTemplateHtmxConfig:
     def test_history_cache_disabled_and_purged(self, client, sample_job):
-        # use a public page so no auth redirect strips the <head>
         body = client.get(reverse('core:careers')).content.decode()
-        assert 'historyCacheSize' in body         # cache disabled via meta config
-        assert 'htmx-history-cache' in body        # stale snapshot purge script
+        assert 'historyCacheSize' in body
+        assert 'htmx-history-cache' in body

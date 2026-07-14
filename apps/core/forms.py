@@ -4,7 +4,6 @@ from django import forms
 from .form_utils import AriaInvalidMixin, clean_label_text, clean_person_text, clean_phone_text
 from .models import Job, Resume
 
-
 class FileValidationMixin:
     """
     Mixin for file upload validation (PDF, DOCX).
@@ -12,7 +11,7 @@ class FileValidationMixin:
     """
     
     ALLOWED_EXTENSIONS = ['pdf', 'docx']
-    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_FILE_SIZE = 5 * 1024 * 1024
     MAGIC_BYTES = {
         'pdf': b'%PDF',
         'docx': b'PK\x03\x04',
@@ -23,17 +22,14 @@ class FileValidationMixin:
         if not file:
             return file
         
-        # Check file size
         if file.size > self.MAX_FILE_SIZE:
             raise forms.ValidationError('File size must be under 5MB.')
         
-        # Check extension using os.path.splitext to handle multi-dot filenames safely
         _, raw_ext = os.path.splitext(file.name)
         ext = raw_ext.lstrip('.').lower()
         if ext not in self.ALLOWED_EXTENSIONS:
             raise forms.ValidationError('Invalid file type. Allowed: PDF or DOCX only.')
         
-        # Check magic bytes
         file.seek(0)
         header = file.read(8)
         file.seek(0)
@@ -45,7 +41,6 @@ class FileValidationMixin:
             )
         
         return file
-
 
 class FileSaveMixin:
     """Mixin to handle file metadata on save."""
@@ -62,16 +57,28 @@ class FileSaveMixin:
             instance.save()
         return instance
 
-
 class JobForm(AriaInvalidMixin, forms.ModelForm):
     """Form for creating and editing job descriptions."""
+
+    required_skills_text = forms.CharField(
+        required=False, label='Required skills',
+        help_text='Comma-separated must-have skills the AI screens against (e.g. Python, Django, MySQL).',
+        widget=forms.Textarea(attrs={'class': 'form-input', 'rows': 2,
+                                     'placeholder': 'Python, Django, REST APIs, MySQL'}),
+    )
+    required_education_text = forms.CharField(
+        required=False, label='Required education',
+        help_text='Comma-separated (e.g. Bachelor, Computer Science).',
+        widget=forms.TextInput(attrs={'class': 'form-input',
+                                      'placeholder': 'Bachelor, Computer Science'}),
+    )
 
     class Meta:
         model = Job
         fields = [
             'title', 'description', 'status',
             'employment_type', 'location_type', 'location',
-            'posted_date', 'closing_date',
+            'posted_date', 'closing_date', 'required_experience',
         ]
         widgets = {
             'title': forms.TextInput(attrs={
@@ -92,6 +99,8 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             }),
             'posted_date': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}),
             'closing_date': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}),
+            'required_experience': forms.NumberInput(attrs={'class': 'form-input', 'min': 0,
+                                                            'step': '0.5', 'placeholder': 'e.g. 5'}),
         }
         labels = {
             'title': 'Job Title',
@@ -102,13 +111,11 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             'location': 'Location',
             'posted_date': 'Posted Date',
             'closing_date': 'Application Deadline',
+            'required_experience': 'Required experience (years)',
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Title and description are mandatory — a job posting is meaningless
-        # without both. (The model leaves description blank=True for flexibility,
-        # so we enforce it at the form level.)
         self.fields['title'].required = True
         self.fields['title'].error_messages['required'] = 'Please enter a job title.'
         self.fields['description'].required = True
@@ -118,8 +125,16 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         self.fields['employment_type'].required = False
         self.fields['location_type'].required = False
         self.fields['location'].required = False
+        self.fields['required_experience'].required = False
         self.fields['employment_type'].choices = [('', 'Select employment type…')] + list(Job.EMPLOYMENT_TYPE_CHOICES)
         self.fields['location_type'].choices = [('', 'Select location type…')] + list(Job.LOCATION_TYPE_CHOICES)
+        if self.instance and self.instance.pk:
+            self.fields['required_skills_text'].initial = ', '.join(self.instance.required_skills or [])
+            self.fields['required_education_text'].initial = ', '.join(self.instance.required_education or [])
+
+    @staticmethod
+    def _split_csv(text):
+        return [s.strip() for s in (text or '').split(',') if s.strip()]
 
     def clean(self):
         data = super().clean()
@@ -135,6 +150,13 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
     def clean_location(self):
         return clean_label_text(self.cleaned_data.get('location'))
 
+    def save(self, commit=True):
+        job = super().save(commit=False)
+        job.required_skills = self._split_csv(self.cleaned_data.get('required_skills_text'))
+        job.required_education = self._split_csv(self.cleaned_data.get('required_education_text'))
+        if commit:
+            job.save()
+        return job
 
 class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for creating and editing resumes - only name and file required, AI handles the rest."""
@@ -177,11 +199,7 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
         super().__init__(*args, **kwargs)
         self.fields['email'].required = False
         self.fields['phone'].required = False
-        # The model field is blank=True for flexibility, but a submitted
-        # application/resume must actually include a file.
         self.fields['file'].required = True
-        # On the public careers form every field is required so recruiters get
-        # complete, contactable applications.
         if require_contact:
             self.fields['email'].required = True
             self.fields['phone'].required = True
@@ -195,8 +213,6 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
 
     def clean(self):
         data = super().clean()
-        if self.fields['email'].required and not (data.get('email') or '').strip():
-            self.add_error('email', 'This field is required.')
         phone_required = self.fields['phone'].required
         try:
             data['phone'] = clean_phone_text(data.get('phone'), required=phone_required)
@@ -208,9 +224,18 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
         """Save with file metadata using mixin."""
         return self.save_with_file_metadata(commit)
 
-
 class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.ModelForm):
     """Form for editing resumes - includes AI-generated fields that can be manually adjusted."""
+
+    SCORE_FIELDS = {'experience_score', 'education_score', 'skills_score',
+                    'certification_score', 'achievement_score', 'final_score'}
+
+    reason = forms.CharField(
+        required=False, label='Reason for score change',
+        help_text='Required when you change a score. Recorded in the audit trail (not stored on the résumé).',
+        widget=forms.Textarea(attrs={'class': 'form-input', 'rows': 2,
+                                     'placeholder': 'Why are you overriding the AI score?'}),
+    )
 
     class Meta:
         model = Resume
@@ -281,6 +306,13 @@ class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms
     def clean_file(self):
         """Validate uploaded file using mixin."""
         return self.validate_resume_file(self.cleaned_data.get('file'))
+
+    def clean(self):
+        cleaned = super().clean()
+        score_changed = any(f in self.changed_data for f in self.SCORE_FIELDS)
+        if score_changed and not (cleaned.get('reason') or '').strip():
+            self.add_error('reason', 'A reason is required when you change a score.')
+        return cleaned
 
     def clean_candidate_name(self):
         return clean_person_text(self.cleaned_data.get('candidate_name'), required=True)

@@ -22,7 +22,6 @@ _CHAR_REPLACEMENTS = {
     '…': '...', ' ': ' ',
 }
 
-
 class DocumentExtractor:
     """Extract text content from resume documents."""
 
@@ -74,7 +73,7 @@ class DocumentExtractor:
             text = text.replace(src, dst)
 
         return text
-    
+
     @staticmethod
     def _extract_from_pdf(file_path: str) -> str:
         """Extract text from PDF, preferring PyMuPDF.
@@ -122,27 +121,25 @@ class DocumentExtractor:
                     text_parts.append(page_text)
 
         return "\n".join(text_parts)
-    
+
     @staticmethod
     def _extract_from_docx(file_path: str) -> str:
         """Extract text from DOCX file."""
         doc = docx.Document(file_path)
         text_parts = []
-        
 
         for para in doc.paragraphs:
             if para.text.strip():
                 text_parts.append(para.text)
-        
 
         for table in doc.tables:
             for row in table.rows:
                 row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
                 if row_text:
                     text_parts.append(row_text)
-        
+
         return "\n".join(text_parts)
-    
+
     @classmethod
     def is_supported(cls, file_path: str) -> bool:
         """Check if file type is supported."""

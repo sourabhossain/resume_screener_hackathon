@@ -4,7 +4,6 @@ Tests for AI Services: ai_screener, llm_client, document_extractor, resume_servi
 import pytest
 from unittest.mock import patch
 
-
 @pytest.mark.django_db
 class TestDocumentExtractor:
     """Tests for DocumentExtractor service."""
@@ -22,7 +21,6 @@ class TestDocumentExtractor:
         """Test that unsupported file types raise ValueError."""
         from apps.core.services.document_extractor import DocumentExtractor
         
-        # Create a temp file with unsupported extension
         xyz_file = tmp_path / "test.xyz"
         xyz_file.write_text("some content")
         
@@ -46,7 +44,6 @@ class TestDocumentExtractor:
         assert DocumentExtractor.is_supported("resume.txt") is False
         assert DocumentExtractor.is_supported("resume.xyz") is False
 
-
 @pytest.mark.django_db
 class TestPromptLoader:
     """Tests for PromptLoader utility."""
@@ -58,7 +55,6 @@ class TestPromptLoader:
         prompt = get_extraction_prompt(resume_text="Sample resume text")
 
         assert "Sample resume text" in prompt
-        # Experience is computed in code now; the prompt extracts raw spans.
         assert "work_history" in prompt
     
     def test_load_matching_prompt(self):
@@ -93,7 +89,6 @@ class TestPromptLoader:
         assert "Jane Doe" in prompt
         assert "85" in prompt
 
-
 @pytest.mark.django_db  
 class TestLLMClient:
     """Tests for LLMClient with mocked OpenAI calls."""
@@ -101,14 +96,12 @@ class TestLLMClient:
     @patch('apps.core.services.llm_client.ChatOpenAI')
     def test_invoke_json_returns_dict(self, mock_chat):
         """Test that invoke_json returns parsed dictionary."""
-        # This is a mock test - actual LLM calls are expensive
         pass
     
     @patch('apps.core.services.llm_client.ChatOpenAI')
     def test_invoke_text_returns_string(self, mock_chat):
         """Test that invoke_text returns string."""
         pass
-
 
 @pytest.mark.django_db
 class TestResumeService:
@@ -121,7 +114,7 @@ class TestResumeService:
 
         monkeypatch.setattr(ResumeService, 'extract_text', staticmethod(lambda r: 'cv text'))
         monkeypatch.setattr(ResumeService, '_fill_contact_info', classmethod(lambda cls, r, t: None))
-        def _boom(resume):
+        def _boom(resume, job_type=None):
             raise AIScreeningError('Request timed out.', stage='screening')
         monkeypatch.setattr(ResumeService, 'run_screening', staticmethod(_boom))
 
@@ -168,12 +161,11 @@ class TestResumeService:
         
         sample_resume.refresh_from_db()
         assert sample_resume.skills == ['Python', 'Django']
-        assert sample_resume.final_score == 82  # Rounded
+        assert sample_resume.final_score == 82
         assert sample_resume.tier == 'top'
         assert sample_resume.screening_status == 'completed'
         assert sample_resume.achievements == ['Shipped billing refactor']
         assert sample_resume.achievement_score == 88
-
 
 @pytest.mark.django_db
 class TestExceptions:

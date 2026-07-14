@@ -174,7 +174,18 @@
 
     {% include 'core/partials/pipeline_badge.html' %}
 
-    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+    <div x-data="{
+            selected: [],
+            toggle(u, on) {
+                if (on) { if (!this.selected.includes(u) && this.selected.length < 4) this.selected.push(u); }
+                else { this.selected = this.selected.filter(x => x !== u); }
+            },
+            go() {
+                if (this.selected.length >= 2 && this.selected.length <= 4)
+                    window.location = '{% url 'core:job_compare' job.slug %}?candidates=' + this.selected.join(',');
+            }
+         }"
+         class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
         <div class="flex flex-col gap-4 border-b border-zinc-100 px-5 py-5 dark:border-zinc-800 sm:px-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -200,15 +211,16 @@
                 <span class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                     {% if job.status == 'draft' %}Draft, activate to add resumes{% else %}Closed, no new resumes{% endif %}
                 </span>
-                <span class="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-400 dark:bg-zinc-800">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <button type="button" disabled aria-disabled="true"
+                        title="{% if job.status == 'draft' %}Activate this job to add resumes{% else %}This job is closed to new resumes{% endif %}"
+                        class="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-400 dark:bg-zinc-800">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     Add resume
-                </span>
+                </button>
             </div>
             {% endif %}
             </div>
 
-            {# Pipeline search — hx-disinherit goes on the hx-get elements below, not this wrapper #}
             <div class="relative" x-data="{
                     hasValue: '{{ search_q|escapejs }}' !== '',
                     clear() {
@@ -234,10 +246,15 @@
                                hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
                                hx-target="#pipeline-tbody"
                                hx-swap="innerHTML"
+                               hx-indicator="#pipeline-search-spinner"
                                hx-disinherit="hx-target hx-select hx-swap hx-push-url"
                                @input="hasValue = $event.target.value.length > 0"
                                @blur="setTimeout(() => { document.getElementById('pipeline-suggestions').innerHTML = ''; }, 200)"
-                               class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
+                               class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-10 text-sm text-zinc-900 placeholder-zinc-400 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
+                        <svg id="pipeline-search-spinner" class="htmx-indicator pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
                     </div>
                     <button type="button" x-show="hasValue" @click="clear()"
                             aria-label="Clear search"
@@ -245,7 +262,7 @@
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                {# Suggestions: separate HTMX listener — never touches tbody #}
+
                 <div hx-get="{% url 'core:pipeline_suggestions' job.slug %}"
                      hx-trigger="input changed delay:200ms from:#pipeline-search-input, focusin delay:100ms from:#pipeline-search-input"
                      hx-target="#pipeline-suggestions"
@@ -257,11 +274,24 @@
         </div>
 
         {% if resumes %}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800 sm:px-6">
+            <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-200"><span x-text="selected.length">0</span> selected</span>
+            <span class="text-xs text-zinc-400 dark:text-zinc-500">Select 2–4 candidates to compare side by side.</span>
+            <button type="button" @click="go()"
+                    :disabled="selected.length < 2 || selected.length > 4"
+                    :class="(selected.length >= 2 && selected.length <= 4) ? 'bg-primary-600 hover:bg-primary-500' : 'bg-zinc-300 dark:bg-zinc-700'"
+                    class="ml-auto inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed"
+                    aria-label="Compare selected candidates">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                Compare
+            </button>
+        </div>
         <div class="overflow-x-auto">
             <table class="resp-table w-full text-left md:min-w-[68rem]">
                 <caption class="sr-only">Applicant pipeline, sorted by decision then score. Updates live as you search.</caption>
                 <thead class="border-b border-zinc-100 bg-zinc-50/95 dark:border-zinc-800 dark:bg-zinc-900/95">
                     <tr>
+                        <th scope="col" class="w-10 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400"><span class="sr-only">Select</span></th>
                         <th scope="col" class="w-12 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">#</th>
                         <th scope="col" class="w-64 px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Candidate</th>
                         <th scope="col" class="w-24 px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Tier</th>
@@ -272,7 +302,7 @@
                         <th scope="col" class="w-24 px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Actions</th>
                     </tr>
                 </thead>
-                {# disinherit so polling rows don't inherit the body's hx-select="#main-content" (which would blank them); candidate links inside use hx-boost="false" #}
+
                 <tbody id="pipeline-tbody" aria-live="polite" hx-disinherit="hx-target hx-select hx-swap hx-push-url" class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for resume in resumes %}
                 {% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter %}
