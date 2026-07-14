@@ -21,10 +21,11 @@ class LLMClient:
     Singleton LLM client with caching and retry logic.
     Uses the OpenAI model configured via settings.OPENAI_MODEL.
     """
-    
+
     _instance = None
     _llm = None
     _llm_json = None
+    _llm_json_minimal = None
 
     CACHE_TIMEOUT = 3600
     CACHE_VERSION = "v2"
@@ -36,7 +37,7 @@ class LLMClient:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     @staticmethod
     def _is_reasoning_model(model: str) -> bool:
         """
@@ -75,10 +76,7 @@ class LLMClient:
                 model_kwargs={"response_format": {"type": "json_object"}}
             )
 
-            logger.info(
-                "LLMClient initialized with model: %s (reasoning=%s)",
-                model, self._is_reasoning_model(model),
-            )
+            logger.info(f"LLMClient initialized with model: {model}")
 
     def _get_cache_key(self, prompt: str) -> str:
         """
@@ -88,7 +86,7 @@ class LLMClient:
         model = getattr(self, '_model', 'unknown')
         digest = hashlib.md5(prompt.encode()).hexdigest()
         return f"llm_cache_{self.CACHE_VERSION}_{model}_{digest}"
-    
+
     _llm_retry = retry(
         retry=retry_if_exception_type(
             (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError, JSONDecodeError)
@@ -99,71 +97,77 @@ class LLMClient:
     )
 
     @_llm_retry
-    def invoke_json(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> Dict[str, Any]:
+    def invoke_json(self, prompt: str, system_prompt: str = "You are a helpful assistant.", fast: bool = False) -> Dict[str, Any]:
         """
         Invoke LLM and return parsed JSON response.
         Uses caching to avoid duplicate API calls.
-        
+
         Args:
             prompt: The user prompt
             system_prompt: The system prompt
-            
+            fast: Use the minimal-reasoning client (for retrieval-style calls like
+                  extraction where the default reasoning budget just adds latency).
+
         Returns:
             Parsed JSON response as dictionary
         """
-        if not self._llm_json:
+        llm = self._llm_json_minimal if fast else self._llm_json
+        if not llm:
             raise RuntimeError("LLM not initialized. Check OPENAI_API_KEY.")
-        
-        cache_key = self._get_cache_key(f"{system_prompt}:{prompt}")
+
+        # 'min:' namespaces the fast cache so minimal- and default-effort responses
+        # for the same prompt never collide.
+        cache_key = self._get_cache_key(f"{'min:' if fast else ''}{system_prompt}:{prompt}")
         cached = cache.get(cache_key)
         if cached:
             logger.debug("LLM cache hit")
             return cached
 
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=prompt)
         ]
-        
-        response = self._llm_json.invoke(messages)
+
+        response = llm.invoke(messages)
         result = json.loads(response.content)
 
         cache.set(cache_key, result, self.CACHE_TIMEOUT)
-        
+
         return result
-    
+
     @_llm_retry
     def invoke_text(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> str:
         """
         Invoke LLM and return text response.
         Uses caching to avoid duplicate API calls.
-        
+
         Args:
             prompt: The user prompt
             system_prompt: The system prompt
-            
+
         Returns:
             Text response
         """
         if not self._llm:
             raise RuntimeError("LLM not initialized. Check OPENAI_API_KEY.")
-        
+
         cache_key = self._get_cache_key(f"text:{system_prompt}:{prompt}")
         cached = cache.get(cache_key)
         if cached:
             logger.debug("LLM text cache hit")
             return cached
-        
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=prompt)
         ]
-        
+
         response = self._llm.invoke(messages)
         result = response.content
 
         cache.set(cache_key, result, self.CACHE_TIMEOUT)
-        
+
         return result
 
 llm_client = LLMClient()

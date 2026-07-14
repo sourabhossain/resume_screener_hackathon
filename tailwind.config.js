@@ -8,8 +8,14 @@ module.exports = {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // SSL Wireless brand palette (from official logo).
+        brand: {
+          blue: '#284699',
+          'blue-dark': '#1e3578',
+          'blue-light': '#3d5fbd',
+          red: '#e62832',
+        },
         // Brand "ink" — a warm near-black scale (replaces the generic indigo).
-        // Amber (Tailwind's built-in amber-*) is the single accent pop.
         primary: {
           50: '#fafaf9',
           100: '#f5f5f4',

@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Career{% endblock %}</title>
+    <title>{% block title %}SSL Wireless Careers{% endblock %}</title>
     <meta name="description" content="{% block meta_description %}Screen resumes with structured AI scoring, clear tiers, and consistent criteria across every role.{% endblock %}">
 
     <meta name="theme-color" id="theme-color-meta" content="#fafafa">
     <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
     {% block social_meta %}
     <meta property="og:type" content="website">
-    <meta property="og:title" content="{% block og_title %}Career{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}SSL Wireless Careers{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Find a role that fits you and submit your resume.{% endblock %}">
     <meta name="twitter:card" content="summary">
     {% endblock %}
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=3">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=7">
     <script src="{% static 'js/status-picker.js' %}?v=3"></script>
     <script>try { localStorage.removeItem('htmx-history-cache'); } catch (e) {}</script>
     <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
@@ -276,7 +277,7 @@
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
 
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
-        <div class="absolute -top-32 left-1/2 h-[28rem] w-[min(120%,46rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-amber-400/[0.07] to-transparent blur-3xl dark:from-amber-400/[0.06] dark:to-transparent"></div>
+        <div class="absolute -top-32 left-1/2 h-[28rem] w-[min(120%,46rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-brand-blue/[0.06] to-transparent blur-3xl dark:from-brand-blue/[0.08] dark:to-transparent"></div>
     </div>
 
     <nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
@@ -296,16 +297,13 @@
                         </div>
                     </button>
 
-                    <a href="{% if user.is_authenticated %}{% url 'core:dashboard' %}{% else %}{% url 'core:careers' %}{% endif %}" class="flex items-center space-x-3 group">
-                        <div class="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center shadow-md shadow-amber-500/25 transition-transform duration-200 group-hover:scale-[1.02]">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                        </div>
-                        <span class="hidden text-xl font-semibold tracking-tight sm:block">
-                            <span class="gradient-text">Career</span>
-                        </span>
-                    </a>
+                    <!-- Logo -->
+                    {% if user.is_authenticated %}
+                    {% url 'core:dashboard' as brand_home_url %}
+                    {% else %}
+                    {% url 'core:careers' as brand_home_url %}
+                    {% endif %}
+                    {% include 'partials/brand_logo.html' with href=brand_home_url variant='nav' show_product=True class='group shrink-0' %}
 
                     {% block recruiter_nav %}
                     {% if user.is_authenticated %}
@@ -417,6 +415,7 @@
                     {% endblock recruiter_nav %}
                 </div>
 
+                <!-- Right Side Actions -->
                 <div class="flex items-center gap-2 sm:gap-3">
 
                     <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); applyThemeColor(darkMode)"
@@ -431,6 +430,7 @@
                         </svg>
                     </button>
 
+                    <!-- Logout Button -->
                     {% block recruiter_logout %}
                     {% if user.is_authenticated %}
                     <form action="{% url 'logout' %}" method="post" class="inline" hx-boost="false">
@@ -447,6 +447,7 @@
                     {% endif %}
                     {% endblock recruiter_logout %}
 
+                    <!-- Post Job Button -->
                     {% block nav_action %}
                     {% if user.is_authenticated %}
                     <a href="{% url 'core:job_create' %}" class="btn-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white sm:px-5">
@@ -461,6 +462,7 @@
             </div>
         </div>
 
+        <!-- Mobile Menu Drawer -->
         <div x-show="mobileMenuOpen"
              style="display:none"
              x-transition:enter="transition ease-out duration-300"
@@ -483,18 +485,15 @@
              x-transition:leave-end="-translate-x-full"
              class="fixed bottom-0 left-0 top-0 z-50 w-80 max-w-[85vw] overflow-y-auto border-r border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:hidden">
 
+            <!-- Mobile Menu Header -->
             <div class="border-b border-zinc-200 p-6 dark:border-zinc-800">
                 <div class="flex items-center justify-between">
-                    <a href="{% if user.is_authenticated %}{% url 'core:dashboard' %}{% else %}{% url 'core:careers' %}{% endif %}" class="flex items-center space-x-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500 shadow-md">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                        </div>
-                        <span class="text-lg font-semibold tracking-tight">
-                            <span class="gradient-text">Career</span>
-                        </span>
-                    </a>
+                    {% if user.is_authenticated %}
+                    {% url 'core:dashboard' as brand_home_url %}
+                    {% else %}
+                    {% url 'core:careers' as brand_home_url %}
+                    {% endif %}
+                    {% include 'partials/brand_logo.html' with href=brand_home_url variant='nav' show_product=True %}
                     <button type="button" @click="mobileMenuOpen = false" class="rounded-lg p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
                         <svg class="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -503,6 +502,7 @@
                 </div>
             </div>
 
+            <!-- Mobile Search -->
             <div class="p-4">
                 <form method="get" action="{% if user.is_authenticated %}{% url 'core:job_list' %}{% else %}{% url 'core:careers' %}{% endif %}" @submit="mobileMenuOpen = false">
                     <div class="relative">
@@ -515,6 +515,7 @@
                 </form>
             </div>
 
+            <!-- Mobile Nav Links -->
             {% block mobile_recruiter_nav %}
             {% if user.is_authenticated %}
             <div class="px-4 py-2">
@@ -541,58 +542,6 @@
                     <div>
                         <p class="font-semibold">Jobs</p>
                         <p class="text-xs text-zinc-500 dark:text-zinc-500">Job postings</p>
-                    </div>
-                </a>
-
-                <a href="{% url 'interviews:calendar' %}" @click="mobileMenuOpen = false"
-                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                        <svg class="h-5 w-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="font-semibold">Calendar</p>
-                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Interview schedule</p>
-                    </div>
-                </a>
-
-                <a href="{% url 'core:talent_pool' %}" @click="mobileMenuOpen = false"
-                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40">
-                        <svg class="h-5 w-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="font-semibold">Talent Pool</p>
-                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Saved candidates</p>
-                    </div>
-                </a>
-
-                <a href="{% url 'core:needs_review' %}" @click="mobileMenuOpen = false"
-                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40">
-                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="font-semibold">Needs Review</p>
-                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Pending triage</p>
-                    </div>
-                </a>
-
-                <a href="{% url 'core:screening_failed' %}" @click="mobileMenuOpen = false"
-                   class="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
-                        <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 9.172l5.656 5.656m0-5.656l-5.656 5.656M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="font-semibold">Screening Failed</p>
-                        <p class="text-xs text-zinc-500 dark:text-zinc-500">Re-run screening</p>
                     </div>
                 </a>
 
@@ -673,16 +622,12 @@
 
     <footer class="mt-auto border-t border-zinc-200/90 bg-white/70 py-10 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/75">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div class="flex flex-col items-center justify-between gap-4 md:flex-row">
-                <div class="flex items-center gap-2">
-                    <div class="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500">
-                        <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                    </div>
-                    <span class="font-semibold text-zinc-800 dark:text-zinc-200">Career</span>
-                </div>
-                <p class="text-sm text-zinc-500 dark:text-zinc-500">© {% now "Y" %} Career</p>
+            <div class="flex flex-col items-center justify-between gap-5 md:flex-row">
+                {% url 'core:careers' as brand_home_url %}
+                {% include 'partials/brand_logo.html' with href=brand_home_url variant='footer' show_product=True %}
+                <p class="text-center text-sm text-zinc-500 dark:text-zinc-500 md:text-right">
+                    © {% now "Y" %} <span class="font-medium text-zinc-700 dark:text-zinc-300">SSL Wireless</span>. All rights reserved.
+                </p>
             </div>
         </div>
     </footer>

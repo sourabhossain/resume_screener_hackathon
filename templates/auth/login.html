@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Sign In - Career{% endblock %}
+{% block title %}Sign In · SSL Wireless Careers{% endblock %}
 
 {% block nav_action %}{% endblock %}
 
@@ -8,13 +8,12 @@
 <div class="min-h-[72vh] flex items-center justify-center">
     <div class="w-full max-w-[420px]">
         <div class="mb-10 text-center animate-fade-in">
-            <div class="mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-xl gradient-bg shadow-md">
-                <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
+            {% url 'core:careers' as brand_home_url %}
+            <div class="mx-auto mb-8 flex justify-center">
+                {% include 'partials/brand_logo.html' with href=brand_home_url variant='hero' show_product=True show_product_tagline=True %}
             </div>
             <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">Sign in</h1>
-            <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-500">Career hiring workspace</p>
+            <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-500">Recruiter workspace</p>
         </div>
 
         <div class="animate-fade-in rounded-xl border border-zinc-200/90 bg-white p-8 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark" style="animation-delay: 0.1s">

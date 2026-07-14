@@ -1,11 +1,20 @@
 """
 Document text extraction from PDF and DOCX files.
 """
+import logging
 from pathlib import Path
 
 from pypdf import PdfReader
 import docx
 
+logger = logging.getLogger(__name__)
+
+
+# Fancy resume templates render icons/labels using symbol fonts, which PDF
+# extraction turns into decorative Unicode glyphs (e.g. ⌢ U+2322, bullets,
+# en/em dashes, smart quotes). The raw_text column is utf8mb4 so these store
+# fine, but we still normalise the common readable ones to ASCII so the LLM
+# sees clean text rather than icon-font artefacts.
 _CHAR_REPLACEMENTS = {
     '–': '-', '—': '-', '−': '-',
     '•': '*', '·': '*', '●': '*', '○': '*',
@@ -64,21 +73,55 @@ class DocumentExtractor:
             text = text.replace(src, dst)
 
         return text
-    
+
     @staticmethod
     def _extract_from_pdf(file_path: str) -> str:
-        """Extract text from PDF file."""
+        """Extract text from PDF, preferring PyMuPDF.
+
+        pypdf renders some styled/letter-spaced templates character-by-character
+        (a name heading comes out as 'M a s h r u r  M a h m u d'), which breaks
+        name/skill extraction. PyMuPDF reconstructs words correctly on those same
+        files and matches pypdf on plain PDFs, so it is the primary extractor;
+        pypdf stays as a fallback if PyMuPDF is unavailable or errors.
+        """
+        text = DocumentExtractor._extract_pdf_pymupdf(file_path)
+        if text and text.strip():
+            return text
+        return DocumentExtractor._extract_pdf_pypdf(file_path)
+
+    @staticmethod
+    def _extract_pdf_pymupdf(file_path: str) -> str:
+        """Primary PDF extractor (PyMuPDF/fitz). Returns '' on any failure so the
+        caller can fall back to pypdf."""
+        try:
+            import fitz  # PyMuPDF
+        except ImportError:
+            logger.warning("PyMuPDF not installed; falling back to pypdf")
+            return ''
+        try:
+            doc = fitz.open(file_path)
+            try:
+                return "\n".join(page.get_text() for page in doc)
+            finally:
+                doc.close()
+        except Exception as e:
+            logger.warning("PyMuPDF extraction failed for %s (%s); falling back to pypdf", file_path, e)
+            return ''
+
+    @staticmethod
+    def _extract_pdf_pypdf(file_path: str) -> str:
+        """Fallback PDF extractor (pypdf)."""
         text_parts = []
-        
+
         with open(file_path, 'rb') as file:
             reader = PdfReader(file)
             for page in reader.pages:
                 page_text = page.extract_text()
                 if page_text:
                     text_parts.append(page_text)
-        
+
         return "\n".join(text_parts)
-    
+
     @staticmethod
     def _extract_from_docx(file_path: str) -> str:
         """Extract text from DOCX file."""
@@ -94,9 +137,9 @@ class DocumentExtractor:
                 row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
                 if row_text:
                     text_parts.append(row_text)
-        
+
         return "\n".join(text_parts)
-    
+
     @classmethod
     def is_supported(cls, file_path: str) -> bool:
         """Check if file type is supported."""

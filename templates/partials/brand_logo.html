@@ -1,0 +1,45 @@
+{% load static %}
+{# SSL Wireless brand lockup — variant: nav | hero | footer | icon #}
+{% with v=variant|default:"nav" %}
+<a href="{{ href|default:'#' }}"
+   class="brand-lockup brand-lockup--{{ v }}{% if class %} {{ class }}{% endif %}"
+   {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}>
+    {% if v == "icon" %}
+    <img src="{% static 'img/ssl-wireless-icon.png' %}"
+         alt="SSL Wireless"
+         class="brand-logo brand-logo--icon"
+         width="40"
+         height="40"
+         decoding="async">
+    {% elif v == "hero" %}
+    <img src="{% static 'img/ssl-wireless-logo.png' %}"
+         alt="SSL Wireless"
+         class="brand-logo brand-logo--hero"
+         width="320"
+         height="105"
+         decoding="async">
+    {% elif v == "footer" %}
+    <img src="{% static 'img/ssl-wireless-logo-nav.png' %}"
+         alt="SSL Wireless"
+         class="brand-logo brand-logo--footer"
+         width="160"
+         height="52"
+         decoding="async">
+    {% else %}
+    <img src="{% static 'img/ssl-wireless-logo-nav.png' %}"
+         alt="SSL Wireless"
+         class="brand-logo brand-logo--nav"
+         width="160"
+         height="52"
+         decoding="async">
+    {% endif %}
+    {% if show_product %}
+    <span class="brand-product">
+        <span class="brand-product__label">Careers</span>
+        {% if show_product_tagline %}
+        <span class="brand-product__tagline">Hiring platform</span>
+        {% endif %}
+    </span>
+    {% endif %}
+</a>
+{% endwith %}
