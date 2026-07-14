@@ -26,6 +26,9 @@ django-ratelimit>=4.1
 # Markdown rendering
 markdown>=3.5
 
+# Streaming ZIP downloads (memory-safe bulk CV export)
+zipstream-ng>=1.7.0
+
 # AI/NLP
 langgraph>=0.2
 langchain>=0.3

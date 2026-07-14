@@ -533,3 +533,100 @@ class TestLoginRatelimitFailsafe:
             reverse('core:careers_apply', kwargs={'slug': sample_job.slug})
         )
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestDownloadResumesZip:
+    """Tests for the streaming bulk CV ZIP download."""
+
+    def _make_resume(self, job, name, score):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return Resume.objects.create(
+            job=job,
+            candidate_name=name,
+            final_score=score,
+            file=SimpleUploadedFile(
+                f'{name}.pdf', b'%PDF-1.4 fake resume content', content_type='application/pdf'
+            ),
+        )
+
+    @pytest.fixture
+    def job_with_resumes(self, sample_job, tmp_path, settings):
+        # Isolate uploaded files to a throwaway media root.
+        settings.MEDIA_ROOT = str(tmp_path)
+        # score drives recommendation: >=80 interview, >=60 talent_pool, else reject
+        self._make_resume(sample_job, 'Alice Interview', 90)
+        self._make_resume(sample_job, 'Bob Talentpool', 70)
+        self._make_resume(sample_job, 'Carol Reject', 40)
+        return sample_job
+
+    @staticmethod
+    def _zip_names(response):
+        import io
+        import zipfile
+        buf = io.BytesIO(b''.join(response.streaming_content))
+        with zipfile.ZipFile(buf) as zf:
+            return zf.namelist()
+
+    def test_downloads_all_as_zip(self, authenticated_client, job_with_resumes):
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = authenticated_client.get(url + '?filter=all')
+        assert response.status_code == 200
+        assert response['Content-Type'] == 'application/zip'
+        assert response['Content-Disposition'].endswith('.zip"')
+        names = self._zip_names(response)
+        # 3 resume files + summary
+        assert len([n for n in names if n != '_summary.txt']) == 3
+
+    def test_filter_shortlisted(self, authenticated_client, job_with_resumes):
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = authenticated_client.get(url + '?filter=shortlisted')
+        assert response.status_code == 200
+        names = [n for n in self._zip_names(response) if n != '_summary.txt']
+        # interview + talent_pool only → 2 files, no rejected candidate
+        assert len(names) == 2
+        assert not any('Reject' in n or 'Carol' in n for n in names)
+
+    def test_requires_login(self, client, job_with_resumes):
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = client.get(url)
+        assert response.status_code == 302
+        assert '/login' in response['Location'] or 'login' in response['Location']
+
+    def test_nonexistent_job_returns_404(self, authenticated_client, db):
+        url = reverse('core:download_resumes_zip', kwargs={'slug': 'no-such-job'})
+        response = authenticated_client.get(url)
+        assert response.status_code == 404
+
+    def test_excludes_other_jobs_resumes(self, authenticated_client, job_with_resumes, user):
+        # A second job with its own resume must not leak into job_with_resumes' ZIP.
+        other_job = Job.objects.create(owner=user, title='Other Role', status='active')
+        self._make_resume(other_job, 'Zoe Other', 95)
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = authenticated_client.get(url + '?filter=all')
+        names = self._zip_names(response)
+        assert not any('Zoe' in n for n in names)
+
+    def test_redirects_when_no_files(self, authenticated_client, sample_job):
+        # Resume exists but has no file attached → redirect with warning.
+        Resume.objects.create(job=sample_job, candidate_name='No File', final_score=90)
+        url = reverse('core:download_resumes_zip', kwargs={'slug': sample_job.slug})
+        response = authenticated_client.get(url + '?filter=all')
+        assert response.status_code == 302
+
+    def test_skips_missing_files_on_disk(self, authenticated_client, job_with_resumes):
+        import os
+        # Delete one file from disk but keep the DB record.
+        victim = Resume.objects.filter(job=job_with_resumes).first()
+        os.remove(victim.file.path)
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = authenticated_client.get(url + '?filter=all')
+        assert response.status_code == 200
+        names = [n for n in self._zip_names(response) if n != '_summary.txt']
+        # One file gone → 2 remain, no crash.
+        assert len(names) == 2
+
+    def test_zip_contains_summary(self, authenticated_client, job_with_resumes):
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = authenticated_client.get(url + '?filter=all')
+        assert '_summary.txt' in self._zip_names(response)
