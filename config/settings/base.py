@@ -289,7 +289,12 @@ OPENAI_MODEL = 'gpt-5-nano-2025-08-07'
 AI_SCREENING_CONFIG = {
     'TOP_TIER_THRESHOLD': 80,
     'MID_TIER_THRESHOLD': 60,
-    'MAX_RESUME_CHARS': 4000,
+    # Extraction truncates the resume to this many chars BEFORE parsing. Real
+    # 2-3 page resumes run 8-11k chars, so a 4000 cap silently dropped the
+    # second half (experience/education/achievements) and starved the scorer,
+    # pushing long resumes to artificially low scores. gpt-5-nano handles the
+    # larger input cheaply, especially with extraction on reasoning_effort=minimal.
+    'MAX_RESUME_CHARS': 16000,
     'MAX_JOB_DESC_CHARS': 3000,
     # Detector results below this confidence are flagged for manual review
     # rather than routed to a guessed family.
