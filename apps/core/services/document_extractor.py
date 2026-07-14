@@ -1,10 +1,13 @@
 """
 Document text extraction from PDF and DOCX files.
 """
+import logging
 from pathlib import Path
 
 from pypdf import PdfReader
 import docx
+
+logger = logging.getLogger(__name__)
 
 
 # Fancy resume templates render icons/labels using symbol fonts, which PDF
@@ -74,16 +77,50 @@ class DocumentExtractor:
     
     @staticmethod
     def _extract_from_pdf(file_path: str) -> str:
-        """Extract text from PDF file."""
+        """Extract text from PDF, preferring PyMuPDF.
+
+        pypdf renders some styled/letter-spaced templates character-by-character
+        (a name heading comes out as 'M a s h r u r  M a h m u d'), which breaks
+        name/skill extraction. PyMuPDF reconstructs words correctly on those same
+        files and matches pypdf on plain PDFs, so it is the primary extractor;
+        pypdf stays as a fallback if PyMuPDF is unavailable or errors.
+        """
+        text = DocumentExtractor._extract_pdf_pymupdf(file_path)
+        if text and text.strip():
+            return text
+        return DocumentExtractor._extract_pdf_pypdf(file_path)
+
+    @staticmethod
+    def _extract_pdf_pymupdf(file_path: str) -> str:
+        """Primary PDF extractor (PyMuPDF/fitz). Returns '' on any failure so the
+        caller can fall back to pypdf."""
+        try:
+            import fitz  # PyMuPDF
+        except ImportError:
+            logger.warning("PyMuPDF not installed; falling back to pypdf")
+            return ''
+        try:
+            doc = fitz.open(file_path)
+            try:
+                return "\n".join(page.get_text() for page in doc)
+            finally:
+                doc.close()
+        except Exception as e:
+            logger.warning("PyMuPDF extraction failed for %s (%s); falling back to pypdf", file_path, e)
+            return ''
+
+    @staticmethod
+    def _extract_pdf_pypdf(file_path: str) -> str:
+        """Fallback PDF extractor (pypdf)."""
         text_parts = []
-        
+
         with open(file_path, 'rb') as file:
             reader = PdfReader(file)
             for page in reader.pages:
                 page_text = page.extract_text()
                 if page_text:
                     text_parts.append(page_text)
-        
+
         return "\n".join(text_parts)
     
     @staticmethod
