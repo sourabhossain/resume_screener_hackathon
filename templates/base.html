@@ -16,7 +16,7 @@
     {% endblock %}
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=8">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=9">
     <script src="{% static 'js/status-picker.js' %}?v=3"></script>
     <script>try { localStorage.removeItem('htmx-history-cache'); } catch (e) {}</script>
     <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
@@ -291,7 +291,7 @@
     <nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex min-h-[4.25rem] items-center justify-between py-3">
-                <div class="flex items-center space-x-6 lg:space-x-10">
+                <div class="flex items-center gap-6 lg:gap-10">
                     <!-- Mobile Menu Button -->
                     <button @click="mobileMenuOpen = !mobileMenuOpen"
                             aria-label="Toggle navigation menu"
