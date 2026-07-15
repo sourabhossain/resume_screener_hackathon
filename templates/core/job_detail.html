@@ -272,7 +272,8 @@
                         <th scope="col" class="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Scores</th>
                         <th scope="col" class="w-24 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Verified</th>
                         <th scope="col" class="w-24 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Final</th>
-                        <th scope="col" class="w-24 px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Actions</th>
+                        <th scope="col" class="w-32 px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Applied</th>
+                        <th scope="col" class="w-16 px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 {# disinherit so polling rows don't inherit the body's hx-select="#main-content" (which would blank them); candidate links inside use hx-boost="false" #}
@@ -310,6 +311,49 @@
             {% endif %}
         </div>
         {% endif %}
+    </div>
+</div>
+
+<div x-data="{ open: false, url: '', download: '', name: '', type: '' }"
+     x-on:cv-view.window="url = $event.detail.cvUrl; download = $event.detail.cvDownload; name = $event.detail.cvName; type = $event.detail.cvType; open = true"
+     x-on:keydown.escape.window="open = false"
+     x-show="open"
+     x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="display: none;">
+    <div x-show="open" x-transition.opacity class="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" x-on:click="open = false"></div>
+    <div x-show="open" x-transition
+         style="height: 90vh; max-height: 90vh;"
+         class="relative flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-900">
+        <div class="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3.5 dark:border-zinc-800">
+            <div class="flex min-w-0 items-center gap-2">
+                <svg class="h-5 w-5 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <h2 class="truncate text-sm font-bold text-zinc-900 dark:text-white" x-text="name + ' — Resume'"></h2>
+            </div>
+            <div class="flex shrink-0 items-center gap-1">
+                <a :href="download" download class="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Download">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                </a>
+                <button type="button" x-on:click="open = false" class="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" title="Close">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="relative flex-1 bg-zinc-100 dark:bg-zinc-800">
+            <template x-if="open && type === 'pdf'">
+                <iframe :src="url" class="h-full w-full border-0" title="Resume preview"></iframe>
+            </template>
+            <template x-if="open && type !== 'pdf'">
+                <div class="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+                    <svg class="h-12 w-12 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <p class="text-sm text-zinc-500 dark:text-zinc-400">Inline preview is available for PDF files only<template x-if="type"><span> (this is a <span class="font-semibold uppercase" x-text="type"></span> file)</span></template>.</p>
+                    <a :href="download" download class="btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Download resume
+                    </a>
+                </div>
+            </template>
+        </div>
     </div>
 </div>
 

@@ -33,8 +33,8 @@
             </thead>
             <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for u in users %}
-                <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40 {% if not u.is_active %}opacity-60{% endif %}">
-                    <td class="px-5 py-4">
+                <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40">
+                    <td class="px-5 py-4 {% if not u.is_active %}opacity-60{% endif %}">
                         <div class="flex items-center gap-3">
                             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white
                                         {% if u.is_superuser %}gradient-bg{% elif u.is_staff %}bg-violet-500{% else %}bg-zinc-400 dark:bg-zinc-600{% endif %}">
@@ -48,10 +48,10 @@
                             </div>
                         </div>
                     </td>
-                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 sm:table-cell">
+                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 sm:table-cell {% if not u.is_active %}opacity-60{% endif %}">
                         {{ u.email|default:"—" }}
                     </td>
-                    <td class="px-5 py-4">
+                    <td class="px-5 py-4 {% if not u.is_active %}opacity-60{% endif %}">
                         {% if u.is_superuser %}
                         <span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
                             <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9.664 1.319a.75.75 0 0 1 .672 0 41.059 41.059 0 0 1 8.198 5.424.75.75 0 0 1-.254 1.285 31.372 31.372 0 0 0-7.86 3.83.75.75 0 0 1-.84 0 31.508 31.508 0 0 0-2.08-1.287V9.394c0-.244.116-.463.302-.592a35.504 35.504 0 0 1 3.305-2.033.75.75 0 0 0-.714-1.319 37 37 0 0 0-3.446 2.12A2.216 2.216 0 0 0 6 9.393v.38a31.293 31.293 0 0 0-4.28-1.746.75.75 0 0 1-.254-1.285 41.059 41.059 0 0 1 8.198-5.424ZM6 11.459a29.848 29.848 0 0 0-2.455-1.158 41.029 41.029 0 0 0-.39 3.114.75.75 0 0 0 .419.74c.528.255 1.046.52 1.554.794a.75.75 0 0 0 .861-.1c.12-.112.237-.226.351-.34.04-.04.082-.08.124-.122a.75.75 0 0 0-.027-1.052A29.82 29.82 0 0 0 6 13.5v-2.041Zm6.845 1.56a30.09 30.09 0 0 0-2.46 1.176.75.75 0 0 0-.027 1.052c.116.116.233.23.351.34a.75.75 0 0 0 .861.1 30.07 30.07 0 0 1 1.554-.794.75.75 0 0 0 .419-.74 41.048 41.048 0 0 0-.39-3.114A29.848 29.848 0 0 0 12.845 13.019Z" clip-rule="evenodd"/></svg>
@@ -63,7 +63,7 @@
                         <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Recruiter</span>
                         {% endif %}
                     </td>
-                    <td class="px-5 py-4">
+                    <td class="px-5 py-4 {% if not u.is_active %}opacity-60{% endif %}">
                         {% if u.is_active %}
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
                             <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active
@@ -74,49 +74,22 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 md:table-cell">
+                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 md:table-cell {% if not u.is_active %}opacity-60{% endif %}">
                         {% if u.last_login %}{{ u.last_login|timesince }} ago{% else %}Never{% endif %}
                     </td>
-                    <td class="px-5 py-4">
-                        <div class="flex items-center justify-end gap-1.5">
-                            <a href="{% url 'core:user_change_password' u.pk %}"
-                               title="Change password"
-                               class="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-                                </svg>
-                            </a>
-                            {% if u != request.user %}
-                            <form method="post" action="{% url 'core:user_toggle_active' u.pk %}" class="inline"
-                                  data-confirm
-                                  data-confirm-strong="{{ u.username }}"
-                                  {% if u.is_active %}
-                                  data-confirm-title="Deactivate this user?"
-                                  data-confirm-text="This user will lose access until reactivated."
-                                  data-confirm-button="Deactivate"
-                                  {% else %}
-                                  data-confirm-safe
-                                  data-confirm-icon="question"
-                                  data-confirm-title="Activate this user?"
-                                  data-confirm-text="This user will regain access to the system."
-                                  data-confirm-button="Activate"
-                                  {% endif %}>
-                                {% csrf_token %}
-                                <button type="submit" title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}"
-                                        class="rounded-lg p-2 transition-colors {% if u.is_active %}text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:text-zinc-500 dark:hover:bg-red-950/40 dark:hover:text-red-400{% else %}text-zinc-400 hover:bg-emerald-50 hover:text-emerald-600 dark:text-zinc-500 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400{% endif %}">
-                                    {% if u.is_active %}
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                                    </svg>
-                                    {% else %}
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    {% endif %}
-                                </button>
-                            </form>
-                            {% endif %}
-                        </div>
+                    <td class="px-5 py-4 text-right">
+                        <button type="button"
+                                class="js-user-menu-trigger rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+                                aria-label="Actions for {{ u.username }}"
+                                aria-haspopup="true"
+                                title="More actions"
+                                data-username="{{ u.username }}"
+                                data-password-url="{% url 'core:user_change_password' u.pk %}"
+                                data-toggle-url="{% url 'core:user_toggle_active' u.pk %}"
+                                data-is-active="{% if u.is_active %}1{% else %}0{% endif %}"
+                                data-can-toggle="{% if u != request.user %}1{% else %}0{% endif %}">
+                            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                        </button>
                     </td>
                 </tr>
                 {% empty %}
@@ -128,4 +101,127 @@
         </table>
     </div>
 </div>
+
+{# One shared menu for all rows — avoids per-row Alpine/fixed overlap bugs. #}
+<div id="user-row-menu"
+     class="fixed z-[200] hidden w-48 -translate-x-full origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
+     role="menu">
+    <a id="user-row-menu-password" href="#" role="menuitem" hx-boost="false"
+       class="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium text-zinc-700 transition hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-200 dark:hover:bg-primary-950/40 dark:hover:text-primary-300">
+        <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        Change password
+    </a>
+    <div id="user-row-menu-divider" class="my-1 hidden border-t border-zinc-100 dark:border-zinc-700"></div>
+    <a id="user-row-menu-deactivate" href="#" role="menuitem" hx-boost="false"
+       data-confirm data-method="post"
+       data-confirm-title="Deactivate this user?"
+       data-confirm-text="This user will lose access until reactivated."
+       data-confirm-button="Deactivate"
+       class="hidden flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30">
+        <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        Deactivate
+    </a>
+    <a id="user-row-menu-activate" href="#" role="menuitem" hx-boost="false"
+       data-confirm data-method="post"
+       data-confirm-safe data-confirm-icon="question"
+       data-confirm-title="Activate this user?"
+       data-confirm-text="This user will regain access to the system."
+       data-confirm-button="Activate"
+       class="hidden flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium text-emerald-600 transition hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30">
+        <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Activate
+    </a>
+</div>
+
+<script>
+(function () {
+    if (window.__userRowMenuBound) return;
+    window.__userRowMenuBound = true;
+
+    let openTrigger = null;
+
+    function menuEl() {
+        return document.getElementById('user-row-menu');
+    }
+
+    function closeMenu() {
+        const menu = menuEl();
+        if (menu) menu.classList.add('hidden');
+        openTrigger = null;
+    }
+
+    function openMenu(trigger) {
+        const menu = menuEl();
+        if (!menu) return;
+
+        const pwdLink = document.getElementById('user-row-menu-password');
+        const divider = document.getElementById('user-row-menu-divider');
+        const deactivateLink = document.getElementById('user-row-menu-deactivate');
+        const activateLink = document.getElementById('user-row-menu-activate');
+        if (!pwdLink || !divider || !deactivateLink || !activateLink) return;
+
+        openTrigger = trigger;
+        const rect = trigger.getBoundingClientRect();
+        const openUp = (window.innerHeight - rect.bottom) < 220;
+        menu.style.top = (openUp ? rect.top - 6 : rect.bottom + 6) + 'px';
+        menu.style.left = rect.right + 'px';
+        menu.classList.toggle('-translate-y-full', openUp);
+        menu.classList.toggle('origin-bottom-right', openUp);
+        menu.classList.toggle('origin-top-right', !openUp);
+
+        pwdLink.href = trigger.dataset.passwordUrl;
+
+        const canToggle = trigger.dataset.canToggle === '1';
+        const isActive = trigger.dataset.isActive === '1';
+        const username = trigger.dataset.username || '';
+
+        divider.classList.toggle('hidden', !canToggle);
+        deactivateLink.classList.toggle('hidden', !canToggle || !isActive);
+        activateLink.classList.toggle('hidden', !canToggle || isActive);
+
+        if (canToggle) {
+            const toggleUrl = trigger.dataset.toggleUrl;
+            deactivateLink.href = toggleUrl;
+            activateLink.href = toggleUrl;
+            deactivateLink.dataset.confirmStrong = username;
+            activateLink.dataset.confirmStrong = username;
+        }
+
+        menu.classList.remove('hidden');
+    }
+
+    document.addEventListener('click', function (event) {
+        const menu = menuEl();
+        if (!menu) return;
+
+        const trigger = event.target.closest('.js-user-menu-trigger');
+        if (trigger) {
+            event.stopPropagation();
+            if (openTrigger === trigger && !menu.classList.contains('hidden')) {
+                closeMenu();
+            } else {
+                openMenu(trigger);
+            }
+            return;
+        }
+
+        const menuItem = event.target.closest('#user-row-menu a[role="menuitem"]');
+        if (menuItem && menu.contains(menuItem) && !menuItem.hasAttribute('data-confirm')) {
+            closeMenu();
+            return;
+        }
+
+        if (!menu.contains(event.target)) {
+            closeMenu();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeMenu();
+    });
+
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+})();
+</script>
 {% endblock %}
