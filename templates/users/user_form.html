@@ -29,7 +29,7 @@
             </div>
         </div>
 
-        <form method="post" class="space-y-6 p-6" x-data="{ submitting: false }" @submit="submitting = true">
+        <form method="post" hx-boost="false" class="space-y-6 p-6" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
 
             <div class="grid gap-5 sm:grid-cols-2">

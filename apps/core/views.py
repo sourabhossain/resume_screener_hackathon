@@ -616,7 +616,7 @@ def careers_apply(request, slug):
     job = get_object_or_404(Job, slug=slug, status='active')
 
     from django.utils import timezone as tz
-    if job.closing_date and tz.now().date() > job.closing_date:
+    if job.closing_date and tz.localdate() > job.closing_date:
         messages.error(request, 'This position is no longer accepting applications.')
         return redirect('core:careers')
 
@@ -893,7 +893,13 @@ def screening_rescreen_bulk(request):
     if scope == 'all':
         targets = _failed_resumes_queryset()
     else:
-        uuids = request.POST.getlist('uuids')
+        import uuid as _uuid
+        uuids = []
+        for raw in request.POST.getlist('uuids'):
+            try:
+                uuids.append(_uuid.UUID(str(raw)))
+            except (ValueError, AttributeError, TypeError):
+                continue
         if not uuids:
             messages.warning(request, 'Select at least one candidate to re-screen.')
             return redirect('core:screening_failed')

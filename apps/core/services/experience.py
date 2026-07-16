@@ -11,6 +11,8 @@ import datetime
 import re
 from typing import List, Optional, Tuple
 
+from django.utils import timezone
+
 _MONTHS = {
     'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
     'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
@@ -114,6 +116,6 @@ def compute_experience_years(work_history, today: Optional[datetime.date] = None
     Deterministic, month-precise, and overlap-safe. Returns 0.0 for empty or
     unparseable input. Rounds to one decimal place.
     """
-    today = today or datetime.date.today()
+    today = today or timezone.localdate()
     months = _merge(_intervals(work_history, today))
     return round(months / 12.0, 1)

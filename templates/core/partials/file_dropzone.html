@@ -24,6 +24,7 @@ Expects the bound form field `form.file` (name="file", id="id_file") in context.
   }
 }">
     <input type="file" name="file" id="id_file" x-ref="fileInput" accept=".pdf,.docx" class="sr-only"
+           required aria-required="true"
            @change="if ($event.target.files[0]) handleFile($event.target.files[0])">
 
     <div x-show="!fileName"

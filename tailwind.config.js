@@ -1,6 +1,15 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./templates/**/*.html'],
+  // Picker tone classes are assembled at runtime in status-picker.js
+  // ('status-picker__dot--' + tone), so Tailwind's content scan can't see them
+  // and would purge the @layer component rules. Keep them explicitly.
+  safelist: [
+    {
+      pattern: /^status-picker__(dot|badge|trigger)--(zinc|sky|cyan|indigo|violet|emerald|rose|amber)$/,
+      variants: ['dark'],
+    },
+  ],
   darkMode: 'class',
   theme: {
     extend: {

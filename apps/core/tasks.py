@@ -154,7 +154,7 @@ def close_expired_jobs():
     from django.utils import timezone
     from apps.core.models import Job
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     count = Job.objects.filter(
         status='active',
         closing_date__isnull=False,

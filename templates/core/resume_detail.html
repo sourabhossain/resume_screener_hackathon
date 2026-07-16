@@ -247,7 +247,7 @@
             </div>
 
         {# Textarea form #}
-        <form method="post" action="{% url 'core:resume_note_add' resume.uuid %}" class="mb-5">
+        <form method="post" action="{% url 'core:resume_note_add' resume.uuid %}" hx-boost="false" class="mb-5">
             {% csrf_token %}
             <textarea name="text" rows="3" required
                 placeholder="Write a note about this candidate, interview impression, follow-up action, anything relevant…"
@@ -282,6 +282,7 @@
                 </div>
                 {% if request.user == note.author or request.user.is_superuser %}
                 <form method="post" action="{% url 'core:resume_note_delete' resume.uuid note.pk %}"
+                      hx-boost="false"
                       data-confirm
                       data-confirm-title="Delete this note?"
                       data-confirm-text="This note will be permanently removed."
