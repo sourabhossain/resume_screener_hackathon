@@ -97,8 +97,6 @@ def test_ipv4_mapped_loopback_blocked(monkeypatch):
     assert ok is False
 
 
-# --- pinned_ip_for_host: DNS-rebinding backstop (validate the exact connect IP) ---
-
 def test_pin_blocks_metadata_hostname():
     with pytest.raises(UnsafeHostError):
         pinned_ip_for_host('169.254.169.254')
@@ -121,8 +119,6 @@ def test_pin_returns_validated_public_ip(monkeypatch):
 
 
 def test_pin_rebinding_to_private_is_blocked(monkeypatch):
-    """The rebinding case: a hostname whose (connect-time) resolution yields only
-    private/metadata IPs must raise, so the pinned backend never opens the socket."""
     import apps.core.services.url_safety as us
     monkeypatch.setattr(us, '_resolved_ips', lambda h: [ipaddress.ip_address('169.254.169.254')])
     with pytest.raises(UnsafeHostError):
@@ -130,7 +126,6 @@ def test_pin_rebinding_to_private_is_blocked(monkeypatch):
 
 
 def test_pin_picks_public_when_mixed(monkeypatch):
-    """If resolution returns a public and a private IP, connect only to the public one."""
     import apps.core.services.url_safety as us
     monkeypatch.setattr(us, '_resolved_ips',
                         lambda h: [ipaddress.ip_address('93.184.216.34'), ipaddress.ip_address('10.0.0.1')])

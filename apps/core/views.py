@@ -405,17 +405,10 @@ def serve_protected_media(request, path):
         raise Http404
     if not os.path.exists(full_path):
         raise Http404
-    # By default as_attachment forces a download instead of letting the browser
-    # render the PII file inline (defence-in-depth alongside the upload
-    # magic-byte checks). Inline is only granted for the "View CV" modal and
-    # only for PDFs, whose renderer cannot execute embedded scripts — a crafted
-    # HTML/SVG upload can therefore never run same-origin.
+    # Inline only for PDFs (safe to render); everything else stays a download.
     inline = request.GET.get('inline') == '1' and full_path.lower().endswith('.pdf')
     response = FileResponse(open(full_path, 'rb'), as_attachment=not inline)
     if inline:
-        # Allow the recruiter's own dashboard to embed the preview while keeping
-        # cross-site framing blocked. Set explicitly so the global CSP/XFO
-        # middleware (which only fill in missing headers) leave these intact.
         response['X-Frame-Options'] = 'SAMEORIGIN'
         response['Content-Security-Policy'] = "frame-ancestors 'self'"
     return response

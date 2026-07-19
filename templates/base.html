@@ -107,8 +107,7 @@
             f.submit();
         }
 
-        // Confirm (reading data-confirm-* off el) then POST to url. Used by menu
-        // buttons so the flow never depends on link navigation or htmx boost.
+        // Confirm then POST — for menu buttons.
         window.djConfirmPost = function (el, url) {
             const postUrl = url || el.dataset.postUrl;
             if (!postUrl) return;
