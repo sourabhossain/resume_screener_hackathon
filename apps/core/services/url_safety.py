@@ -134,3 +134,44 @@ def is_safe_public_http_url(url: str, *, resolve_dns: bool = True) -> tuple[bool
             return False, 'blocked resolved ip'
 
     return True, ''
+
+
+class UnsafeHostError(Exception):
+    """Raised when a host is a blocked literal/name or resolves only to blocked IPs."""
+
+
+def pinned_ip_for_host(host: str) -> str:
+    """Resolve `host` and return one validated public IP string to connect to.
+
+    The caller MUST open the socket to the returned IP rather than re-resolving
+    the hostname. Because the address we validate is the exact address used for
+    the connection, the DNS-rebinding TOCTOU window is closed (there is no second,
+    unchecked resolution at connect time). TLS SNI / certificate verification are
+    unaffected: the connecting layer still passes the original hostname to
+    start_tls, so we connect to the IP but verify the cert against the hostname.
+    """
+    if not host:
+        raise UnsafeHostError('missing host')
+
+    hl = host.lower().strip('.')
+    if hl in _METADATA_AND_LOCAL_HOSTS:
+        raise UnsafeHostError('blocked hostname')
+
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if _blocked_ip(literal):
+            raise UnsafeHostError('blocked ip literal')
+        return host
+
+    try:
+        ips = _resolved_ips(host)
+    except socket.gaierror as e:
+        raise UnsafeHostError(f'dns resolution failed: {e}')
+
+    for ip in ips:
+        if not _blocked_ip(ip):
+            return str(ip)
+    raise UnsafeHostError('all resolved addresses blocked')

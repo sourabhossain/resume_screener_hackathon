@@ -7,11 +7,48 @@ import logging
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
+import httpcore
 import httpx
 
-from apps.core.services.url_safety import is_safe_public_http_url
+from apps.core.services.url_safety import (
+    UnsafeHostError,
+    is_safe_public_http_url,
+    pinned_ip_for_host,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class _SSRFValidatingBackend(httpcore.AnyIOBackend):
+    """httpx/httpcore backend that resolves + validates the destination host and
+    connects to the exact validated IP.
+
+    This closes the DNS-rebinding TOCTOU window: the SSRF check and the socket
+    connection use the *same* resolution, so a hostname cannot pass a public-IP
+    check and then rebind to an internal/metadata address at connect time. TLS is
+    unaffected — httpcore still passes the original hostname to start_tls, so the
+    certificate is verified against the hostname while the socket targets the IP.
+    """
+
+    async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        ip = pinned_ip_for_host(host)  # raises UnsafeHostError on a blocked host
+        return await super().connect_tcp(
+            ip, port, timeout=timeout, local_address=local_address, socket_options=socket_options
+        )
+
+
+def _pinned_async_client() -> httpx.AsyncClient:
+    """An httpx AsyncClient whose connections are DNS-rebinding-safe (see backend)."""
+    transport = httpx.AsyncHTTPTransport(verify=True)
+    # httpx 0.28 doesn't expose network_backend on the transport; inject it into
+    # the underlying httpcore connection pool (read per new connection).
+    transport._pool._network_backend = _SSRFValidatingBackend()
+    return httpx.AsyncClient(
+        transport=transport,
+        headers=LinkCrawler.HEADERS,
+        timeout=REQUEST_TIMEOUT,
+        follow_redirects=False,
+    )
 
 # Timeout for all requests
 REQUEST_TIMEOUT = 15  # seconds
@@ -85,14 +122,10 @@ class LinkCrawler:
     async def _crawl_with_httpx(cls, url: str) -> CrawlResult:
         # SSRF hardening: do NOT let httpx auto-follow redirects. A validated
         # public URL can 3xx-redirect to an internal/metadata address; following
-        # blindly would bypass the guard. Instead follow manually and re-run the
-        # SSRF check (which re-resolves DNS) on every hop before each request.
-        async with httpx.AsyncClient(
-            headers=cls.HEADERS,
-            timeout=REQUEST_TIMEOUT,
-            follow_redirects=False,
-            verify=True,
-        ) as client:
+        # blindly would bypass the guard. Instead follow manually, pre-check every
+        # hop, and — crucially — connect through a pinned backend that validates the
+        # resolved IP at connect time (closes the DNS-rebinding TOCTOU window).
+        async with _pinned_async_client() as client:
             current = url
             for _ in range(MAX_REDIRECTS + 1):
                 safe, reason = is_safe_public_http_url(current)
@@ -100,7 +133,11 @@ class LinkCrawler:
                     logger.info('Blocked crawl hop (SSRF guard): %s — %s', current, reason)
                     return CrawlResult(url=url, success=False, error=f'blocked: {reason}')
 
-                response = await client.get(current)
+                try:
+                    response = await client.get(current)
+                except UnsafeHostError as e:
+                    logger.info('Blocked crawl hop (SSRF pin): %s — %s', current, e)
+                    return CrawlResult(url=url, success=False, error=f'blocked: {e}')
 
                 if response.is_redirect and response.headers.get('location'):
                     nxt = response.next_request
@@ -135,19 +172,21 @@ class LinkCrawler:
                         user_agent=cls.HEADERS['User-Agent']
                     )
 
-                    # Re-check SSRF on every navigation request so that
-                    # redirects (e.g. github.com → internal IP) can't bypass
-                    # the guard that was applied to the original URL in crawl().
+                    # Re-check SSRF on EVERY request (navigation and sub-resources
+                    # like img/script/xhr) so neither a redirect nor a page-embedded
+                    # fetch can reach an internal/metadata host. Playwright uses
+                    # Chromium's own resolver so we can't IP-pin here as we do for
+                    # httpx; this path is limited to the trusted JS_REQUIRED_DOMAINS
+                    # (github/linkedin), whose DNS an attacker does not control.
                     async def _ssrf_guard(route, request):
-                        if request.is_navigation_request():
-                            safe, reason = is_safe_public_http_url(request.url)
-                            if not safe:
-                                logger.info(
-                                    'Blocked Playwright navigation (SSRF guard): %s — %s',
-                                    request.url, reason,
-                                )
-                                await route.abort('blockedbyclient')
-                                return
+                        safe, reason = is_safe_public_http_url(request.url)
+                        if not safe:
+                            logger.info(
+                                'Blocked Playwright request (SSRF guard): %s — %s',
+                                request.url, reason,
+                            )
+                            await route.abort('blockedbyclient')
+                            return
                         await route.continue_()
 
                     await page.route('**/*', _ssrf_guard)
