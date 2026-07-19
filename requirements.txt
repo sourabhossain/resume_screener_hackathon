@@ -4,6 +4,9 @@ gunicorn>=21.2
 whitenoise>=6.6
 playwright>=1.40.0
 httpx>=0.26.0
+# Explicit: link_crawler pins the SSRF-validating network backend via httpcore
+# (httpx's transport layer). It ships with httpx but we depend on it directly.
+httpcore>=1.0.0
 PyMySQL>=1.1
 cryptography>=42.0
 python-dotenv>=1.0
