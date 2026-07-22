@@ -183,7 +183,7 @@
                 </div>
             {% if job.status == 'active' %}
             {# Only when the pipeline already has candidates — otherwise the empty state below is the single, complete add hub (no duplicate "Add resume"). #}
-            {% if resumes %}
+            {% if pipeline_stats.total %}
             <div class="flex items-center gap-2">
                 <a href="{% url 'core:resume_bulk_create' job.slug %}"
                    class="inline-flex items-center justify-center gap-2 self-stretch rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:self-auto">
@@ -211,8 +211,8 @@
             {% endif %}
             </div>
 
-            {# Pipeline search — hx-disinherit goes on the hx-get elements below, not this wrapper #}
-            <div class="relative" x-data="{
+            {# hx-disinherit only works on ancestors — without this the body's hx-select="#main-content" blanks the tbody on partial swaps #}
+            <div class="relative" hx-disinherit="hx-target hx-select hx-swap hx-push-url" x-data="{
                     hasValue: '{{ search_q|escapejs }}' !== '',
                     clear() {
                         const input = this.$refs.input;
@@ -223,7 +223,7 @@
                     }
                  }">
                 <div class="flex items-center gap-2">
-                    <div class="relative flex-1">
+                    <div class="relative w-full max-w-md">
                         <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"></path>
                         </svg>
@@ -237,7 +237,7 @@
                                hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
                                hx-target="#pipeline-tbody"
                                hx-swap="innerHTML"
-                               hx-disinherit="hx-target hx-select hx-swap hx-push-url"
+                               hx-include="#pipeline-status-filter"
                                @input="hasValue = $event.target.value.length > 0"
                                @blur="setTimeout(() => { document.getElementById('pipeline-suggestions').innerHTML = ''; }, 200)"
                                class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
@@ -247,19 +247,32 @@
                             class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-zinc-500 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
+                    <select id="pipeline-status-filter"
+                            name="recruiter_status"
+                            aria-label="Filter by recruiter status"
+                            hx-get="{% url 'core:pipeline_search' job.slug %}"
+                            hx-trigger="change"
+                            hx-target="#pipeline-tbody"
+                            hx-swap="innerHTML"
+                            hx-include="#pipeline-search-input"
+                            class="shrink-0 cursor-pointer rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-3 pr-4 text-sm font-medium text-zinc-700 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
+                        <option value="all" {% if recruiter_status_filter == 'all' %}selected{% endif %}>All statuses</option>
+                        {% for val, label in recruiter_status_choices %}
+                        <option value="{{ val }}" {% if recruiter_status_filter == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 {# Suggestions: separate HTMX listener — never touches tbody #}
                 <div hx-get="{% url 'core:pipeline_suggestions' job.slug %}"
                      hx-trigger="input changed delay:200ms from:#pipeline-search-input, focusin delay:100ms from:#pipeline-search-input"
                      hx-target="#pipeline-suggestions"
                      hx-swap="innerHTML"
-                     hx-disinherit="hx-target hx-select hx-swap hx-push-url"
-                     hx-include="#pipeline-search-input"></div>
-                <div id="pipeline-suggestions" class="absolute left-0 right-10 top-full z-20 mt-1"></div>
+                     hx-include="#pipeline-search-input, #pipeline-status-filter"></div>
+                <div id="pipeline-suggestions" class="absolute left-0 top-full z-20 mt-1 w-full max-w-md"></div>
             </div>
         </div>
 
-        {% if resumes %}
+        {% if pipeline_stats.total %}
         <div class="overflow-x-auto">
             <table class="resp-table w-full text-left md:min-w-[68rem]">
                 <caption class="sr-only">Applicant pipeline, sorted by decision then score. Updates live as you search.</caption>
@@ -281,6 +294,12 @@
                 <tbody id="pipeline-tbody" aria-live="polite" hx-disinherit="hx-target hx-select hx-swap hx-push-url" class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for resume in resumes %}
                 {% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter %}
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="px-6 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                        {% if search_q %}No candidates match <strong class="text-zinc-600 dark:text-zinc-300">{{ search_q }}</strong>{% else %}No candidates with this recruiter status. Switch the filter to <strong class="text-zinc-600 dark:text-zinc-300">All statuses</strong> to see everyone.{% endif %}
+                    </td>
+                </tr>
                 {% endfor %}
                 </tbody>
             </table>

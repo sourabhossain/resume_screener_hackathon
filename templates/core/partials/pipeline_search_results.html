@@ -5,7 +5,7 @@
 {% else %}
 <tr>
     <td colspan="10" class="px-6 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        No candidates match <strong class="text-zinc-600 dark:text-zinc-300">{{ search_q }}</strong>
+        {% if search_q %}No candidates match <strong class="text-zinc-600 dark:text-zinc-300">{{ search_q }}</strong>{% else %}No candidates with this recruiter status. Switch the filter to <strong class="text-zinc-600 dark:text-zinc-300">All statuses</strong> to see everyone.{% endif %}
     </td>
 </tr>
 {% endif %}

@@ -13,6 +13,7 @@
           hx-post="{% url 'core:resume_status_update' resume.uuid %}"
           {% if status_context == 'card' %}hx-target="closest .rs-status"{% else %}hx-target="closest td"{% endif %}
           hx-swap="outerHTML"
+          hx-select="unset"
           x-data="{ open: false, mx: 0, my: 0, up: false, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); this.mx = r.left; this.up = (window.innerHeight - r.bottom) < 320; this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
           x-on:keydown.escape.window="open = false"
           x-on:scroll.window="open = false"

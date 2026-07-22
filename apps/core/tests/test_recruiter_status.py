@@ -93,7 +93,9 @@ class TestRecruiterStatusColumnQueries:
     def _count(self, authenticated_client, job):
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
-        url = reverse('core:job_detail', args=[job.slug])
+        # recruiter_status=all so the shortlisted rows actually render — the
+        # default 'new' filter would hide them and trivialise the guard.
+        url = reverse('core:job_detail', args=[job.slug]) + '?recruiter_status=all'
         with CaptureQueriesContext(connection) as ctx:
             resp = authenticated_client.get(url)
             assert resp.status_code == 200
@@ -105,3 +107,69 @@ class TestRecruiterStatusColumnQueries:
         self._make_resumes(sample_job, 5)
         more = self._count(authenticated_client, sample_job)
         assert few == more, f'query count grew with rows: {few} -> {more} (N+1)'
+
+
+@pytest.mark.django_db
+class TestRecruiterStatusFilter:
+    """Pipeline table filter on job_detail / pipeline_search. Defaults to the
+    untriaged ('new') queue; 'all' shows everyone."""
+
+    @pytest.fixture
+    def mixed_resumes(self, sample_job):
+        new = Resume.objects.create(
+            job=sample_job, candidate_name='Newton Fresh',
+            screening_status='completed', final_score=60,
+        )
+        shortlisted = Resume.objects.create(
+            job=sample_job, candidate_name='Shorty Listed',
+            recruiter_status='shortlisted',
+            screening_status='completed', final_score=80,
+        )
+        return new, shortlisted
+
+    def _detail(self, client, job, query=''):
+        return client.get(reverse('core:job_detail', args=[job.slug]) + query)
+
+    def test_default_shows_only_new(self, authenticated_client, sample_job, mixed_resumes):
+        response = self._detail(authenticated_client, sample_job)
+        assert response.status_code == 200
+        assert b'Newton Fresh' in response.content
+        assert b'Shorty Listed' not in response.content
+
+    def test_all_shows_everyone(self, authenticated_client, sample_job, mixed_resumes):
+        response = self._detail(authenticated_client, sample_job, '?recruiter_status=all')
+        assert b'Newton Fresh' in response.content
+        assert b'Shorty Listed' in response.content
+
+    def test_specific_status_filters(self, authenticated_client, sample_job, mixed_resumes):
+        response = self._detail(authenticated_client, sample_job, '?recruiter_status=shortlisted')
+        assert b'Shorty Listed' in response.content
+        assert b'Newton Fresh' not in response.content
+
+    def test_invalid_value_falls_back_to_new(self, authenticated_client, sample_job, mixed_resumes):
+        response = self._detail(authenticated_client, sample_job, '?recruiter_status=bogus')
+        assert response.status_code == 200
+        assert b'Newton Fresh' in response.content
+        assert b'Shorty Listed' not in response.content
+
+    def test_stats_cards_ignore_filter(self, authenticated_client, sample_job, mixed_resumes):
+        response = self._detail(authenticated_client, sample_job)
+        assert response.context['pipeline_stats']['total'] == 2
+
+    def test_filtered_empty_state_keeps_table(self, authenticated_client, sample_job, mixed_resumes):
+        response = self._detail(authenticated_client, sample_job, '?recruiter_status=hired')
+        assert response.status_code == 200
+        assert b'No candidates with this recruiter status' in response.content
+        assert b'No applicants yet' not in response.content
+
+    def test_pipeline_search_respects_filter(self, authenticated_client, sample_job, mixed_resumes):
+        url = reverse('core:pipeline_search', args=[sample_job.slug])
+        response = authenticated_client.get(url, {'q': 'o', 'recruiter_status': 'shortlisted'})
+        assert b'Shorty Listed' in response.content
+        assert b'Newton Fresh' not in response.content
+
+    def test_pipeline_search_all(self, authenticated_client, sample_job, mixed_resumes):
+        url = reverse('core:pipeline_search', args=[sample_job.slug])
+        response = authenticated_client.get(url, {'q': '', 'recruiter_status': 'all'})
+        assert b'Newton Fresh' in response.content
+        assert b'Shorty Listed' in response.content

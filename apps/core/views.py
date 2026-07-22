@@ -54,6 +54,16 @@ def _ordered_active_resumes_queryset(resume_qs):
     ).order_by('-decision_rank', '-final_score', '-created_at')
 
 
+def _recruiter_status_filter(request):
+    """Validated recruiter-status filter for the pipeline table. Defaults to
+    'new' so the page opens on the untriaged queue; 'all' disables filtering."""
+    value = request.GET.get('recruiter_status', 'new').strip()
+    valid = {c[0] for c in Resume.RECRUITER_STATUS_CHOICES}
+    if value == 'all' or value in valid:
+        return value
+    return 'new'
+
+
 def _pipeline_stats(resume_qs):
     # order_by() clears any inherited ordering so it doesn't leak into the
     # implicit GROUP BY; conditional Counts give exact per-decision totals.
@@ -211,6 +221,13 @@ def job_detail(request, slug):
             Q(phone__icontains=search_q)
         )
 
+    # Snapshot cards keep whole-pipeline numbers; the status filter narrows
+    # only the table rows below them.
+    pipeline_stats = _pipeline_stats(resumes)
+    status_filter = _recruiter_status_filter(request)
+    if status_filter != 'all':
+        resumes = resumes.filter(recruiter_status=status_filter)
+
     # Counts for the "Download CVs" menu — only resumes that actually have a file.
     with_files = (
         Resume.objects.filter(job=job, is_deleted=False)
@@ -230,8 +247,10 @@ def job_detail(request, slug):
         {
             'job': job,
             'resumes': resumes,
-            'pipeline_stats': _pipeline_stats(resumes),
+            'pipeline_stats': pipeline_stats,
             'search_q': search_q,
+            'recruiter_status_filter': status_filter,
+            'recruiter_status_choices': Resume.RECRUITER_STATUS_CHOICES,
             'total_count': download_counts['total'],
             'shortlisted_count': download_counts['shortlisted'],
             'interview_count': download_counts['interview'],
@@ -271,16 +290,20 @@ def job_delete(request, slug):
 def pipeline_search(request, job_slug):
     job = get_object_or_404(Job, slug=job_slug)
     search_q = request.GET.get('q', '').strip()
-    resumes = _ordered_active_resumes_queryset(job.resumes)
+    resumes = _ordered_active_resumes_queryset(job.resumes).prefetch_related('interviews__evaluations')
     if search_q:
         resumes = resumes.filter(
             Q(candidate_name__icontains=search_q) |
             Q(email__icontains=search_q) |
             Q(phone__icontains=search_q)
         )
+    status_filter = _recruiter_status_filter(request)
+    if status_filter != 'all':
+        resumes = resumes.filter(recruiter_status=status_filter)
     return render(request, 'core/partials/pipeline_search_results.html', {
         'resumes': resumes,
         'search_q': search_q,
+        'recruiter_status_filter': status_filter,
         'job': job,
     })
 
@@ -291,13 +314,15 @@ def pipeline_suggestions(request, job_slug):
     search_q = request.GET.get('q', '').strip()
     suggestions = []
     if search_q:
-        suggestions = list(
-            _ordered_active_resumes_queryset(job.resumes).filter(
-                Q(candidate_name__icontains=search_q) |
-                Q(email__icontains=search_q) |
-                Q(phone__icontains=search_q)
-            ).values('uuid', 'candidate_name', 'email', 'phone')[:6]
+        qs = _ordered_active_resumes_queryset(job.resumes).filter(
+            Q(candidate_name__icontains=search_q) |
+            Q(email__icontains=search_q) |
+            Q(phone__icontains=search_q)
         )
+        status_filter = _recruiter_status_filter(request)
+        if status_filter != 'all':
+            qs = qs.filter(recruiter_status=status_filter)
+        suggestions = list(qs.values('uuid', 'candidate_name', 'email', 'phone')[:6])
     return render(request, 'core/partials/pipeline_suggestions.html', {
         'suggestions': suggestions,
         'search_q': search_q,
