@@ -247,20 +247,76 @@
                             class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-zinc-500 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
-                    <select id="pipeline-status-filter"
-                            name="recruiter_status"
-                            aria-label="Filter by recruiter status"
-                            hx-get="{% url 'core:pipeline_search' job.slug %}"
-                            hx-trigger="change"
-                            hx-target="#pipeline-tbody"
-                            hx-swap="innerHTML"
-                            hx-include="#pipeline-search-input"
-                            class="shrink-0 cursor-pointer rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-3 pr-4 text-sm font-medium text-zinc-700 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
-                        <option value="all" {% if recruiter_status_filter == 'all' %}selected{% endif %}>All statuses</option>
-                        {% for val, label in recruiter_status_choices %}
-                        <option value="{{ val }}" {% if recruiter_status_filter == val %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="relative shrink-0"
+                         x-data="{ open: false, value: '{{ recruiter_status_filter|escapejs }}', mx: 0, my: 0, up: false, mh: 384,
+                                   labels: { 'all': 'All statuses'{% for opt in recruiter_status_options %}, '{{ opt.value|escapejs }}': '{{ opt.label|escapejs }}'{% endfor %} },
+                                   toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); const below = window.innerHeight - r.bottom - 12; const above = r.top - 12; this.up = below < 430 && above > below; this.mh = Math.round(Math.min(420, Math.max(160, this.up ? above : below))); this.mx = Math.max(8, Math.min(r.right - 256, window.innerWidth - 264)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; },
+                                   pick(v) { this.open = false; if (this.value === v) return; this.value = v; const f = this.$refs.field; f.value = v; htmx.trigger(f, 'change'); } }"
+                         x-on:keydown.escape.window="open = false"
+                         x-on:scroll.window="open = false">
+                        <input type="hidden"
+                               id="pipeline-status-filter"
+                               name="recruiter_status"
+                               value="{{ recruiter_status_filter }}"
+                               x-ref="field"
+                               hx-get="{% url 'core:pipeline_search' job.slug %}"
+                               hx-trigger="change"
+                               hx-target="#pipeline-tbody"
+                               hx-swap="innerHTML"
+                               hx-include="#pipeline-search-input">
+                        <button type="button"
+                                x-on:click="toggle($event.currentTarget)"
+                                :aria-expanded="open"
+                                aria-haspopup="listbox"
+                                aria-label="Filter by recruiter status"
+                                class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white py-2.5 pl-3 pr-3 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus:border-primary-500">
+                            <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            <span class="whitespace-nowrap" x-text="labels[value]">{% if recruiter_status_filter == 'all' %}All statuses{% else %}{% for opt in recruiter_status_options %}{% if opt.value == recruiter_status_filter %}{{ opt.label }}{% endif %}{% endfor %}{% endif %}</span>
+                            <svg class="h-4 w-4 text-zinc-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open" x-cloak
+                             x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                             x-on:click.outside="open = false"
+                             :style="`top:${my}px; left:${mx}px; max-height:${mh}px;${up ? ' transform: translateY(-100%);' : ''}`"
+                             class="fixed z-50 w-64 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
+                             role="listbox" style="display: none;">
+                            <p class="status-picker__group-label">Filter by status</p>
+                            <button type="button" role="option" :aria-selected="value === 'all'"
+                                    x-on:click="pick('all')"
+                                    class="status-picker__option" :class="value === 'all' ? 'status-picker__option--active status-picker__option--zinc' : ''">
+                                <span class="status-picker__badge status-picker__badge--sm status-picker__badge--zinc" aria-hidden="true">
+                                    <span class="status-picker__dot status-picker__dot--zinc"></span>
+                                </span>
+                                <span class="status-picker__option-body">
+                                    <span class="status-picker__option-label">All statuses</span>
+                                </span>
+                                <span class="status-picker__check" :class="{ 'status-picker__check--visible': value === 'all' }" aria-hidden="true">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                </span>
+                            </button>
+                            <div class="status-picker__divider" aria-hidden="true"></div>
+                            {% for opt in recruiter_status_options %}
+                            <button type="button" role="option" :aria-selected="value === '{{ opt.value }}'"
+                                    x-on:click="pick('{{ opt.value }}')"
+                                    class="status-picker__option" :class="value === '{{ opt.value }}' ? 'status-picker__option--active status-picker__option--{{ opt.tone }}' : ''">
+                                <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
+                                    <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
+                                </span>
+                                <span class="status-picker__option-body">
+                                    <span class="status-picker__option-label">{{ opt.label }}</span>
+                                </span>
+                                <span class="status-picker__check" :class="{ 'status-picker__check--visible': value === '{{ opt.value }}' }" aria-hidden="true">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                </span>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
                 {# Suggestions: separate HTMX listener — never touches tbody #}
                 <div hx-get="{% url 'core:pipeline_suggestions' job.slug %}"

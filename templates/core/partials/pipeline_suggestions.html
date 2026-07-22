@@ -29,6 +29,12 @@
                 {% endif %}
             </div>
         </div>
+        <span class="flex shrink-0 items-center gap-1.5">
+            <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ s.status_tone }}" aria-hidden="true">
+                <span class="status-picker__dot status-picker__dot--{{ s.status_tone }}"></span>
+            </span>
+            <span class="hidden text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 sm:inline">{{ s.status_label }}</span>
+        </span>
         <svg class="h-4 w-4 shrink-0 text-zinc-300 transition-colors group-hover:text-primary-400 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
     </a>
     {% endfor %}

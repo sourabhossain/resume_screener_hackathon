@@ -104,7 +104,7 @@
 
 {# One shared menu for all rows — avoids per-row Alpine/fixed overlap bugs. #}
 <div id="user-row-menu"
-     class="fixed z-50 hidden w-48 -translate-x-full origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
+     class="fixed z-50 hidden w-48 rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
      role="menu">
     <a id="user-row-menu-password" href="#" role="menuitem" hx-boost="false"
        class="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium text-zinc-700 transition hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-200 dark:hover:bg-primary-950/40 dark:hover:text-primary-300">
@@ -165,9 +165,7 @@
         const openUp = (window.innerHeight - rect.bottom) < 220;
         menu.style.top = (openUp ? rect.top - 6 : rect.bottom + 6) + 'px';
         menu.style.left = rect.right + 'px';
-        menu.classList.toggle('-translate-y-full', openUp);
-        menu.classList.toggle('origin-bottom-right', openUp);
-        menu.classList.toggle('origin-top-right', !openUp);
+        menu.style.transform = 'translateX(-100%)' + (openUp ? ' translateY(-100%)' : '');
 
         pwdLink.href = trigger.dataset.passwordUrl;
 

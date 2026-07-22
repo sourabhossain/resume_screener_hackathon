@@ -14,7 +14,7 @@
           {% if status_context == 'card' %}hx-target="closest .rs-status"{% else %}hx-target="closest td"{% endif %}
           hx-swap="outerHTML"
           hx-select="unset"
-          x-data="{ open: false, mx: 0, my: 0, up: false, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); this.mx = r.left; this.up = (window.innerHeight - r.bottom) < 320; this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
+          x-data="{ open: false, mx: 0, my: 0, up: false, mh: 420, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); const below = window.innerHeight - r.bottom - 12; const above = r.top - 12; this.up = below < 430 && above > below; this.mh = Math.round(Math.min(420, Math.max(160, this.up ? above : below))); this.mx = Math.max(8, Math.min(r.left, window.innerWidth - 264)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
           x-on:keydown.escape.window="open = false"
           x-on:scroll.window="open = false"
           class="relative inline-block">
@@ -39,26 +39,50 @@
              x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
              x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
              x-on:click.outside="open = false"
-             :style="`top:${my}px; left:${mx}px`"
-             :class="up ? '-translate-y-full origin-bottom-left' : 'origin-top-left'"
-             class="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
+             :style="`top:${my}px; left:${mx}px; max-height:${mh}px;${up ? ' transform: translateY(-100%);' : ''}`"
+             class="fixed z-50 w-64 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
              role="listbox" style="display: none;">
-            {% for opt in resume.recruiter_status_options %}
-            <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
-                    aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
-                    x-on:click="open = false"
-                    class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium text-zinc-700 transition hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-200 dark:hover:text-primary-300{% if opt.current %} bg-zinc-50 dark:bg-zinc-800{% endif %}">
-                <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
-                    <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
-                </span>
-                <span class="flex-1 whitespace-nowrap">{{ opt.label }}</span>
-                {% if opt.current %}
-                <svg class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-                </svg>
-                {% endif %}
-            </button>
-            {% endfor %}
+            <div class="status-picker__group">
+                <p class="status-picker__group-label">Pipeline</p>
+                {% for opt in resume.recruiter_status_options %}{% if not opt.outcome %}
+                <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
+                        aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
+                        title="{{ opt.hint }}"
+                        x-on:click="open = false"
+                        class="status-picker__option{% if opt.current %} status-picker__option--active status-picker__option--{{ opt.tone }}{% endif %}">
+                    <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
+                        <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
+                    </span>
+                    <span class="status-picker__option-body">
+                        <span class="status-picker__option-label">{{ opt.label }}</span>
+                    </span>
+                    <span class="status-picker__check{% if opt.current %} status-picker__check--visible{% endif %}" aria-hidden="true">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    </span>
+                </button>
+                {% endif %}{% endfor %}
+            </div>
+            <div class="status-picker__divider" aria-hidden="true"></div>
+            <div class="status-picker__group">
+                <p class="status-picker__group-label">Outcome</p>
+                {% for opt in resume.recruiter_status_options %}{% if opt.outcome %}
+                <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
+                        aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
+                        title="{{ opt.hint }}"
+                        x-on:click="open = false"
+                        class="status-picker__option{% if opt.current %} status-picker__option--active status-picker__option--{{ opt.tone }}{% endif %}">
+                    <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
+                        <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
+                    </span>
+                    <span class="status-picker__option-body">
+                        <span class="status-picker__option-label">{{ opt.label }}</span>
+                    </span>
+                    <span class="status-picker__check{% if opt.current %} status-picker__check--visible{% endif %}" aria-hidden="true">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    </span>
+                </button>
+                {% endif %}{% endfor %}
+            </div>
         </div>
     </form>
 {% endif %}

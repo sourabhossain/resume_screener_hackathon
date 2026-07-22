@@ -206,9 +206,8 @@
                  x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
                  x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                  x-on:click.outside="open = false"
-                 :style="`top:${my}px; left:${mx}px`"
-                 :class="up ? '-translate-y-full origin-bottom-right' : 'origin-top-right'"
-                 class="fixed z-50 w-48 -translate-x-full rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
+                 :style="`top:${my}px; left:${mx}px; transform: translateX(-100%)${up ? ' translateY(-100%)' : ''}`"
+                 class="fixed z-50 w-48 rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
                  role="menu" style="display: none;">
                 {% if resume.file %}
                 <button type="button" role="menuitem"

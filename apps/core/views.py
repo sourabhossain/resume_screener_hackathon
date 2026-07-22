@@ -250,7 +250,10 @@ def job_detail(request, slug):
             'pipeline_stats': pipeline_stats,
             'search_q': search_q,
             'recruiter_status_filter': status_filter,
-            'recruiter_status_choices': Resume.RECRUITER_STATUS_CHOICES,
+            'recruiter_status_options': [
+                {'value': value, 'label': label, 'tone': Resume.RECRUITER_STATUS_TONES.get(value, 'zinc')}
+                for value, label in Resume.RECRUITER_STATUS_CHOICES
+            ],
             'total_count': download_counts['total'],
             'shortlisted_count': download_counts['shortlisted'],
             'interview_count': download_counts['interview'],
@@ -322,7 +325,12 @@ def pipeline_suggestions(request, job_slug):
         status_filter = _recruiter_status_filter(request)
         if status_filter != 'all':
             qs = qs.filter(recruiter_status=status_filter)
-        suggestions = list(qs.values('uuid', 'candidate_name', 'email', 'phone')[:6])
+        suggestions = list(qs.values('uuid', 'candidate_name', 'email', 'phone', 'recruiter_status')[:6])
+        labels = dict(Resume.RECRUITER_STATUS_CHOICES)
+        for s in suggestions:
+            status = s['recruiter_status'] or 'new'
+            s['status_label'] = labels.get(status, 'New')
+            s['status_tone'] = Resume.RECRUITER_STATUS_TONES.get(status, 'zinc')
     return render(request, 'core/partials/pipeline_suggestions.html', {
         'suggestions': suggestions,
         'search_q': search_q,

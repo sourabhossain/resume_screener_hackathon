@@ -279,6 +279,18 @@ class Resume(SoftDeleteModel):
         'rejected': 'rose',
         'withdrawn': 'amber',
     }
+    # Mirrors hint()/isOutcome() in static/js/status-picker.js.
+    RECRUITER_STATUS_HINTS = {
+        'new': 'Recently added to pipeline',
+        'shortlisted': 'Passed initial screening',
+        'phone_screen': 'Phone interview stage',
+        'interviewing': 'Active interview process',
+        'offer_extended': 'Offer has been extended',
+        'hired': 'Successfully placed',
+        'rejected': 'Not proceeding',
+        'withdrawn': 'Candidate withdrew',
+    }
+    RECRUITER_STATUS_OUTCOMES = {'hired', 'rejected', 'withdrawn'}
 
     @property
     def recruiter_status_tone(self) -> str:
@@ -294,6 +306,8 @@ class Resume(SoftDeleteModel):
                 'value': value,
                 'label': label,
                 'tone': self.RECRUITER_STATUS_TONES.get(value, 'zinc'),
+                'hint': self.RECRUITER_STATUS_HINTS.get(value, ''),
+                'outcome': value in self.RECRUITER_STATUS_OUTCOMES,
                 'current': value == current,
             }
             for value, label in self.RECRUITER_STATUS_CHOICES
