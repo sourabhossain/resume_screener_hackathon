@@ -267,6 +267,38 @@ class Resume(SoftDeleteModel):
     def __str__(self):
         return f"{self.candidate_name} - {self.job.title}"
 
+    # Colour tone for the recruiter-status badge. Kept in sync with the tone()
+    # map in static/js/status-picker.js so the picker and the table chip match.
+    RECRUITER_STATUS_TONES = {
+        'new': 'zinc',
+        'shortlisted': 'sky',
+        'phone_screen': 'cyan',
+        'interviewing': 'indigo',
+        'offer_extended': 'violet',
+        'hired': 'emerald',
+        'rejected': 'rose',
+        'withdrawn': 'amber',
+    }
+
+    @property
+    def recruiter_status_tone(self) -> str:
+        return self.RECRUITER_STATUS_TONES.get(self.recruiter_status or 'new', 'zinc')
+
+    def recruiter_status_options(self):
+        """Choices annotated with tone + current flag for the status dropdown.
+        Django templates can't index a dict by a loop variable, so the per-option
+        tone is resolved here."""
+        current = self.recruiter_status or 'new'
+        return [
+            {
+                'value': value,
+                'label': label,
+                'tone': self.RECRUITER_STATUS_TONES.get(value, 'zinc'),
+                'current': value == current,
+            }
+            for value, label in self.RECRUITER_STATUS_CHOICES
+        ]
+
     def assign_tier_and_recommendation_from_final_score(self) -> None:
         """Align tier and decision with final_score using AI_SCREENING_CONFIG thresholds."""
         if self.final_score is None:

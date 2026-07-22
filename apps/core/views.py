@@ -10,7 +10,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
 from django.db.models import Avg, Case, Count, IntegerField, Prefetch, Q, Value, When
-from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse
+from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse, HttpResponseBadRequest
+from django.views.decorators.http import require_POST
 from django.utils.text import slugify
 from zipstream import ZipStream
 from django.db import connection
@@ -777,17 +778,38 @@ def resume_note_delete(request, uuid, note_id):
 
 
 @login_required
+@require_POST
 def resume_status_update(request, uuid):
-    resume = get_object_or_404(Resume, uuid=uuid)
-    if request.method == 'POST':
-        new_status = request.POST.get('recruiter_status', '').strip()
-        valid = {c[0] for c in Resume.RECRUITER_STATUS_CHOICES}
-        if new_status in valid:
-            resume.recruiter_status = new_status
-            resume.save(update_fields=['recruiter_status'])
-            messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
-        else:
-            messages.error(request, 'Invalid status.')
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    is_htmx = request.headers.get('HX-Request') == 'true'
+    new_status = request.POST.get('recruiter_status', '').strip()
+    valid = {c[0] for c in Resume.RECRUITER_STATUS_CHOICES}
+
+    if new_status not in valid:
+        # A value outside the declared choices can only come from a tampered
+        # request. Reject with 400 and persist nothing — htmx not swapping on
+        # the error keeps the cell on its previous value.
+        if is_htmx:
+            return HttpResponseBadRequest('Invalid status.')
+        messages.error(request, 'Invalid status.')
+        return redirect('core:resume_detail', uuid=uuid)
+
+    resume.recruiter_status = new_status
+    resume.save(update_fields=['recruiter_status', 'updated_at'])
+
+    if is_htmx:
+        # 'card' (candidate detail page) swaps the control in place; 'cell'
+        # (pipeline table) swaps the whole <td>. Both re-render the same shared
+        # control partial, so the two pages cannot drift apart.
+        status_context = request.POST.get('context', 'cell')
+        template = (
+            'core/partials/recruiter_status_control.html'
+            if status_context == 'card'
+            else 'core/partials/recruiter_status_cell.html'
+        )
+        return render(request, template, {'resume': resume, 'status_context': status_context})
+
+    messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
     return redirect('core:resume_detail', uuid=uuid)
 
 

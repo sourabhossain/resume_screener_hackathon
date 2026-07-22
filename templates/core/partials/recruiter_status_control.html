@@ -1,0 +1,64 @@
+<div class="rs-status inline-flex">
+{% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' or resume.verification_status == 'pending' %}
+    <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+        <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ resume.recruiter_status_tone }}" aria-hidden="true">
+            <span class="status-picker__dot status-picker__dot--{{ resume.recruiter_status_tone }}"></span>
+        </span>
+        <span class="whitespace-nowrap">{{ resume.get_recruiter_status_display|default:"New" }}</span>
+    </span>
+{% else %}
+    <form method="post"
+          action="{% url 'core:resume_status_update' resume.uuid %}"
+          data-status-control
+          hx-post="{% url 'core:resume_status_update' resume.uuid %}"
+          {% if status_context == 'card' %}hx-target="closest .rs-status"{% else %}hx-target="closest td"{% endif %}
+          hx-swap="outerHTML"
+          x-data="{ open: false, mx: 0, my: 0, up: false, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); this.mx = r.left; this.up = (window.innerHeight - r.bottom) < 320; this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
+          x-on:keydown.escape.window="open = false"
+          x-on:scroll.window="open = false"
+          class="relative inline-block">
+        {% csrf_token %}
+        <input type="hidden" name="context" value="{{ status_context|default:'cell' }}">
+        <button type="button"
+                x-on:click="toggle($event.currentTarget)"
+                :aria-expanded="open"
+                aria-haspopup="listbox"
+                aria-label="Recruiter status for {{ resume.candidate_name|title }}"
+                title="Change recruiter status"
+                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+            <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ resume.recruiter_status_tone }}" aria-hidden="true">
+                <span class="status-picker__dot status-picker__dot--{{ resume.recruiter_status_tone }}"></span>
+            </span>
+            <span class="whitespace-nowrap">{{ resume.get_recruiter_status_display|default:"New" }}</span>
+            <svg class="h-3 w-3 text-zinc-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <div x-show="open" x-cloak
+             x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+             x-on:click.outside="open = false"
+             :style="`top:${my}px; left:${mx}px`"
+             :class="up ? '-translate-y-full origin-bottom-left' : 'origin-top-left'"
+             class="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800 dark:ring-white/10"
+             role="listbox" style="display: none;">
+            {% for opt in resume.recruiter_status_options %}
+            <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
+                    aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
+                    x-on:click="open = false"
+                    class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium text-zinc-700 transition hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-200 dark:hover:text-primary-300{% if opt.current %} bg-zinc-50 dark:bg-zinc-800{% endif %}">
+                <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
+                    <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
+                </span>
+                <span class="flex-1 whitespace-nowrap">{{ opt.label }}</span>
+                {% if opt.current %}
+                <svg class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                </svg>
+                {% endif %}
+            </button>
+            {% endfor %}
+        </div>
+    </form>
+{% endif %}
+</div>

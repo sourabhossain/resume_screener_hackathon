@@ -35,6 +35,13 @@
             }
         });
 
+        document.addEventListener('htmx:responseError', function (evt) {
+            const elt = evt.detail && evt.detail.elt;
+            if (elt && elt.closest('[data-status-control]') && typeof window.notify === 'function') {
+                window.notify('error', 'Could not update status. Please try again.');
+            }
+        });
+
 
         // Map Django message tags → SweetAlert2 icons
         function djIcon(tags) {

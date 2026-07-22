@@ -69,6 +69,8 @@
         {% endwith %}
     </td>
 
+    {% include 'core/partials/recruiter_status_cell.html' with resume=resume %}
+
     <td data-label="Tier" class="px-4 py-4">
         {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' %}
         <div class="h-6 w-14 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700"></div>
