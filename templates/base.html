@@ -305,7 +305,7 @@
 
     {% block topbar %}
     <nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto px-4 sm:px-6 lg:px-8" style="max-width: 96rem;">
             <div class="flex min-h-[4.25rem] items-center justify-between py-3">
                 <div class="flex items-center gap-6 lg:gap-10">
                     <!-- Mobile Menu Button -->
@@ -576,7 +576,7 @@
     </nav>
     {% endblock topbar %}
 
-    <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8">
+    <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8" style="max-width: 96rem;">
         {% if messages %}
 
         <script id="dj-messages" type="application/json">[{% for message in messages %}{"text": "{{ message|escapejs }}", "tags": "{{ message.tags|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]</script>
@@ -586,7 +586,7 @@
     </main>
 
     <footer class="mt-auto border-t border-zinc-200/90 bg-white/70 py-10 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/75">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto px-4 sm:px-6 lg:px-8" style="max-width: 96rem;">
             <div class="flex flex-col items-center justify-between gap-5 md:flex-row">
                 {% url 'core:careers' as brand_home_url %}
                 {% include 'partials/brand_logo.html' with href=brand_home_url variant='footer' show_product=True %}

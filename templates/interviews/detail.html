@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ interview.get_phase_display }} - {{ interview.resume.candidate_name|title }}{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-7xl space-y-6">
+<div class="mx-auto space-y-6">
 
     <nav class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:resume_detail' interview.resume.uuid %}" class="hover:text-primary-600 transition">{{ interview.resume.candidate_name|title }}</a>
