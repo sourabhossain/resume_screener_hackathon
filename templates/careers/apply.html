@@ -45,7 +45,7 @@
                 {% if job.location_type %}
                 <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700">{{ job.get_location_type_display }}</span>
                 {% endif %}
-                {% if job.location %}
+                {% if job.location and job.location|lower != job.get_location_type_display|lower %}
                 <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700">{{ job.location }}</span>
                 {% endif %}
             </div>
@@ -92,7 +92,7 @@
                     {% if other.location_type %}
                     <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ other.get_location_type_display }}</span>
                     {% endif %}
-                    {% if other.location %}
+                    {% if other.location and other.location|lower != other.get_location_type_display|lower %}
                     <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ other.location }}</span>
                     {% endif %}
                 </div>
@@ -128,7 +128,7 @@
             {% if job.location_type %}
             <span class="inline-flex items-center rounded-full bg-zinc-100 px-3.5 py-1.5 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ job.get_location_type_display }}</span>
             {% endif %}
-            {% if job.location %}
+            {% if job.location and job.location|lower != job.get_location_type_display|lower %}
             <span class="inline-flex items-center rounded-full bg-zinc-100 px-3.5 py-1.5 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ job.location }}</span>
             {% endif %}
         </div>
