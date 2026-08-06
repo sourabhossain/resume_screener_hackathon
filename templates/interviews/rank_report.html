@@ -31,7 +31,6 @@
                 </div>
             </div>
         </div>
-        {# Print-only generated stamp #}
         <div class="hidden text-right print:block">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Generated</p>
             <p class="text-sm font-medium text-zinc-700">{% now "M j, Y · g:i A" %}</p>
@@ -104,7 +103,6 @@
                 <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30
                            {% if c.rank == 1 %}bg-amber-50/40 dark:bg-amber-950/10{% elif c.rank == 2 %}bg-zinc-50/60 dark:bg-zinc-800/20{% elif c.rank == 3 %}bg-orange-50/30 dark:bg-orange-950/10{% endif %}">
 
-                    {# Rank badge #}
                     <td class="px-4 py-4 text-center">
                         {% if c.rank == 1 %}
                         <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-white shadow-sm">1</span>
@@ -117,7 +115,6 @@
                         {% endif %}
                     </td>
 
-                    {# Candidate #}
                     <td class="px-4 py-4">
                         <a href="{% url 'core:resume_detail' r.uuid %}" class="group/link">
                             <p class="font-semibold text-zinc-900 group-hover/link:text-primary-600 dark:text-zinc-100 dark:group-hover/link:text-primary-400">{{ r.candidate_name }}</p>
@@ -125,7 +122,6 @@
                         </a>
                     </td>
 
-                    {# Phases #}
                     <td class="hidden px-4 py-4 sm:table-cell print:table-cell">
                         <div class="flex flex-wrap gap-1">
                             {% for ph in c.phases %}
@@ -134,7 +130,6 @@
                         </div>
                     </td>
 
-                    {# Interview score bar #}
                     <td class="px-4 py-4">
                         {% if c.interview_pct is not None %}
                         <div class="flex items-center gap-2">
@@ -154,7 +149,6 @@
                         {% endif %}
                     </td>
 
-                    {# AI Score #}
                     <td class="hidden px-4 py-4 md:table-cell print:table-cell">
                         {% if r.final_score %}
                         <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{{ r.final_score }}</span>
@@ -164,7 +158,6 @@
                         {% endif %}
                     </td>
 
-                    {# Evaluator recommendations #}
                     <td class="hidden px-4 py-4 lg:table-cell print:table-cell">
                         <div class="flex items-center gap-1.5">
                             {% if c.yes > 0 %}
@@ -185,7 +178,6 @@
                         </div>
                     </td>
 
-                    {# Composite score #}
                     <td class="px-4 py-4 text-center">
                         {% if c.composite is not None %}
                         <span class="text-xl font-black
@@ -198,7 +190,6 @@
                         {% endif %}
                     </td>
 
-                    {# Verdict #}
                     <td class="px-4 py-4 text-center">
                         {% if c.verdict == 'hire' %}
                         <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">

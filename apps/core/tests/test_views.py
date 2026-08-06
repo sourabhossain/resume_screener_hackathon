@@ -19,7 +19,15 @@ class TestErrorPages:
         assert b'404' in response.content
         assert b'Page not found' in response.content or b'page not found' in response.content.lower()
 
-    def test_404_page_has_dashboard_link(self, client):
+    def test_404_page_offers_careers_link_to_anonymous_visitors(self, client):
+        """Candidates hitting a stale job link get the public listing, not the
+        login-gated dashboard."""
+        response = client.get('/404/')
+        assert b'Browse open positions' in response.content
+        assert b'Go to Dashboard' not in response.content
+
+    def test_404_page_has_dashboard_link_for_staff(self, client, user):
+        client.force_login(user)
         response = client.get('/404/')
         assert b'Go to Dashboard' in response.content
 
@@ -38,10 +46,13 @@ class TestErrorPages:
         assert b'500' in response.content
         assert b'Something went wrong' in response.content
 
-    def test_500_page_has_dashboard_link(self, rf):
+    def test_500_page_has_recovery_links(self, rf):
+        """No auth-conditional link on 500 — resolving `user` can re-hit the very
+        database whose failure triggered the error."""
         from config.urls import custom_500
         response = custom_500(rf.get('/'))
-        assert b'Go to Dashboard' in response.content
+        assert b'Try again' in response.content
+        assert b'View all jobs' in response.content
 
     def test_500_page_has_notification_message(self, rf):
         from config.urls import custom_500

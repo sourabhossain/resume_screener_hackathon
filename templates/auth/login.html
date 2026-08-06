@@ -3,7 +3,6 @@
 
 {% block title %}Sign In · SSL Wireless Careers{% endblock %}
 
-{# Auth pages drop the full app nav (no brand duplication) — just a minimal theme toggle. #}
 {% block topbar %}
 <div class="flex justify-end px-4 pt-4 sm:px-6 lg:px-8">
     <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); applyThemeColor(darkMode)"
@@ -25,7 +24,6 @@
 <div class="flex min-h-[68vh] items-center justify-center py-4">
     <div class="animate-fade-in grid w-full max-w-5xl overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-[0_28px_90px_-30px_rgba(15,23,42,0.35)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_28px_90px_-30px_rgba(0,0,0,0.8)] lg:grid-cols-2">
 
-        <!-- Brand / value panel (desktop) -->
         <div class="relative hidden overflow-hidden border-r border-zinc-200/70 bg-zinc-50 p-10 dark:border-zinc-800 dark:bg-zinc-950/40 lg:flex lg:flex-col lg:justify-between">
             <div class="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-brand-blue/10 blur-3xl dark:bg-brand-blue/20" aria-hidden="true"></div>
             <div class="pointer-events-none absolute -bottom-24 -left-12 h-64 w-64 rounded-full bg-brand-red/5 blur-3xl dark:bg-brand-red/10" aria-hidden="true"></div>
@@ -66,9 +64,7 @@
             <p class="relative mt-12 text-xs text-zinc-400 dark:text-zinc-500">© 2026 SSL Wireless. All rights reserved.</p>
         </div>
 
-        <!-- Sign-in form panel -->
         <div class="min-w-0 p-8 sm:p-10 lg:p-12">
-            <!-- Brand shown here only on small screens (panel above is hidden) -->
             <div class="mb-8 flex justify-center lg:hidden">
                 {% include 'partials/brand_logo.html' with href=brand_home_url variant='hero' show_product=True show_product_tagline=True %}
             </div>
@@ -78,11 +74,9 @@
                 <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">Welcome back to the recruiter workspace.</p>
             </div>
 
-            {# Full page load on login so the nav re-renders for the authenticated state #}
             <form method="post" hx-boost="false" class="space-y-5" x-data="{ submitting: false }" @submit="submitting = true">
                 {% csrf_token %}
 
-                <!-- Username -->
                 <div>
                     <label for="id_username" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                         Username
@@ -97,7 +91,6 @@
                     </div>
                 </div>
 
-                <!-- Password -->
                 <div x-data="{ show: false }">
                     <label for="id_password" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                         Password
@@ -123,7 +116,6 @@
                     </div>
                 </div>
 
-                <!-- Remember me -->
                 <div class="flex items-center justify-between pt-1">
                     <label class="flex cursor-pointer items-center gap-2">
                         <input type="checkbox" name="remember" class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-2 focus:ring-primary-500/35 focus:ring-offset-0 dark:border-zinc-600 dark:bg-zinc-900">
@@ -131,7 +123,6 @@
                     </label>
                 </div>
 
-                <!-- Submit -->
                 <button type="submit"
                         :disabled="submitting"
                         :class="{ 'opacity-50 cursor-not-allowed': submitting }"

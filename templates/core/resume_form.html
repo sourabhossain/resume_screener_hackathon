@@ -146,7 +146,6 @@
                     </div>
                 </div>
                 
-                <!-- AI Info Note -->
                 <div class="rounded-xl border border-primary-200/70 bg-primary-50/90 p-5 dark:border-indigo-400/20 dark:bg-zinc-800/90 dark:shadow-inner">
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
                         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm dark:bg-primary-500 dark:ring-1 dark:ring-indigo-400/30">
@@ -171,12 +170,10 @@
                         :disabled="submitting"
                         :class="{ 'opacity-50 cursor-not-allowed': submitting }"
                         class="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-8 py-3 text-sm font-semibold text-white sm:w-auto">
-                    <!-- Loading spinner -->
                     <svg x-show="submitting" style="display:none" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
-                    <!-- Normal state -->
                     <template x-if="!submitting">
                         <span class="flex items-center gap-2">
                             {% if resume %}
@@ -192,7 +189,6 @@
                             {% endif %}
                         </span>
                     </template>
-                    <!-- Submitting state -->
                     <span x-show="submitting" style="display:none">Processing...</span>
                 </button>
             </div>

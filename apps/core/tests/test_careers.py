@@ -81,8 +81,55 @@ class TestCareersApplyGet:
         assert resp.status_code == 200
         assert "form" in resp.context
 
-    def test_inactive_job_returns_404(self, client, sample_job):
+    def test_closed_job_renders_read_only_instead_of_404(self, client, sample_job):
+        """Shared links outlive the deadline — a closed job must not dead-end on a 404."""
         sample_job.status = "closed"
+        sample_job.save()
+        resp = client.get(
+            reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
+        )
+        assert resp.status_code == 200
+        assert resp.context["applications_open"] is False
+        body = resp.content.decode()
+        assert "This Job Is No Longer Available" in body
+        assert "View Current Job Openings" in body
+        # The submission form must be gone, not merely hidden.
+        assert 'enctype="multipart/form-data"' not in body
+
+    def test_closed_job_lists_other_open_roles(self, client, sample_job):
+        """The closed page is a recovery path, not a dead end."""
+        sample_job.status = "closed"
+        sample_job.save()
+        open_job = Job.objects.create(title="Still Open Role", status="active")
+        resp = client.get(
+            reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
+        )
+        body = resp.content.decode()
+        assert open_job.title in body
+        assert reverse("core:careers_apply", kwargs={"slug": open_job.slug}) in body
+
+    def test_closed_job_never_suggests_another_closed_role(self, client, sample_job):
+        """Suggesting a role that is itself unavailable would repeat the bug."""
+        sample_job.status = "closed"
+        sample_job.save()
+        expired = Job.objects.create(
+            title="Expired Suggestion",
+            status="active",
+            closing_date=date.today() - timedelta(days=1),
+        )
+        drafted = Job.objects.create(title="Draft Suggestion", status="draft")
+        resp = client.get(
+            reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
+        )
+        body = resp.content.decode()
+        assert expired.title not in body
+        assert drafted.title not in body
+        # It must not suggest the job the candidate is already looking at.
+        assert resp.context["other_jobs"] == []
+
+    def test_draft_job_still_returns_404(self, client, sample_job):
+        """Unpublished drafts stay invisible to the public."""
+        sample_job.status = "draft"
         sample_job.save()
         resp = client.get(
             reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
@@ -195,11 +242,26 @@ class TestCareersApplyDuplicates:
 @pytest.mark.django_db
 class TestCareersApplyExpired:
     def test_past_closing_date_blocks_submission(self, client, sample_job):
+        """Still 'active' because close_expired_jobs hasn't run yet — the date guard
+        must reject the POST on its own."""
         sample_job.closing_date = date.today() - timedelta(days=1)
         sample_job.save()
         resp = _post_apply(client, sample_job)
-        assert resp.status_code == 302
+        assert resp.status_code == 200
+        assert resp.context["applications_open"] is False
         assert Resume.objects.filter(job=sample_job).count() == 0
+
+    def test_past_closing_date_shows_unavailable_page(self, client, sample_job):
+        sample_job.closing_date = date.today() - timedelta(days=1)
+        sample_job.save()
+        resp = client.get(
+            reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
+        )
+        assert resp.status_code == 200
+        body = resp.content.decode()
+        assert "This Job Is No Longer Available" in body
+        # The job title stays on the page so the candidate knows which role closed.
+        assert sample_job.title in body
 
     def test_future_closing_date_allows_submission(self, client, sample_job):
         sample_job.closing_date = date.today() + timedelta(days=7)
@@ -229,3 +291,38 @@ class TestCareersThanks:
             reverse("core:careers_thanks", kwargs={"slug": sample_job.slug})
         )
         assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+class TestErrorPageStyling:
+    """The error pages once pulled Tailwind from cdn.tailwindcss.com. When that CDN
+    was unreachable in production the 404 rendered with zero styling — full-size
+    SVGs and default blue links. They must be self-hosted."""
+
+    ERROR_TEMPLATES = ["403.html", "404.html", "500.html"]
+
+    @pytest.mark.parametrize("template", ERROR_TEMPLATES)
+    def test_no_cdn_stylesheet(self, template):
+        from django.template.loader import render_to_string
+
+        html = render_to_string(template)
+        assert "cdn.tailwindcss.com" not in html
+        assert "/static/css/app.css" in html
+
+    @pytest.mark.parametrize("template", ERROR_TEMPLATES)
+    def test_no_external_script_dependency(self, template):
+        """Alpine was loaded from a CDN just to drive the dark-mode toggle."""
+        from django.template.loader import render_to_string
+
+        html = render_to_string(template)
+        assert "cdn.jsdelivr.net" not in html
+        assert "unpkg.com" not in html
+
+    def test_404_sends_anonymous_visitors_to_careers_not_login_gated_dashboard(self, client):
+        resp = client.get("/careers/no-such-job-slug/")
+        assert resp.status_code == 404
+        body = resp.content.decode()
+        assert reverse("core:careers") in body
+        # The dashboard CTA is login-gated; it must only appear for staff.
+        assert "Go to Dashboard" not in body
+        assert "Browse open positions" in body

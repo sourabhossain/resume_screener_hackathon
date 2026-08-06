@@ -1,8 +1,3 @@
-{% comment %}
-Custom choice picker — replaces native <select> for Django form fields.
-Required: field (bound form field). Optional: preset, placeholder, aria_label, class.
-Presets: job_status, employment_type, location_type, interview_phase, recommendation
-{% endcomment %}
 <div class="status-picker relative w-full{% if class %} {{ class }}{% endif %}"
      :class="{ 'status-picker--open': open }"
      x-data="choicePicker({

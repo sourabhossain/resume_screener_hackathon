@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SSL Wireless Careers{% endblock %}</title>
     <meta name="description" content="{% block meta_description %}Screen resumes with structured AI scoring, clear tiers, and consistent criteria across every role.{% endblock %}">
-    {# Single dynamic theme-color — kept in sync with the class-based dark-mode toggle (not OS) #}
     <meta name="theme-color" id="theme-color-meta" content="#fafafa">
     <meta name="htmx-config" content='{"historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
     {% block social_meta %}
@@ -16,7 +15,7 @@
     {% endblock %}
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=10">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=11">
     <script src="{% static 'js/status-picker.js' %}?v=3"></script>
     <script>try { localStorage.removeItem('htmx-history-cache'); } catch (e) {}</script>
     <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
@@ -298,7 +297,6 @@
 
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
 
-    {# One restrained warm wash at the top instead of the generic floating gradient blobs #}
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
         <div class="absolute -top-32 left-1/2 h-[28rem] w-[min(120%,46rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-brand-blue/[0.06] to-transparent blur-3xl dark:from-brand-blue/[0.08] dark:to-transparent"></div>
     </div>
@@ -308,7 +306,6 @@
         <div class="mx-auto px-4 sm:px-6 lg:px-8" style="max-width: 96rem;">
             <div class="flex min-h-[4.25rem] items-center justify-between py-3">
                 <div class="flex items-center gap-6 lg:gap-10">
-                    <!-- Mobile Menu Button -->
                     <button @click="mobileMenuOpen = !mobileMenuOpen"
                             aria-label="Toggle navigation menu"
                             :aria-expanded="mobileMenuOpen"
@@ -321,7 +318,6 @@
                         </div>
                     </button>
 
-                    <!-- Logo -->
                     {% if user.is_authenticated %}
                     {% url 'core:dashboard' as brand_home_url %}
                     {% else %}
@@ -375,9 +371,7 @@
                     {% endblock recruiter_nav %}
                 </div>
 
-                <!-- Right Side Actions -->
                 <div class="flex items-center gap-2 sm:gap-3">
-                    <!-- Dark Mode Toggle -->
                     <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); applyThemeColor(darkMode)"
                             :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
                             class="rounded-lg border border-zinc-200/80 bg-white p-2.5 transition-all hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/55 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
@@ -390,7 +384,6 @@
                         </svg>
                     </button>
 
-                    <!-- Logout Button -->
                     {% block recruiter_logout %}
                     {% if user.is_authenticated %}
                     <form action="{% url 'logout' %}" method="post" class="inline" hx-boost="false">
@@ -407,7 +400,6 @@
                     {% endif %}
                     {% endblock recruiter_logout %}
 
-                    <!-- Post Job Button -->
                     {% block nav_action %}
                     {% if user.is_authenticated %}
                     <a href="{% url 'core:job_create' %}" class="btn-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white sm:px-5">
@@ -422,7 +414,6 @@
             </div>
         </div>
 
-        <!-- Mobile Menu Drawer -->
         <div x-show="mobileMenuOpen"
              style="display:none"
              x-transition:enter="transition ease-out duration-300"
@@ -445,7 +436,6 @@
              x-transition:leave-end="-translate-x-full"
              class="fixed bottom-0 left-0 top-0 z-50 w-80 max-w-[85vw] overflow-y-auto border-r border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:hidden">
 
-            <!-- Mobile Menu Header -->
             <div class="border-b border-zinc-200 p-6 dark:border-zinc-800">
                 <div class="flex items-center justify-between">
                     {% if user.is_authenticated %}
@@ -462,7 +452,6 @@
                 </div>
             </div>
 
-            <!-- Mobile Search -->
             <div class="p-4">
                 <form method="get" action="{% if user.is_authenticated %}{% url 'core:job_list' %}{% else %}{% url 'core:careers' %}{% endif %}" @submit="mobileMenuOpen = false">
                     <div class="relative">
@@ -475,7 +464,6 @@
                 </form>
             </div>
 
-            <!-- Mobile Nav Links -->
             {% block mobile_recruiter_nav %}
             {% if user.is_authenticated %}
             <div class="px-4 py-2">
@@ -551,7 +539,6 @@
             {% endif %}
             {% endblock mobile_recruiter_nav %}
 
-            <!-- Mobile Menu Footer -->
             <div class="absolute bottom-0 left-0 right-0 border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div class="flex items-center justify-between">
                     <span class="text-sm text-zinc-500 dark:text-zinc-400">Theme</span>

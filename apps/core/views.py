@@ -639,13 +639,36 @@ def careers_list(request):
 
 @ratelimit(key='ip', rate='10/h', method='POST', block=True)
 def careers_apply(request, slug):
-    """Public job detail + resume submission form. Only active jobs accept applications."""
-    job = get_object_or_404(Job, slug=slug, status='active')
+    """Public job detail + resume submission form. Only open jobs accept applications.
+
+    Closed jobs stay reachable and render read-only: candidates keep these links
+    from job boards and emails long after the deadline, and a hard 404 there
+    looks like a broken site rather than a closed role. Drafts stay hidden.
+    """
+    job = get_object_or_404(Job, slug=slug, status__in=('active', 'closed'))
 
     from django.utils import timezone as tz
-    if job.closing_date and tz.localdate() > job.closing_date:
-        messages.error(request, 'This position is no longer accepting applications.')
-        return redirect('core:careers')
+    # Open only while the job is active AND on/before its deadline. The date
+    # check matters because close_expired_jobs only flips status once a day.
+    applications_open = job.status == 'active' and (
+        not job.closing_date or tz.localdate() <= job.closing_date
+    )
+
+    if not applications_open:
+        # Turn the dead end into a recovery path: surface the roles a candidate
+        # can still apply to instead of making them navigate back and re-scan.
+        # Same open-test as above so this never links to another closed job.
+        other_jobs = list(
+            Job.objects.filter(status='active')
+            .filter(Q(closing_date__isnull=True) | Q(closing_date__gte=tz.localdate()))
+            .exclude(pk=job.pk)
+            .order_by('-created_at')[:4]
+        )
+        return render(request, 'careers/apply.html', {
+            'job': job,
+            'applications_open': False,
+            'other_jobs': other_jobs,
+        })
 
     if request.method == 'POST':
         # require_contact: applicants must give an email so recruiters can reply.
@@ -660,7 +683,7 @@ def careers_apply(request, slug):
             # Block duplicate submissions: same email, phone, or file already on record for this job.
             if email and Resume.objects.filter(job=job, email__iexact=email, is_deleted=False).exists():
                 messages.error(request, 'An application with this email address already exists for this position.')
-                return render(request, 'careers/apply.html', {'job': job, 'form': form})
+                return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
 
             if phone:
                 # Normalize DB values the same way before comparing so formatting differences don't bypass the check.
@@ -685,11 +708,11 @@ def careers_apply(request, slug):
                 )
                 if existing_phone:
                     messages.error(request, 'An application with this phone number already exists for this position.')
-                    return render(request, 'careers/apply.html', {'job': job, 'form': form})
+                    return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
 
             if file_hash and Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
                 messages.error(request, 'This resume has already been submitted for this position.')
-                return render(request, 'careers/apply.html', {'job': job, 'form': form})
+                return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
 
             resume = form.save(commit=False)
             resume.job = job
@@ -706,7 +729,11 @@ def careers_apply(request, slug):
     else:
         form = ResumeForm(require_contact=True)
 
-    return render(request, 'careers/apply.html', {'job': job, 'form': form})
+    return render(request, 'careers/apply.html', {
+        'job': job,
+        'form': form,
+        'applications_open': True,
+    })
 
 
 def careers_thanks(request, slug):

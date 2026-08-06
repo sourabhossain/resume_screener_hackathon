@@ -9,22 +9,15 @@
     <p class="text-zinc-600 dark:text-zinc-400">Postings and applicant volume</p>
 </div>
 
-{% comment %}
-Tab bar + search stay STATIC (outside the swap) so they never flicker.
-Only #job-results swaps via HTMX; the active pill updates instantly via Alpine.
-Without JS, the links fall back to normal navigation.
-{% endcomment %}
 <div>
 
 
-<!-- Search and Filters -->
 <div class="mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
      x-data="{ status: '{{ status_filter|default:"active" }}' }"
      hx-target="#job-results"
      hx-select="#job-results"
      hx-swap="outerHTML show:none"
      hx-push-url="true">
-    <!-- Search Bar -->
     <form method="get" action="{% url 'core:job_list' %}" hx-get="{% url 'core:job_list' %}"
           class="relative w-full max-w-md min-w-0 flex-1">
         <input type="text"
@@ -39,7 +32,6 @@ Without JS, the links fall back to normal navigation.
         <input type="hidden" name="status" :value="status" value="{{ status_filter }}">
     </form>
 
-    <!-- Status Filter Tabs -->
     <div class="w-full overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:w-auto sm:overflow-visible">
         <div class="inline-flex min-w-max rounded-lg border border-zinc-200 bg-zinc-100/80 p-0.5 dark:border-zinc-800 dark:bg-zinc-900 sm:min-w-0">
         <a href="{% url 'core:job_list' %}?status=all{% if search_query %}&q={{ search_query }}{% endif %}"
@@ -72,7 +64,6 @@ Without JS, the links fall back to normal navigation.
 
 <div id="job-results" aria-live="polite">
 
-<!-- Results Summary -->
 {% if search_query or has_active_filter %}
 <div class="mb-6 flex flex-wrap items-center gap-2 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
     <span>Showing {{ jobs|length }} result{{ jobs|length|pluralize }}</span>
@@ -192,11 +183,9 @@ Without JS, the links fall back to normal navigation.
     {% endfor %}
 </div>
 
-<!-- Pagination -->
 {% if page_obj.has_other_pages %}
 <div class="mt-10 flex flex-wrap items-center justify-center gap-2"
      hx-target="#job-results" hx-select="#job-results" hx-swap="outerHTML show:none" hx-push-url="true">
-    <!-- Previous -->
     {% if page_obj.has_previous %}
     <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
        hx-get="{% url 'core:job_list' %}?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
@@ -208,7 +197,6 @@ Without JS, the links fall back to normal navigation.
     </a>
     {% endif %}
 
-    <!-- Page Numbers -->
     <div class="flex max-w-full flex-wrap items-center justify-center gap-1 overflow-x-auto pb-1">
         {% for num in page_obj.paginator.page_range %}
             {% if page_obj.number == num %}
@@ -223,7 +211,6 @@ Without JS, the links fall back to normal navigation.
         {% endfor %}
     </div>
 
-    <!-- Next -->
     {% if page_obj.has_next %}
     <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
        hx-get="{% url 'core:job_list' %}?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
@@ -236,14 +223,13 @@ Without JS, the links fall back to normal navigation.
     {% endif %}
 </div>
 
-<!-- Page Info -->
 <p class="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
     Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
     ({{ page_obj.paginator.count }} total)
 </p>
 {% endif %}
 
-</div>{# /#job-results — HTMX swap region #}
+</div>
 
-</div>{# /static filters + swap config wrapper #}
+</div>
 {% endblock %}

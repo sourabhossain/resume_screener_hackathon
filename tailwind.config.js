@@ -34,6 +34,10 @@ module.exports = {
           700: '#1c1917',
           800: '#171311',
           900: '#0c0a09',
+          // Templates already reference primary-950 (dark: chip/hover tints). Without
+          // it those dark variants generate nothing and fall back to the near-white
+          // primary-50, giving pale-on-pale chips in dark mode.
+          950: '#050403',
         },
         dark: {
           50: '#fafafa',

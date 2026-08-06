@@ -1,0 +1,26 @@
+{% load static %}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" id="theme-color-meta" content="#fafafa">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}?v=11">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script>
+    // Plain JS rather than Alpine: same reason as the CSS above — no external
+    // script should be able to break the dark-mode toggle on an error page.
+    (function () {
+        var dark = localStorage.getItem('darkMode') === 'true';
+        if (dark) document.documentElement.classList.add('dark');
+    })();
+
+    window.toggleDarkMode = function () {
+        var dark = document.documentElement.classList.toggle('dark');
+        try { localStorage.setItem('darkMode', dark); } catch (e) {}
+        var meta = document.getElementById('theme-color-meta');
+        if (meta) meta.setAttribute('content', dark ? '#09090b' : '#fafafa');
+    };
+</script>

@@ -230,7 +230,6 @@
         {% with notes=resume.notes.all %}
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-6 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark">
 
-            {# Header #}
             <div class="flex items-center justify-between mb-4">
                 <h2 class="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-white">
                     <svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,7 +244,6 @@
                 </span>
             </div>
 
-        {# Textarea form #}
         <form method="post" action="{% url 'core:resume_note_add' resume.uuid %}" hx-boost="false" class="mb-5">
             {% csrf_token %}
             <textarea name="text" rows="3" required
@@ -262,7 +260,6 @@
             </div>
         </form>
 
-        {# Notes list — styled like link detail cards #}
         {% if notes %}
         <div class="space-y-3">
             {% for note in notes %}
