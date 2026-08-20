@@ -53,6 +53,12 @@ class EmployeeForm(models.Model):
 
     invited_at = models.DateTimeField(null=True, blank=True)
     invite_count = models.PositiveSmallIntegerField(default=0)
+
+    # Why the last send failed. Delivery happens in a Celery task, so without
+    # this a bounced or rejected invitation would be invisible to the recruiter
+    # -- they would sit waiting for a candidate who never got an email.
+    last_error = models.CharField(max_length=500, blank=True)
+    last_error_at = models.DateTimeField(null=True, blank=True)
     invited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True,
@@ -139,7 +145,18 @@ class EmployeeForm(models.Model):
     # ── Progress ─────────────────────────────────────────────────────────
     @property
     def path(self) -> list:
+        """Steps the candidate actually visits, for navigation and progress."""
         return schema.step_path(self.answers or {})
+
+    @property
+    def review_path(self) -> list:
+        """Sections to read answers back from.
+
+        Differs from `path`: Section D renders its role section on the same page,
+        so that section is absent from the wizard's path — but its answers still
+        have to be shown to the recruiter under their own heading.
+        """
+        return schema.review_path(self.answers or {})
 
     @property
     def total_steps(self) -> int:
@@ -191,7 +208,7 @@ class EmployeeForm(models.Model):
             files_by_key.setdefault(upload.question_key, []).append(upload)
 
         sections = []
-        for step_key in self.path:
+        for step_key in self.review_path:
             step = schema.get_step(step_key)
             if not step:
                 continue
@@ -250,6 +267,8 @@ class EmployeeForm(models.Model):
         """
         if self.is_submitted:
             return 'Submitted'
+        if self.last_error:
+            return 'Invite failed'
         if self.is_expired:
             return 'Link expired'
         if self.otp_verified_at:

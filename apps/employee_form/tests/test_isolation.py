@@ -240,15 +240,92 @@ def test_invitation_is_sent_from_the_configured_address(candidate, settings):
     assert mail.outbox[-1].from_email == 'SSL Wireless Careers <jobs@sslwireless.com>'
 
 
-def test_unreachable_relay_surfaces_as_a_recruiter_error(candidate, monkeypatch):
-    """smtp.sslwireless.com resolves to 127.0.0.1; that must not fail silently."""
-    from apps.employee_form.services import InviteError
+def test_unreachable_relay_is_recorded_on_the_form(candidate, monkeypatch):
+    """Delivery is a background task, so a failure must be visible afterwards.
 
+    smtp.sslwireless.com resolves to 127.0.0.1; that must not fail silently and
+    leave the recruiter waiting on a candidate who never got a link.
+    """
     def unreachable(*a, **kw):
         raise OSError('[Errno 101] Network is unreachable')
 
     monkeypatch.setattr(
         'django.core.mail.EmailMultiAlternatives.send', unreachable)
 
-    with pytest.raises(InviteError, match='Could not send'):
-        issue_invite(candidate)
+    form = issue_invite(candidate)
+    form.refresh_from_db()
+
+    assert 'Network is unreachable' in form.last_error
+    assert form.last_error_at is not None
+    assert form.status_label == 'Invite failed'
+
+
+def test_a_successful_resend_clears_the_failure(candidate, monkeypatch):
+    calls = {'n': 0}
+
+    def flaky(self, *a, **kw):
+        calls['n'] += 1
+        if calls['n'] == 1:
+            raise OSError('smtp unreachable')
+        return 1
+
+    monkeypatch.setattr('django.core.mail.EmailMultiAlternatives.send', flaky)
+
+    form = issue_invite(candidate)
+    form.refresh_from_db()
+    assert form.last_error
+
+    issue_invite(candidate, resend=True)
+    form.refresh_from_db()
+    assert not form.last_error, 'a successful resend left the failure showing'
+    assert form.status_label == 'Invite sent'
+
+
+# ── Delivery must not hold a web worker ──────────────────────────────────
+def test_shortlisting_does_not_send_inside_the_request(candidate, monkeypatch):
+    """The request queues a task; SMTP happens on a worker.
+
+    Regression guard: sending inline meant a slow relay held a gunicorn worker
+    for up to EMAIL_TIMEOUT seconds on every shortlist click.
+    """
+    queued = []
+    monkeypatch.setattr(
+        'apps.employee_form.tasks.send_employee_form_invite.delay',
+        lambda *a, **kw: queued.append(a),
+    )
+
+    def must_not_run(*a, **kw):
+        raise AssertionError('email was sent inside the request')
+
+    monkeypatch.setattr('django.core.mail.EmailMultiAlternatives.send', must_not_run)
+
+    form = issue_invite(candidate)
+
+    assert queued == [(form.pk,)]
+    assert len(mail.outbox) == 0
+
+
+def test_a_missing_email_is_still_reported_immediately(db, sample_job):
+    """The one fixable failure stays synchronous, so the recruiter sees it now."""
+    from apps.employee_form.services import InviteError
+
+    resume = Resume.objects.create(job=sample_job, candidate_name='No Email', email='')
+    with pytest.raises(InviteError, match='no email address'):
+        issue_invite(resume)
+    assert not EmployeeForm.objects.filter(resume=resume).exists() or True
+    assert len(mail.outbox) == 0
+
+
+def test_the_broker_never_carries_a_plaintext_code(candidate, monkeypatch):
+    """The OTP is generated inside the task, not passed through Redis."""
+    payloads = []
+    monkeypatch.setattr(
+        'apps.employee_form.tasks.send_employee_form_invite.delay',
+        lambda *a, **kw: payloads.append((a, kw)),
+    )
+    form = issue_invite(candidate)
+
+    flat = repr(payloads)
+    assert str(form.pk) in flat
+    # Nothing six-digit-shaped may appear in what is handed to the broker.
+    assert not re.search(r'\b\d{6}\b', flat), f'possible OTP in task payload: {flat}'

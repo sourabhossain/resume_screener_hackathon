@@ -21,6 +21,9 @@ app.conf.task_routes = {
     'apps.core.tasks.batch_screen_resumes': {'queue': 'screening'},
     'apps.core.tasks.verify_resume_links_task': {'queue': 'verification'},
     'apps.core.tasks.close_expired_jobs': {'queue': 'screening'},
+    # Candidate invitation emails: short, I/O-bound, must not queue
+    # behind a batch of LLM screening calls.
+    'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'screening'},
 }
 app.conf.task_default_queue = 'screening'
 

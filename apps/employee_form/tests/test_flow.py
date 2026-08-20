@@ -508,3 +508,47 @@ def test_wide_fields_are_never_half_width():
         if question['type'] in schema.FILE_TYPES or question['type'] in (
                 schema.TEXTAREA, schema.RADIO, schema.CHECKBOX):
             assert not schema.is_half_width(question), question['key']
+
+
+# ── Absorbed sections must still be readable ─────────────────────────────
+def test_role_answers_reach_the_recruiter_view(candidate):
+    """Section D absorbs its role section for the candidate, not for the reviewer.
+
+    Regression: `answered_sections()` walked the wizard path, so once D4 was
+    rendered inside the department page its answers were stored but never shown.
+    """
+    form = issue_invite(candidate)
+    form.answers = {
+        'department': 'engineering',
+        'tech_stack': 'Django, Postgres, Redis',
+        'tech_achievement': 'Cut p95 latency by 40%',
+    }
+    form.save(update_fields=['answers'])
+
+    assert 'd4_technology' not in form.path          # not a wizard step
+    assert 'd4_technology' in form.review_path       # but a reviewable section
+
+    sections = {s['key']: s for s in form.answered_sections()}
+    assert 'd4_technology' in sections, 'role answers are invisible to the recruiter'
+    values = [r['value'] for r in sections['d4_technology']['rows']]
+    assert 'Django, Postgres, Redis' in values
+    assert 'Cut p95 latency by 40%' in values
+
+
+def test_every_role_section_is_readable_back(candidate):
+    """Whichever department is chosen, that section's answers must be shown."""
+    form = issue_invite(candidate)
+    for value, label in schema.DEPARTMENT_CHOICES:
+        target = schema.DEPARTMENT_ROUTING[value]
+        # First free-text question: a checkbox answer is a list, not a string.
+        first_key = next(
+            q['key'] for q in schema.get_step(target)['questions']
+            if q['type'] not in schema.CHOICE_TYPES
+        )
+        form.answers = {'department': value, first_key: 'sample answer'}
+        form.save(update_fields=['answers'])
+
+        sections = {s['key']: s for s in form.answered_sections()}
+        assert target in sections, f'{label}: {target} missing from the review'
+        values = [r['value'] for r in sections[target]['rows']]
+        assert 'sample answer' in values, f'{label}: answer not shown'

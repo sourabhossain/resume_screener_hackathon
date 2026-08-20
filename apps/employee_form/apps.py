@@ -7,5 +7,6 @@ class EmployeeFormConfig(AppConfig):
     verbose_name = 'Employee Form'
 
     def ready(self):
-        # Registers the post_delete receiver that removes stored documents.
-        from . import signals  # noqa: F401
+        # Registers the post_delete receiver that removes stored documents, and
+        # the deploy-time settings guards.
+        from . import checks, signals  # noqa: F401

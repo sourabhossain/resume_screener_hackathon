@@ -66,11 +66,16 @@ def send_invite(form, *, otp: str) -> None:
 
 
 def issue_invite(resume, *, user=None, resend=False):
-    """Create (or refresh) the candidate's form and email the link plus an OTP.
+    """Create (or refresh) the candidate's form and queue the invitation email.
 
-    Returns the EmployeeForm. Raises InviteError if it should not be sent, so
-    the caller can surface the reason rather than failing quietly.
+    Whether an invitation *should* go out is decided here, synchronously, so the
+    recruiter learns that on the click. The email itself is handed to Celery:
+    SMTP can take tens of seconds and must not hold a web worker.
+
+    Returns the EmployeeForm. Raises InviteError when nothing was queued.
     """
+    from .tasks import send_employee_form_invite
+
     form = getattr(resume, 'employee_form', None)
 
     if form is None:
@@ -84,28 +89,22 @@ def issue_invite(resume, *, user=None, resend=False):
         # shortlisted must not silently receive a second invitation.
         return form
 
+    # Checked before queueing: a missing address is the one failure the recruiter
+    # can fix on the spot, so it must not surface later as a background error.
+    if not (resume.email or '').strip():
+        raise InviteError(
+            f'{resume.candidate_name} has no email address on file, '
+            'so the form invitation could not be sent.'
+        )
+
     if form.is_expired:
         form.renew()
-
-    otp = form.issue_otp()
-    form.invited_at = timezone.now()
-    form.invite_count = (form.invite_count or 0) + 1
     if user is not None:
         form.invited_by = user
     form.save()
 
-    try:
-        send_invite(form, otp=otp)
-    except InviteError:
-        raise
-    except Exception as exc:
-        logger.exception(
-            'employee_form.invite_failed resume=%s form=%s', resume.pk, form.pk
-        )
-        raise InviteError(
-            f'Could not send the form invitation to {resume.candidate_name}: {exc}'
-        ) from exc
-
+    send_employee_form_invite.delay(form.pk)
+    logger.info('employee_form.invite_queued resume=%s form=%s', resume.pk, form.pk)
     return form
 
 

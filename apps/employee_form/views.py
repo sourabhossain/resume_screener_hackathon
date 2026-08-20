@@ -416,11 +416,11 @@ def send(request, uuid):
     except InviteError as exc:
         messages.error(request, str(exc))
     else:
-        verb = 'resent' if resend else 'sent'
+        verb = 'queued again' if resend else 'queued'
         messages.success(
             request,
-            f'Information form {verb} to {resume.email}. '
-            f'The link is valid for {EmployeeForm.TOKEN_VALIDITY_DAYS} days.',
+            f'Information form invitation {verb} for {resume.email}. '
+            f'The link stays valid for {EmployeeForm.TOKEN_VALIDITY_DAYS} days.',
         )
 
     return redirect('core:resume_detail', uuid=uuid)

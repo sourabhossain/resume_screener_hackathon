@@ -359,22 +359,12 @@ class StepForm(AriaInvalidMixin, forms.Form):
                         'name to skip this section.',
                     )
 
-    def question_fields(self):
-        """(question, bound field) pairs in schema order.
-
-        Django templates cannot look a form field up by a loop variable, so the
-        pairing happens here instead of via a template filter.
-        """
-        return [
-            {'question': question, 'field': self[question['key']]}
-            for question in self.questions
-        ]
-
     def field_groups(self):
         """Bound fields arranged into the step's titled blocks.
 
-        Mirrors `question_fields` but preserves `schema.STEP_GROUPS`, so a step
-        with 23 questions renders as a few short sections instead of one wall.
+        Django templates cannot look a form field up by a loop variable, so the
+        pairing happens here rather than via a template filter. Grouped by
+        `schema.STEP_GROUPS` so a 23-question step renders as a few short blocks.
         """
         return [
             {

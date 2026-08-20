@@ -1,6 +1,6 @@
 """Reshapes a submitted form into blocks built for reviewing, not for filling in.
 
-The Google Form's structure is a data-entry sequence: 131 questions in the order
+The source form's structure is a data-entry sequence: 130 questions in the order
 they are convenient to type. Rendering that back verbatim gives a recruiter sixty
 identical label/value rows with no hierarchy — every optional blank weighted the
 same as the NID number.
