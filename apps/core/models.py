@@ -67,8 +67,15 @@ class Job(SoftDeleteModel):
         ('hybrid', 'Hybrid'),
     ]
 
-    # The recruiter who owns this job. All access is scoped to the owner so one
-    # recruiter/company cannot read or modify another's jobs or candidate PII.
+    # The recruiter who created this job, recorded for attribution.
+    #
+    # NOT an access boundary in the web portal: the HTML views deliberately do
+    # not filter by owner, so any signed-in recruiter can open any job, any
+    # candidate, and the candidate's information-form documents. That is the
+    # intended behaviour here — everyone in the company shares one pipeline.
+    # The DRF API in api_views.py *does* enforce ownership on writes, so the two
+    # surfaces differ on purpose; don't "fix" one to match the other without
+    # deciding which rule is wanted.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

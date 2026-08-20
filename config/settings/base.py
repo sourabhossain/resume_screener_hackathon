@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     # Local apps
     'apps.core',
     'apps.interviews',
+    'apps.employee_form',
 ]
 
 MIDDLEWARE = [
@@ -329,3 +330,32 @@ FAMILY_WEIGHTS = {
     'it_internal':         {'skill': 0.40, 'experience': 0.25, 'education': 0.10, 'certification': 0.15, 'achievement': 0.10},
     'operations':          {'skill': 0.35, 'experience': 0.25, 'education': 0.10, 'certification': 0.10, 'achievement': 0.20},
 }
+
+
+# ── Email ────────────────────────────────────────────────────────────────
+# Used to send Employee Information Form invitations (link + one-time code) to
+# shortlisted candidates. All values come from the environment so no credential
+# is committed; dev.py overrides the backend with the console one, so nothing is
+# actually delivered locally until real SMTP details are supplied here.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1', 'true', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('1', 'true', 'yes')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
+# Defaults to the authenticated mailbox: Microsoft 365 (which hosts
+# sslwireless.com mail) rejects a From address that differs from the account
+# that logged in — "554 5.2.252 SendAsDenied" — unless Send As has been granted.
+# A no-reply@ default silently broke every invitation for that reason.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or (
+    f'SSL Wireless Careers <{EMAIL_HOST_USER}>' if EMAIL_HOST_USER
+    else 'SSL Wireless Careers <careers@localhost>'
+)
+
+# Absolute base URL used to build candidate-facing links in emails. Emails are
+# sent outside a request context, so the host cannot be derived from one.
+SITE_BASE_URL = os.environ.get('SITE_BASE_URL', 'http://localhost:8000')

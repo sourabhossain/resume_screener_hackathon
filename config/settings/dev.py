@@ -28,8 +28,17 @@ CSRF_TRUSTED_ORIGINS = [
 
 INTERNAL_IPS = ['127.0.0.1']
 
-# Email backend for development
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Email backend for development: print to the console, never deliver.
+#
+# Safe by default on purpose. The dev database holds real candidate addresses,
+# so an accidental send here would email actual people — shortlisting a few rows
+# would be enough. Real SMTP credentials in .env are NOT sufficient to turn
+# delivery on; you must opt in explicitly:
+#     EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# Do that only against test data, or use config.settings.prod.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+)
 
 # Force per-request template reloads in dev so .html edits show up without
 # restarting gunicorn. Without this, cached.Loader pins compiled templates in

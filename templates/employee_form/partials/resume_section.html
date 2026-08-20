@@ -1,0 +1,82 @@
+<div class="mb-8 rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+        <div class="flex items-center gap-3">
+            <h2 class="font-bold text-zinc-900 dark:text-white">Information Form</h2>
+            {% if form_obj %}{% include 'employee_form/partials/status_chip.html' %}{% endif %}
+        </div>
+
+        <div class="flex items-center gap-2">
+            {% if form_obj %}
+            <a href="{% url 'employee_form:detail' uuid=resume.uuid %}"
+               class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                View responses
+            </a>
+            {% endif %}
+
+            {% if not form_obj.is_submitted %}
+            <form method="post" action="{% url 'employee_form:send' uuid=resume.uuid %}" hx-boost="false"
+                  data-confirm="{% if form_obj %}Send {{ resume.candidate_name|title }} a new form link and code?{% else %}Send the information form to {{ resume.email|default:'this candidate' }}?{% endif %}">
+                {% csrf_token %}
+                <button type="submit"
+                        class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    {% if form_obj %}Resend{% else %}Send form{% endif %}
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="px-6 py-5">
+        {% if not form_obj %}
+        <p class="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            No information form has been sent yet. It goes out automatically when this
+            candidate is shortlisted, or you can send it now.
+        </p>
+        {% if not resume.email %}
+        <p class="mt-2 text-sm font-semibold text-rose-600 dark:text-rose-400">
+            This candidate has no email address on file, so the form cannot be sent.
+        </p>
+        {% endif %}
+
+        {% elif form_obj.is_submitted %}
+        <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Submitted</p>
+                <p class="mt-0.5 font-semibold text-zinc-800 dark:text-zinc-200">{{ form_obj.submitted_at|date:"j M Y, g:i a" }}</p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Documents</p>
+                <p class="mt-0.5 font-semibold text-zinc-800 dark:text-zinc-200">{{ form_obj.files.count }} uploaded</p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Declaration</p>
+                <p class="mt-0.5 font-semibold text-zinc-800 dark:text-zinc-200">{{ form_obj.declaration_summary }}</p>
+            </div>
+        </div>
+
+        {% else %}
+        <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Invite sent</p>
+                <p class="mt-0.5 font-semibold text-zinc-800 dark:text-zinc-200">
+                    {% if form_obj.invited_at %}{{ form_obj.invited_at|date:"j M Y" }}{% if form_obj.invite_count > 1 %} &middot; {{ form_obj.invite_count }} times{% endif %}{% else %}Not sent{% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Progress</p>
+                <p class="mt-0.5 font-semibold text-zinc-800 dark:text-zinc-200">Step {{ form_obj.step_number }} of {{ form_obj.total_steps }}</p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Link {% if form_obj.is_expired %}expired{% else %}valid until{% endif %}</p>
+                <p class="mt-0.5 font-semibold text-zinc-800 dark:text-zinc-200">{{ form_obj.token_expires_at|date:"j M Y" }}</p>
+            </div>
+        </div>
+
+        <div class="mt-4 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div class="h-full rounded-full bg-gradient-to-r from-primary-500 to-violet-500"
+                 style="width: {{ form_obj.progress_percent }}%"></div>
+        </div>
+        {% endif %}
+    </div>
+</div>

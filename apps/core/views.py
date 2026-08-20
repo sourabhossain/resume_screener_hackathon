@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -380,7 +381,13 @@ def resume_create(request, job_slug):
 @login_required
 def resume_detail(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
-    return render(request, 'core/resume_detail.html', {'resume': resume})
+    return render(request, 'core/resume_detail.html', {
+        'resume': resume,
+        # None until the candidate is shortlisted; the section renders a
+        # "not sent yet" state rather than being hidden, so the recruiter can
+        # always see where the information form stands.
+        'employee_form': getattr(resume, 'employee_form', None),
+    })
 
 
 @login_required
@@ -854,8 +861,28 @@ def resume_status_update(request, uuid):
         messages.error(request, 'Invalid status.')
         return redirect('core:resume_detail', uuid=uuid)
 
+    previous_status = resume.recruiter_status
     resume.recruiter_status = new_status
     resume.save(update_fields=['recruiter_status', 'updated_at'])
+
+    # Shortlisting is the trigger for the Employee Information Form invitation.
+    # issue_invite() is first-time-only unless resend=True, so moving a candidate
+    # away from shortlisted and back does not email them a second link.
+    invite_note = None
+    if new_status == 'shortlisted' and previous_status != 'shortlisted':
+        from apps.employee_form.services import InviteError, issue_invite
+        try:
+            issue_invite(resume, user=request.user)
+        except InviteError as exc:
+            invite_note = ('error', str(exc))
+            logger.warning(
+                'employee_form.invite_skipped resume=%s reason=%s', resume.pk, exc
+            )
+        else:
+            invite_note = (
+                'success',
+                f'Information form sent to {resume.email}.',
+            )
 
     if is_htmx:
         # 'card' (candidate detail page) swaps the control in place; 'cell'
@@ -867,7 +894,22 @@ def resume_status_update(request, uuid):
             if status_context == 'card'
             else 'core/partials/recruiter_status_cell.html'
         )
-        return render(request, template, {'resume': resume, 'status_context': status_context})
+        response = render(
+            request, template, {'resume': resume, 'status_context': status_context}
+        )
+        if invite_note:
+            # A fragment swap never includes #dj-messages, so a Django flash here
+            # would be invisible now and then pop up on the next full page load.
+            # Send it as an htmx trigger instead (see base.html).
+            level, text = invite_note
+            response['HX-Trigger'] = json.dumps(
+                {'toast': {'level': level, 'text': text}}
+            )
+        return response
+
+    if invite_note:
+        level, text = invite_note
+        (messages.error if level == 'error' else messages.success)(request, text)
 
     messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
     return redirect('core:resume_detail', uuid=uuid)

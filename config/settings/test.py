@@ -1,7 +1,15 @@
+import tempfile
+
 from .base import *
 
 DEBUG = False
 SECRET_KEY = 'test-key-insecure-but-fine-for-tests'
+
+# Uploads go to a throwaway directory, never the real media volume.
+# Without this, every test that posts a file (resumes, NID scans, certificates)
+# writes into MEDIA_ROOT for real and nothing removes it, so running the suite
+# steadily fills the volume with candidate documents that no row points at.
+MEDIA_ROOT = tempfile.mkdtemp(prefix='screener-test-media-')
 
 # Avoid LLMClient "OPENAI_API_KEY not configured" noise when .env omits the key; tests mock API calls.
 if not OPENAI_API_KEY:

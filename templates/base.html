@@ -41,6 +41,17 @@
             }
         });
 
+        // Toasts for htmx responses. Django flash messages are rendered into
+        // #dj-messages by the full page, which a partial swap never includes —
+        // so views that swap a fragment send the message as an HX-Trigger
+        // instead and it surfaces here.
+        document.addEventListener('toast', function (evt) {
+            const d = (evt.detail) || {};
+            if (d.text && typeof window.notify === 'function') {
+                window.notify(d.level || 'info', djEsc(d.text), d.level === 'error' ? 6500 : 4200);
+            }
+        });
+
 
         // Map Django message tags → SweetAlert2 icons
         function djIcon(tags) {

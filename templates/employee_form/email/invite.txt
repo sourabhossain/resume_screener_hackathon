@@ -1,0 +1,23 @@
+Dear {{ candidate_name|title }},
+
+Congratulations — you have been shortlisted for the position of {{ job_title }} at SSL Wireless.
+
+To continue, please complete our Employee Information Form:
+
+{{ form_url }}
+
+Your verification code is: {{ otp }}
+
+You will be asked for this code when you open the link. The code expires in
+{{ otp_minutes }} minutes; if it lapses, you can request a new one from that page.
+The form link itself stays valid for {{ link_days }} days.
+
+Please note:
+- Provide information exactly as shown on your official documents.
+- Have your NID and educational certificates ready to upload.
+- Your progress is saved as you go, so you can return using the same link.
+- The form can only be submitted once.
+
+If you did not apply for this position, please ignore this email.
+
+SSL Wireless

@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ step.title }} · Information Form · SSL Wireless{% endblock %}
+
+{% block recruiter_nav %}{% endblock %}
+{% block recruiter_logout %}{% endblock %}
+{% block mobile_recruiter_nav %}{% endblock %}
+{% block nav_action %}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl pb-16">
+
+    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
+        <div class="px-6 py-5">
+            <p class="text-xs font-bold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400">
+                Employee Information Form
+            </p>
+            <h1 class="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                {{ step.section }}
+            </h1>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                {{ form_obj.resume.candidate_name|title }} &middot; {{ form_obj.resume.job.title }}
+            </p>
+
+            <div class="mt-4 flex items-center gap-3">
+                <div class="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full rounded-full bg-gradient-to-r from-primary-500 to-violet-500 transition-all duration-300"
+                         style="width: {% widthratio step_number total_steps 100 %}%"></div>
+                </div>
+                <span class="shrink-0 text-xs font-semibold tabular-nums text-zinc-500 dark:text-zinc-400">
+                    Step {{ step_number }} of {{ total_steps }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {% if step.description %}
+    <div class="mt-4 rounded-xl border border-primary-100 bg-primary-50/60 p-4 dark:border-primary-900/40 dark:bg-primary-950/20">
+        <p class="text-sm leading-relaxed text-primary-900 dark:text-primary-200">{{ step.description }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" hx-boost="false"
+          class="mt-4 space-y-3"
+          x-data="{ submitting: false }" @submit="submitting = true">
+        {% csrf_token %}
+
+        {% for item in step_form.question_fields %}
+            {% include 'employee_form/partials/question.html' with question=item.question field=item.field %}
+        {% endfor %}
+
+        <div class="flex items-center gap-3 pt-2">
+            {% if previous_step %}
+            <a href="{% url 'employee_form:step' token=form_obj.token step_key=previous_step %}"
+               class="rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                Back
+            </a>
+            {% endif %}
+
+            <button type="submit"
+                    :disabled="submitting"
+                    class="btn-primary flex-1 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                <span x-show="!submitting">{% if is_final %}Submit form{% else %}Save and continue{% endif %}</span>
+                <span x-show="submitting" x-cloak>Saving…</span>
+            </button>
+        </div>
+
+        {% if is_final %}
+        <p class="pt-1 text-center text-xs text-zinc-500 dark:text-zinc-500">
+            Once submitted, this form cannot be changed or submitted again.
+        </p>
+        {% else %}
+        <p class="pt-1 text-center text-xs text-zinc-400 dark:text-zinc-500">
+            Your answers are saved at each step — you can return using the same link.
+        </p>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

@@ -54,6 +54,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.core.urls')),
     path('', include('apps.interviews.urls')),
+    path('', include('apps.employee_form.urls')),
 
     # API URLs
     path('api/', include('apps.core.api_urls')),

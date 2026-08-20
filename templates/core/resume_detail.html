@@ -103,6 +103,8 @@
     {% include 'core/partials/recruiter_status_control.html' with resume=resume status_context='card' %}
 </div>
 
+{% include 'employee_form/partials/resume_section.html' with resume=resume form_obj=employee_form %}
+
 {% with interviews=resume.interviews.all %}
 <div class="mb-8 rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
     <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
