@@ -1,8 +1,16 @@
-Django>=5.0
+# Capped below 6.0: the app image (python:3.11) resolves 5.2.x, but the
+# Playwright verification image (python:3.12) would resolve Django 6.x, where
+# `django.utils.cache.cc_delim_re` is gone and DRF fails to import — the
+# verification worker crash-looped on startup. Keep both images on 5.2.
+Django>=5.2,<6.0
 # Production WSGI server (replaces the dev `runserver`) + static file serving.
 gunicorn>=21.2
 whitenoise>=6.6
-playwright>=1.40.0
+# Must match the Playwright version of the verification base image in the
+# Dockerfile — that image supplies the browser binaries and we deliberately
+# skip `playwright install`. A newer pip package looks for a browser build the
+# image doesn't have and every crawl dies with "Executable doesn't exist".
+playwright==1.60.0
 httpx>=0.26.0
 httpcore>=1.0.0
 PyMySQL>=1.1

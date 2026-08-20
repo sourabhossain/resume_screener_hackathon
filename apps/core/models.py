@@ -252,11 +252,19 @@ class Resume(SoftDeleteModel):
             models.Index(fields=['screening_status'], name='resume_status_idx'),
         ]
         constraints = [
-            # DB-level backstop against duplicate submissions: the same file can't
-            # be submitted twice for one job. Complements the app-level .exists()
-            # checks in the views, closing the race window between check and save.
-            # Scoped to non-deleted rows with a real hash so re-uploads after a
-            # delete, and rows without a file, are unaffected.
+            # Intended as a backstop against duplicate submissions: the same file
+            # can't be submitted twice for one job. Scoped to non-deleted rows with
+            # a real hash so re-uploads after a delete, and rows without a file,
+            # are unaffected.
+            #
+            # CAVEAT — this is NOT enforced on MySQL, our deployment database:
+            # conditional unique constraints are unsupported there, so `migrate`
+            # skips it with a models.W036 warning and no index is created. It only
+            # takes effect on backends that support partial indexes (e.g. Postgres).
+            # So on MySQL, duplicates are prevented *only* by the app-level
+            # .exists() checks in careers_apply, which leaves a real check-then-save
+            # race: two concurrent submissions of the same file can both pass the
+            # check and both insert. Don't rely on this constraint to close it.
             models.UniqueConstraint(
                 fields=['job', 'file_hash'],
                 condition=Q(is_deleted=False) & ~Q(file_hash=''),
