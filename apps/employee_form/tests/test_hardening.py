@@ -54,6 +54,7 @@ SECTION_A = {
 
 SECTION_B = {
     'highest_degree': 'bachelors',
+    'has_masters': 'no',
     'bachelors_institution': 'X', 'bachelors_degree_name': 'BBA',
     'bachelors_major': 'M', 'bachelors_completion_date': '2019-01-31',
     'hsc_institution': 'H', 'hsc_board': 'D', 'hsc_passing_year': '2014',
@@ -145,8 +146,6 @@ def test_employer_end_before_start_is_rejected(verified):
         'hsc_certificate': _pdf('h.pdf'),
         'ssc_certificate': _pdf('s.pdf'),
     })
-    _post(client, form, 'employment_gate', {'has_employment': 'yes'})
-
     _post(client, form, 'employer_1', {
         'employer_1_name': 'Acme',
         'employer_1_hr_contact': '+8801711000000',
@@ -155,7 +154,7 @@ def test_employer_end_before_start_is_rejected(verified):
         'employer_1_start_date': '2024-01-01',
         'employer_1_end_date': '2020-01-01',
         'employer_1_reason_leaving': 'x',
-        'employer_1_another': 'no',
+        'employer_1_contact_permission': 'yes',
     })
 
     form.refresh_from_db()
@@ -303,3 +302,60 @@ def test_an_invalid_upload_is_not_stored_even_if_the_rest_is_fine(verified):
     form.refresh_from_db()
     assert form.current_step == 'section_a'
     assert not form.files.filter(question_key='nid_copy').exists()
+
+
+# ── Employers are all-or-nothing ─────────────────────────────────────────
+def _reach_employer_1(client, form):
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+    _post(client, form, 'section_b', {
+        **SECTION_B,
+        'bachelors_certificate': _pdf('b.pdf'),
+        'hsc_certificate': _pdf('h.pdf'),
+        'ssc_certificate': _pdf('s.pdf'),
+    })
+    form.refresh_from_db()
+    assert form.current_step == 'employer_1'
+
+
+def test_fresher_can_pass_every_employer_step_blank(verified):
+    """The PDF marks Employer 1 required; that would block freshers outright."""
+    client, form = verified
+    _reach_employer_1(client, form)
+
+    for index in (1, 2, 3, 4):
+        response = _post(client, form, f'employer_{index}', {})
+        assert response.status_code == 302, f'employer_{index} blocked a fresher'
+        form.refresh_from_db()
+
+    assert form.current_step == 'reference_1'
+
+
+def test_naming_an_employer_requires_the_rest_of_that_block(verified):
+    client, form = verified
+    _reach_employer_1(client, form)
+
+    _post(client, form, 'employer_1', {'employer_1_name': 'Acme Ltd'})
+
+    form.refresh_from_db()
+    assert form.current_step == 'employer_1', 'a half-filled employer was accepted'
+    assert not form.answers.get('employer_1_name')
+
+
+def test_a_fully_named_employer_is_accepted(verified):
+    client, form = verified
+    _reach_employer_1(client, form)
+
+    response = _post(client, form, 'employer_1', {
+        'employer_1_name': 'Acme Ltd',
+        'employer_1_hr_contact': '+8801711000000',
+        'employer_1_hr_email': 'hr@acme.com',
+        'employer_1_position': 'Manager',
+        'employer_1_start_date': '2021-01-01',
+        'employer_1_end_date': '2024-01-01',
+        'employer_1_contact_permission': 'yes',
+    })
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['employer_1_name'] == 'Acme Ltd'
+    assert form.current_step == 'employer_2'

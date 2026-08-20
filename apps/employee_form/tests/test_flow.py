@@ -291,50 +291,57 @@ def test_unknown_step_is_404(client, candidate):
     assert response.status_code == 404
 
 
-# ── Branching ────────────────────────────────────────────────────────────
-def test_fresher_skips_the_employer_sections():
-    path = schema.step_path({'has_employment': 'no'})
-    assert not any(key.startswith('employer_') for key in path)
-    assert 'reference_1' in path
+# ── Flow (PDF: linear Sections A-C, then Section D branches) ─────────────
+def test_section_c_is_linear_all_four_employers_then_references():
+    """The PDF has no employment gate and no "another employer?" branch."""
+    path = schema.step_path({})
+    expected = [
+        'section_a', 'section_b',
+        'employer_1', 'employer_2', 'employer_3', 'employer_4',
+        'reference_1', 'reference_2', 'department',
+    ]
+    assert path[:len(expected)] == expected
 
 
-def test_one_employer_stops_after_employer_1():
-    path = schema.step_path({'has_employment': 'yes', 'employer_1_another': 'no'})
-    assert 'employer_1' in path
-    assert 'employer_2' not in path
-
-
-def test_four_employers_are_all_reachable():
-    path = schema.step_path({
-        'has_employment': 'yes',
-        'employer_1_another': 'yes',
-        'employer_2_another': 'yes',
-        'employer_3_another': 'yes',
-    })
+def test_no_employer_block_is_hard_required():
+    """A fresher must be able to submit, so no employer field is required outright."""
     for index in (1, 2, 3, 4):
-        assert f'employer_{index}' in path
+        for question in schema.STEPS_BY_KEY[f'employer_{index}']['questions']:
+            assert not question['required'], question['key']
 
 
 def test_banking_department_routes_to_d1_sales():
-    """The one department-to-section mapping confirmed by the source form."""
-    path = schema.step_path({
-        'has_employment': 'no', 'department': 'banking_financial_services',
-    })
+    """The one department-to-section mapping confirmed by the client's own form."""
+    path = schema.step_path({'department': 'banking_financial_services'})
     assert 'd1_sales' in path
     assert path[-1] == schema.FINAL_STEP
 
 
-def test_departments_with_no_questions_yet_skip_to_the_declaration():
-    """D2-D6 have no questions until the missing form pages are supplied."""
-    path = schema.step_path({'has_employment': 'no', 'department': 'engineering'})
-    assert 'd4_technology' not in path
-    assert path[-1] == schema.FINAL_STEP
+def test_each_department_reaches_its_mapped_role_section():
+    """D1-D6 all carry questions now, so every mapping must actually land."""
+    for value, label in schema.DEPARTMENT_CHOICES:
+        target = schema.DEPARTMENT_ROUTING.get(value)
+        assert target, f'{value} has no routing entry'
+        path = schema.step_path({'department': value})
+        assert target in path, f'{label} never reaches {target}'
+        assert path[-1] == schema.FINAL_STEP, f'{label} does not reach the declaration'
 
 
-def test_every_department_choice_reaches_the_declaration():
-    for value, _label in schema.DEPARTMENT_CHOICES:
-        path = schema.step_path({'has_employment': 'no', 'department': value})
-        assert path[-1] == schema.FINAL_STEP, f'{value} does not reach the declaration'
+def test_only_one_role_section_is_ever_shown():
+    """A candidate must not be walked through another department's questions."""
+    role_steps = {'d1_sales', 'd2_marketing', 'd3_finance',
+                  'd4_technology', 'd5_operations', 'd6_corporate'}
+    for value, label in schema.DEPARTMENT_CHOICES:
+        path = set(schema.step_path({'department': value}))
+        assert len(path & role_steps) == 1, f'{label} sees {path & role_steps}'
+
+
+def test_every_role_section_is_reachable_by_some_department():
+    """A section no department maps to would be dead weight."""
+    targets = set(schema.DEPARTMENT_ROUTING.values())
+    for key in ('d1_sales', 'd2_marketing', 'd3_finance',
+                'd4_technology', 'd5_operations', 'd6_corporate'):
+        assert key in targets, f'{key} is unreachable'
 
 
 # ── Schema integrity ─────────────────────────────────────────────────────

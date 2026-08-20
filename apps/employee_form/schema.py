@@ -1,14 +1,25 @@
 """Declarative definition of the Employee Information Form.
 
-The whole form lives here as data, not as 131 hand-written Django fields or 22
-hand-written templates: `forms.py` builds a Django form per step from these
-dicts, and one template renders any step. Adding or changing a question means
-editing this file only.
+The whole form lives here as data, not as 131 hand-written Django fields or
+seventeen hand-written templates: `forms.py` builds a Django form per step from
+these dicts, and one template renders any step. Adding or changing a question
+means editing this file only.
 
-Source of truth is the Google Form (22 pages). Where the Google Form's own
-question numbering is inconsistent (it skips 2, reuses 39 and 72-74, and drops
-90), the numbering shown to candidates is generated sequentially from position
-instead -- see `numbered_questions`. Question *content* is reproduced as-is.
+Source of truth is SSL_Wireless_Employee_Information_Form_FINAL_UPDATED.pdf —
+131 questions across Sections A, B, C, D and D1-D7, in the order and with the
+required/optional marks that document gives. The numbers shown to the candidate
+are generated from position, which matches the PDF's numbering exactly.
+
+Two deliberate departures from the PDF, both agreed with the client:
+  * The PDF's Q1 Requisition ID is dropped -- a candidate has no way to know that
+    value. Everything after it shifts up one, so this form has 130 questions and
+    our Q1 is the PDF's Q2.
+  * No employer is hard-required. The PDF marks Employer 1-4 required, which would
+    make the form unsubmittable for a fresher, or for anyone with fewer than four
+    previous jobs. Instead each employer is optional *until its name is given*, at
+    which point the rest of that employer becomes required -- see
+    `_validate_employer_block` in forms.py. That keeps freshers able to submit
+    without allowing half-filled employer records.
 """
 
 # ── Question types ───────────────────────────────────────────────────────
@@ -27,6 +38,11 @@ FILE_TYPES = frozenset({FILE, FILES})
 CHOICE_TYPES = frozenset({RADIO, SELECT, CHECKBOX})
 
 YES_NO = [('yes', 'Yes'), ('no', 'No')]
+
+# The PDF asks this same permission once per employer and once per referee.
+CONTACT_PERMISSION = (
+    'May SSL Wireless HR or its authorised Background Check Agency contact '
+)
 
 RELATIONSHIP_CHOICES = [
     ('direct_manager', 'Direct Manager'),
@@ -72,13 +88,24 @@ DEPARTMENT_CHOICES = [
     ('service_assurance_technical_operations', 'Service Assurance-Technical Operations'),
 ]
 
-CUSTOMER_SEGMENT_CHOICES = [
-    ('b2c', 'B2C / Consumer'),
-    ('b2b', 'B2B'),
-    ('corporate', 'Corporate'),
-    ('government', 'Government'),
-    ('enterprise', 'Enterprise'),
-    ('sme', 'SME'),
+MARKETING_CHANNEL_CHOICES = [
+    ('digital_performance', 'Digital / Performance'),
+    ('brand', 'Brand'),
+    ('content', 'Content'),
+    ('events_sponsorship', 'Events & Sponsorship'),
+    ('pr_communications', 'PR & Communications'),
+    ('other', 'Other'),
+]
+
+FINANCE_AREA_CHOICES = [
+    ('accounts_payable', 'Accounts Payable'),
+    ('accounts_receivable', 'Accounts Receivable'),
+    ('treasury', 'Treasury'),
+    ('fpa', 'FP&A'),
+    ('audit_compliance', 'Audit & Compliance'),
+    ('tax', 'Tax'),
+    ('financial_reporting', 'Financial Reporting'),
+    ('revenue_assurance', 'Revenue Assurance'),
     ('other', 'Other'),
 ]
 
@@ -89,12 +116,12 @@ AVAILABILITY_CHOICES = [
     ('currently_unemployed', 'Currently Unemployed'),
 ]
 
-# Google Forms allows 100 MB per upload; that is Google's platform ceiling, not
-# a business requirement. Candidate documents are ID scans and certificates,
-# which are well under 10 MB -- capping here keeps a single applicant from
-# filling the media volume.
+# Candidate documents are ID scans and certificates, well under 10 MB. Capping
+# here keeps a single applicant from filling the media volume.
 MAX_UPLOAD_MB = 10
 MAX_FILES_PER_QUESTION = 5
+
+_UPLOAD_HELP = f'PDF, document or image. Max {MAX_UPLOAD_MB} MB.'
 
 
 def _q(key, label, qtype=TEXT, required=False, help='', choices=None, max_files=None):
@@ -107,13 +134,12 @@ def _q(key, label, qtype=TEXT, required=False, help='', choices=None, max_files=
 
 
 # ── Section D routing ────────────────────────────────────────────────────
-# Which role-specific section each department is sent to. Only
-# banking_financial_services -> D1 is confirmed (visible in the supplied Google
-# Form screenshots); the rest are INFERRED from the section titles and must be
-# confirmed against the form's Branching Setup Guide before going live.
-# Departments pointing at a section that currently has no questions (D2-D6, whose
-# Google Form pages 16-21 were not supplied) are skipped automatically by
-# `next_step_key`, so those candidates go straight to the declaration.
+# Which role-specific section each department leads to. The PDF defers this to a
+# "Branching Setup Guide" that was not supplied, and only
+# banking_financial_services -> D1 is confirmed (visible in the client's own
+# Google Form). The rest are INFERRED from the section titles and must be
+# confirmed before go-live: a wrong entry sends a candidate to the wrong set of
+# role questions, and now that D2-D6 carry real questions that is visible.
 DEPARTMENT_ROUTING = {
     'banking_financial_services': 'd1_sales',              # confirmed
     'business_development': 'd1_sales',
@@ -152,30 +178,12 @@ def _route_department(answers):
     return DEPARTMENT_ROUTING.get(answers.get('department'), 'd7_declaration')
 
 
-def _after_employment_gate(answers):
-    """Freshers have no employers to declare, so skip straight to references.
-
-    ASSUMPTION -- the supplied screenshots show page 4's "Yes" branch leading to
-    Employer 1 but not where "No - I am a Fresher" goes. Confirm this target.
-    """
-    return 'employer_1' if answers.get('has_employment') == 'yes' else 'reference_1'
-
-
-def _after_employer(index):
-    """Yes on "another previous employer?" opens the next employer step."""
-    def _next(answers):
-        if answers.get(f'employer_{index}_another') == 'yes':
-            return f'employer_{index + 1}'
-        return 'reference_1'
-    return _next
-
-
-# ── Steps ────────────────────────────────────────────────────────────────
+# ── Sections A and B (PDF Q1-38) ─────────────────────────────────────────
 STEPS = [
     {
         'key': 'section_a',
-        'section': 'Section A — Candidate Identification & Information',
-        'title': 'Candidate Identification & Information',
+        'section': 'Section A — Candidate Identification & Police Verification Information',
+        'title': 'Candidate Identification & Police Verification',
         'description': 'Please provide information exactly as shown on your official documents.',
         'next': 'section_b',
         'questions': [
@@ -187,15 +195,14 @@ STEPS = [
             _q('birth_certificate_number', 'Birth Certificate Number (if applicable)', TEXT),
             _q('date_of_birth', 'Date of Birth', DATE, required=True),
             _q('present_address', 'Present Address', TEXTAREA, required=True,
-               help='Provide the full current address for police/background verification.'),
+               help='Full address, for police verification.'),
             _q('permanent_address', 'Permanent Address', TEXTAREA, required=True,
-               help='Provide the complete permanent address for police/background verification.'),
+               help='Full address, for police verification.'),
             _q('address_same', 'Is your Present Address the same as your Permanent Address?',
                RADIO, required=True, choices=YES_NO),
-            _q('nid_copy', 'Upload both sides of your NID Copy', FILE, required=True,
-               help=f'Upload 1 supported file: PDF or image. Max {MAX_UPLOAD_MB} MB.'),
-            _q('birth_certificate_copy', 'Upload Birth Certificate Copy (if applicable)', FILE,
-               help=f'Upload 1 supported file: PDF, document, or image. Max {MAX_UPLOAD_MB} MB.'),
+            _q('nid_copy', 'Upload NID Copy', FILE, required=True, help=_UPLOAD_HELP),
+            _q('birth_certificate_copy', 'Upload Birth Certificate Copy (if applicable)',
+               FILE, help=_UPLOAD_HELP),
             _q('verification_consent',
                'Do you consent to SSL Wireless conducting identity, police, education, '
                'employment, reference and other lawful background verification as part of '
@@ -206,25 +213,31 @@ STEPS = [
     },
     {
         'key': 'section_b',
-        'section': 'Section B — Educational Qualifications & Certificate Uploads',
-        'title': 'Educational Qualifications & Certificate Uploads',
+        'section': 'Section B — Educational Qualifications & Certificate Uploads '
+                   '(Highest to Secondary)',
+        'title': 'Educational Qualifications & Certificates',
         'description': (
-            'Select your highest / last completed degree first and provide the applicable '
-            'qualification details below. Educational levels are arranged from highest to '
-            'secondary level.'
+            'Select your highest / last completed degree first, then provide the '
+            'applicable qualification details below. Educational levels are arranged '
+            'from highest to secondary level.'
         ),
-        'next': 'employment_gate',
+        'next': 'employer_1',
         'questions': [
             _q('highest_degree', 'Highest / Last Completed Degree', SELECT, required=True,
                choices=DEGREE_CHOICES),
 
-            _q('masters_institution', "Master's / Postgraduate Degree — Institution / University Name"),
+            _q('has_masters',
+               "Master's / Postgraduate Degree — Do you have a Master's / Postgraduate "
+               "Degree?",
+               RADIO, required=True, choices=YES_NO),
+            _q('masters_institution',
+               "Master's / Postgraduate Degree — Institution / University Name"),
             _q('masters_degree_name', "Master's / Postgraduate Degree — Degree Name"),
             _q('masters_major', "Master's / Postgraduate Degree — Major / Subject"),
             _q('masters_completion_date',
                "Master's / Postgraduate Degree — Graduation / Completion Date", DATE),
-            _q('masters_certificate', "Master's / Postgraduate Degree — Certificate", FILE,
-               help=f'Upload 1 supported file: PDF, document, or image. Max {MAX_UPLOAD_MB} MB.'),
+            _q('masters_certificate', "Master's / Postgraduate Degree — Certificate",
+               FILE, help=_UPLOAD_HELP),
 
             _q('bachelors_institution',
                "Undergraduate / Bachelor's Degree — Institution / University Name",
@@ -233,108 +246,108 @@ STEPS = [
                TEXT, required=True),
             _q('bachelors_major', "Undergraduate / Bachelor's Degree — Major / Subject",
                TEXT, required=True),
-            _q('bachelors_completion_date', "Undergraduate / Bachelor's Degree - Completion date.",
+            _q('bachelors_completion_date',
+               "Undergraduate / Bachelor's Degree — Graduation / Completion Date",
                DATE, required=True),
-            _q('bachelors_certificate', "Undergraduate / Bachelor's Degree — Certificate Image",
-               FILE, required=True,
-               help=f'Upload 1 supported file: PDF, document, or image. Max {MAX_UPLOAD_MB} MB.'),
+            _q('bachelors_certificate', "Undergraduate / Bachelor's Degree — Certificate",
+               FILE, required=True, help=_UPLOAD_HELP),
 
             _q('hsc_institution', 'HSC / A Level / Equivalent — Institution / College Name',
                TEXT, required=True),
-            _q('hsc_board', 'HSC / A Level / Equivalent — Education Board', TEXT, required=True),
-            _q('hsc_passing_year', 'HSC / A Level / Equivalent — Passing Year', TEXT, required=True),
-            _q('hsc_result', 'HSC / A Level / Equivalent — Result / GPA', TEXT, required=True),
-            _q('hsc_certificate', 'HSC / A Level / Equivalent — Certificate Image', FILE,
-               required=True,
-               help=f'Upload 1 supported file: PDF, document, or image. Max {MAX_UPLOAD_MB} MB.'),
+            _q('hsc_board', 'HSC / A Level / Equivalent — Education Board', TEXT,
+               required=True),
+            _q('hsc_passing_year', 'HSC / A Level / Equivalent — Passing Year', TEXT,
+               required=True),
+            _q('hsc_result', 'HSC / A Level / Equivalent — Result / GPA', TEXT),
+            _q('hsc_certificate', 'HSC / A Level / Equivalent — Certificate', FILE,
+               required=True, help=_UPLOAD_HELP),
 
             _q('ssc_institution', 'SSC / O Level / Equivalent — Institution / School Name',
                TEXT, required=True),
-            _q('ssc_board', 'SSC / O Level / Equivalent — Education Board', TEXT, required=True),
-            _q('ssc_passing_year', 'SSC / O Level / Equivalent — Passing Year', TEXT, required=True),
-            _q('ssc_result', 'SSC / O Level / Equivalent — Result / GPA', TEXT, required=True),
-            _q('ssc_certificate', 'SSC / O Level / Equivalent — Certificate Image', FILE,
-               required=True,
-               help=f'Upload 1 supported file: PDF, document, or image. Max {MAX_UPLOAD_MB} MB.'),
+            _q('ssc_board', 'SSC / O Level / Equivalent — Education Board', TEXT,
+               required=True),
+            _q('ssc_passing_year', 'SSC / O Level / Equivalent — Passing Year', TEXT,
+               required=True),
+            _q('ssc_result', 'SSC / O Level / Equivalent — Result / GPA', TEXT),
+            _q('ssc_certificate', 'SSC / O Level / Equivalent — Certificate', FILE,
+               required=True, help=_UPLOAD_HELP),
 
             _q('training_certification_names',
                'Relevant Training / Professional Certification Name(s)', TEXTAREA,
-               help='List all relevant training and professional certification names in one answer.'),
+               help='List all relevant training and professional certification names '
+                    'in one answer.'),
             _q('training_certificates',
-               'Upload All Relevant Training / Professional Certification Certificates', FILES,
-               help=(f'Upload up to {MAX_FILES_PER_QUESTION} supported files: PDF, document, '
-                     f'or image. Max {MAX_UPLOAD_MB} MB per file.')),
-        ],
-    },
-    {
-        'key': 'employment_gate',
-        'section': 'Section C — Employment History & Professional References',
-        'title': 'Employment History & Professional References',
-        'description': (
-            'Complete employers in the same order as your CV, starting with your current '
-            'or most recent employer.'
-        ),
-        'next': _after_employment_gate,
-        'questions': [
-            _q('has_employment',
-               'Do you have any previous full-time/contractual employment experience?',
-               RADIO, required=True,
-               choices=[('yes', 'Yes'), ('no', 'No – I am a Fresher')]),
+               'Upload All Relevant Training / Professional Certification Certificates',
+               FILES,
+               help=f'Up to {MAX_FILES_PER_QUESTION} files. {_UPLOAD_HELP}'),
         ],
     },
 ]
 
 
-def _employer_step(index, *, another_question, another_required):
-    """Employers 1-4 ask the same seven questions; only the branch differs."""
+# ── Section C: employers (PDF Q39-71) ────────────────────────────────────
+def _employer_step(index, *, required, next_key, extra=()):
+    """Employers 1-4 ask the same eight questions.
+
+    `required` stays False for every block: a fresher must be able to submit.
+    Completeness is enforced conditionally in forms.py instead, so an employer is
+    either left entirely blank or filled in properly.
+    """
     questions = [
-        _q(f'employer_{index}_name', f'Employer {index} Name', TEXT, required=True),
-        _q(f'employer_{index}_hr_contact', f'Employer {index} HR / Official Contact Number',
-           PHONE, required=True),
-        _q(f'employer_{index}_hr_email', f'Employer {index} HR / Official Email Address',
-           EMAIL, required=True),
-        _q(f'employer_{index}_position', f'Your Position / Designation at Employer {index}',
-           TEXT, required=True),
+        _q(f'employer_{index}_name', f'Employer {index} Name', TEXT, required=required),
+        _q(f'employer_{index}_hr_contact',
+           f'Employer {index} HR / Official Contact Number', PHONE, required=required),
+        _q(f'employer_{index}_hr_email',
+           f'Employer {index} HR / Official Email Address', EMAIL, required=required),
+        _q(f'employer_{index}_position',
+           f'Your Position / Designation at Employer {index}', TEXT, required=required),
         _q(f'employer_{index}_start_date',
-           f"Candidate's Claimed Start Date at Employer {index}", DATE,
-           required=index != 3),
+           f"Candidate's Claimed Start Date at Employer {index}", DATE, required=required),
         _q(f'employer_{index}_end_date',
-           f"Candidate's Claimed End Date at Employer {index}", DATE, required=True),
-        _q(f'employer_{index}_reason_leaving', f'Reason for Leaving Employer {index}',
-           TEXTAREA, required=True),
+           f"Candidate's Claimed End Date at Employer {index}", DATE, required=required),
+        _q(f'employer_{index}_reason_leaving',
+           f'Reason for Leaving Employer {index}', TEXTAREA),
+        _q(f'employer_{index}_contact_permission',
+           f'{CONTACT_PERMISSION}Employer {index} for verification?',
+           RADIO, required=required, choices=YES_NO),
     ]
-    if another_question:
-        questions.append(
-            _q(f'employer_{index}_another', another_question, RADIO,
-               required=another_required, choices=YES_NO)
-        )
+    questions.extend(extra)
     return {
         'key': f'employer_{index}',
-        'section': f'Employer {index} Information',
-        'title': f'Employer {index} Information',
-        'description': '',
-        'next': _after_employer(index) if another_question else 'reference_1',
+        'section': f'Section C — Employer {index}',
+        'title': f'Employer {index}',
+        'description': (
+            'Complete employers in the same order as your CV, starting with your '
+            'current or most recent employer. Leave this blank and continue if you '
+            'have no previous employment to declare.'
+            if index == 1 else
+            'Leave this blank and continue if you have no further employers to declare.'
+        ),
+        'next': next_key,
         'questions': questions,
     }
 
 
 STEPS += [
-    _employer_step(1, another_question='Do you have another previous employer?',
-                   another_required=True),
-    _employer_step(2, another_question='Do you have another previous employer to declare?',
-                   another_required=True),
-    # Google Form leaves Employer 3's start date and its "another employer"
-    # question unmarked; reproduced as-is rather than normalised.
-    _employer_step(3, another_question='Do you have another previous employer to declare?',
-                   another_required=False),
-    _employer_step(4, another_question=None, another_required=False),
+    # No employer is hard-required; forms.py makes the rest of a block required
+    # once its name is filled in. See the module docstring.
+    _employer_step(1, required=False, next_key='employer_2'),
+    _employer_step(2, required=False, next_key='employer_3'),
+    _employer_step(3, required=False, next_key='employer_4'),
+    _employer_step(4, required=False, next_key='reference_1', extra=[
+        _q('additional_employment_history',
+           'Additional Employment History (if more than four employers)', TEXTAREA,
+           help='Employer Name, HR/Official Contact Number, Official Email Address, '
+                'Position, Start Date, End Date and Reason for Leaving.'),
+    ]),
 ]
 
 
-def _reference_step(index, *, relationship_type, next_key):
+# ── Section C: references (PDF Q72-83) ───────────────────────────────────
+def _reference_step(index, next_key):
     return {
         'key': f'reference_{index}',
-        'section': f'Professional Reference {index}',
+        'section': f'Section C — Professional Reference {index}',
         'title': f'Professional Reference {index}',
         'description': '',
         'next': next_key,
@@ -342,48 +355,31 @@ def _reference_step(index, *, relationship_type, next_key):
             _q(f'reference_{index}_name', f'Reference {index} Name', TEXT, required=True),
             _q(f'reference_{index}_designation',
                f'Reference {index} Designation & Company', TEXT, required=True),
-            _q(f'reference_{index}_relationship', f'Reference {index} Relationship to You',
-               relationship_type, required=True, choices=RELATIONSHIP_CHOICES),
+            _q(f'reference_{index}_relationship',
+               f'Reference {index} Relationship to You', RADIO, required=True,
+               choices=RELATIONSHIP_CHOICES),
             _q(f'reference_{index}_contact', f'Reference {index} Contact Number',
                PHONE, required=True),
             _q(f'reference_{index}_email',
                f'Reference {index} Official / Work Email Address', EMAIL, required=True),
+            _q(f'reference_{index}_contact_permission',
+               f'{CONTACT_PERMISSION}Reference {index}?',
+               RADIO, required=True, choices=YES_NO),
         ],
     }
 
 
+# ── Sections D, D1-D7 (PDF Q84-131) ──────────────────────────────────────
 STEPS += [
-    # The Google Form renders Reference 1's relationship as a dropdown and
-    # Reference 2's as radio buttons; kept as-is. Reference 2's page also repeats
-    # "Designation & Company" twice (as 73 and 79) -- included once.
-    _reference_step(1, relationship_type=SELECT, next_key='reference_2'),
-    _reference_step(2, relationship_type=RADIO, next_key='team_management'),
-    {
-        'key': 'team_management',
-        'section': 'Previous Team & People Management',
-        'title': 'Previous Team & People Management',
-        'description': '',
-        'next': 'department',
-        'questions': [
-            _q('team_structure', 'What type of team / team structure do you manage or work with?',
-               TEXTAREA, required=True),
-            _q('team_headcount',
-               'How many people are/were under your direct and indirect supervision?',
-               TEXT, required=True),
-            _q('team_functions', 'What were the key functions and responsibilities of the team?',
-               TEXTAREA, required=True),
-            _q('team_authority',
-               'What was your level of authority and decision-making responsibility?',
-               TEXTAREA, required=True),
-        ],
-    },
+    _reference_step(1, 'reference_2'),
+    _reference_step(2, 'department'),
     {
         'key': 'department',
         'section': 'Section D — Department Selection / Role Question Routing',
-        'title': 'Department Selection',
+        'title': 'Department',
         'description': (
-            'Select the department relevant to the position. You will then be routed to '
-            'the appropriate role-specific section.'
+            'Select the department relevant to the position. You will then be routed '
+            'to the appropriate role-specific section.'
         ),
         'next': _route_department,
         'questions': [
@@ -395,69 +391,36 @@ STEPS += [
         'section': 'Section D1 — Sales / Business / Partnership',
         'title': 'Sales / Business / Partnership',
         'description': '',
-        'next': 'd1_customer_profile',
-        'questions': [
-            _q('sales_target_achievement',
-               'Revenue / Sales Target Achievement over the Last 12 Months (%)',
-               TEXT, required=True),
-            _q('sales_key_accounts', 'Key Accounts / Client Types Managed', TEXTAREA, required=True),
-            _q('sales_portfolio_value', 'Approximate Portfolio Value / Deal Size Managed',
-               TEXT, required=True),
-            _q('sales_cycle_length', 'Average Sales Cycle Length', TEXT, required=True),
-            _q('sales_crm_tools', 'CRM / Sales Tools Used', TEXTAREA, required=True),
-            _q('sales_largest_achievement',
-               'Largest Measurable Sales / Business Development Achievement',
-               TEXTAREA, required=True),
-        ],
-    },
-    {
-        'key': 'd1_customer_profile',
-        'section': 'Customer Profile & Exposure',
-        'title': 'Customer Profile & Exposure',
-        'description': '',
-        'next': 'd1_performance',
-        'questions': [
-            _q('customer_types', 'What type of customers do you deal with?', TEXTAREA, required=True),
-            _q('customer_segments', 'Primary customer segment (select all that apply):',
-               CHECKBOX, required=True, choices=CUSTOMER_SEGMENT_CHOICES),
-            _q('customer_portfolio_scale', 'What is the scale and nature of the customer portfolio?',
-               TEXTAREA, required=True),
-            _q('customer_products', 'What type of products / services do you sell or manage?',
-               TEXTAREA, required=True),
-        ],
-    },
-    {
-        'key': 'd1_performance',
-        'section': 'Sales / Business Performance & Measurable Success',
-        'title': 'Sales / Business Performance & Measurable Success',
-        'description': '',
         'next': 'd7_declaration',
         'questions': [
-            _q('perf_sales_type', 'What type of sales / business do you generate?',
-               TEXTAREA, required=True),
-            _q('perf_revenue_volume',
-               'Revenue or business volume handled / generated (where verifiable):', TEXTAREA),
-            _q('perf_key_achievements', 'Key achievements and major accounts / projects acquired',
-               TEXTAREA, required=True),
-            _q('perf_target_vs_achievement', 'Target versus achievement', TEXTAREA, required=True),
-            _q('perf_success_indicators', 'Specific measurable and verifiable success indicators.',
-               TEXTAREA),
+            _q('sales_target_achievement',
+               'Revenue / Sales Target Achievement over the Last 12 Months (%)'),
+            _q('sales_key_accounts', 'Key Accounts / Client Types Managed', TEXTAREA),
+            _q('sales_portfolio_value', 'Approximate Portfolio Value / Deal Size Managed'),
+            _q('sales_cycle_length', 'Average Sales Cycle Length'),
+            _q('sales_crm_tools', 'CRM / Sales Tools Used', TEXTAREA),
+            _q('sales_new_business',
+               'New Business / Partnership Acquisition Responsibility', TEXTAREA),
+            _q('sales_largest_achievement',
+               'Largest Measurable Sales / Business Development Achievement', TEXTAREA),
         ],
     },
-
-    # ── D2-D6: awaiting Google Form pages 16-21 ──────────────────────────
-    # These sections exist so DEPARTMENT_ROUTING has real targets, but their
-    # questions were not in the supplied screenshots. A step with no questions is
-    # skipped by `next_step_key`, so departments routed here currently continue
-    # straight to the declaration. Fill in `questions` to activate a section --
-    # no other code changes needed.
     {
         'key': 'd2_marketing',
         'section': 'Section D2 — Marketing / Communications',
         'title': 'Marketing / Communications',
         'description': '',
         'next': 'd7_declaration',
-        'questions': [],
+        'questions': [
+            _q('marketing_campaigns', 'Campaigns Led in the Last 12 Months', TEXTAREA),
+            _q('marketing_budget', 'Approximate Annual Marketing Budget Managed'),
+            _q('marketing_channels', 'Primary Marketing Channels / Areas of Expertise',
+               CHECKBOX, choices=MARKETING_CHANNEL_CHOICES, help='Select all that apply.'),
+            _q('marketing_kpi', 'Key Marketing KPI / Result Achieved', TEXTAREA),
+            _q('marketing_tools', 'Marketing / Analytics / Automation Tools Used', TEXTAREA),
+            _q('marketing_achievement',
+               'Most Significant Marketing / Communications Achievement', TEXTAREA),
+        ],
     },
     {
         'key': 'd3_finance',
@@ -465,7 +428,19 @@ STEPS += [
         'title': 'Finance / Revenue Assurance',
         'description': '',
         'next': 'd7_declaration',
-        'questions': [],
+        'questions': [
+            _q('finance_areas', 'Functional Areas Handled', CHECKBOX,
+               choices=FINANCE_AREA_CHOICES, help='Select all that apply.'),
+            _q('finance_audit_exposure',
+               'Audit Exposure (Internal / External / Regulatory)', TEXTAREA),
+            _q('finance_software', 'ERP / Finance Software Used', TEXTAREA),
+            _q('finance_budget_responsibility',
+               'Budget / Revenue / Cost Responsibility', TEXTAREA),
+            _q('finance_reconciliation',
+               'Reconciliation / Control / Revenue Leakage Responsibility', TEXTAREA),
+            _q('finance_achievement', 'Key Finance / Revenue Assurance Achievement',
+               TEXTAREA),
+        ],
     },
     {
         'key': 'd4_technology',
@@ -473,7 +448,18 @@ STEPS += [
         'title': 'Technology / Engineering / Data',
         'description': '',
         'next': 'd7_declaration',
-        'questions': [],
+        'questions': [
+            _q('tech_stack', 'Primary Technology Stack / Tools', TEXTAREA),
+            _q('tech_systems_owned', 'Systems / Products Owned or Maintained', TEXTAREA),
+            _q('tech_incident_responsibility',
+               'Incident / Uptime / Production Responsibility', TEXTAREA),
+            _q('tech_data_responsibility',
+               'Data / Database / Analytics Responsibility (if relevant)', TEXTAREA),
+            _q('tech_infra_responsibility',
+               'Infrastructure / Cloud / Security Responsibility (if relevant)', TEXTAREA),
+            _q('tech_certifications', 'Relevant Technical Certifications', TEXTAREA),
+            _q('tech_achievement', 'Most Significant Technical / Data Achievement', TEXTAREA),
+        ],
     },
     {
         'key': 'd5_operations',
@@ -481,7 +467,17 @@ STEPS += [
         'title': 'Operations / Service / Project',
         'description': '',
         'next': 'd7_declaration',
-        'questions': [],
+        'questions': [
+            _q('ops_processes_owned', 'Processes / SLAs / Projects Owned', TEXTAREA),
+            _q('ops_kpis', 'Service / Operational KPIs Managed', TEXTAREA),
+            _q('ops_team_size', 'Team / Vendor Size Overseen'),
+            _q('ops_tools', 'Systems / Tools Used for Operations or Project Management',
+               TEXTAREA),
+            _q('ops_stakeholder_exposure',
+               'Customer / Merchant / Internal Stakeholder Exposure', TEXTAREA),
+            _q('ops_achievement',
+               'Most Significant Operations / Service / Project Achievement', TEXTAREA),
+        ],
     },
     {
         'key': 'd6_corporate',
@@ -489,13 +485,22 @@ STEPS += [
         'title': 'Corporate / Governance / Support',
         'description': '',
         'next': 'd7_declaration',
-        'questions': [],
+        'questions': [
+            _q('corp_functional_areas', 'Primary Functional Areas Managed', TEXTAREA),
+            _q('corp_frameworks', 'Policies / Regulations / Frameworks Worked With',
+               TEXTAREA),
+            _q('corp_audit_exposure', 'Audit / Compliance / Risk Exposure (if relevant)',
+               TEXTAREA),
+            _q('corp_stakeholder_exposure', 'Stakeholder / Management Exposure', TEXTAREA),
+            _q('corp_tools', 'Systems / Tools Used', TEXTAREA),
+            _q('corp_achievement',
+               'Most Significant Measurable Functional Achievement', TEXTAREA),
+        ],
     },
-
     {
         'key': 'd7_declaration',
         'section': 'Section D7 — Candidate Declaration & Availability',
-        'title': 'Candidate Declaration & Availability',
+        'title': 'Declaration & Availability',
         'description': '',
         'next': None,
         'questions': [
@@ -517,7 +522,8 @@ STEPS += [
                'recruitment purposes.',
                RADIO, required=True,
                choices=[('agree', 'I Agree'), ('disagree', 'I Do Not Agree')]),
-            _q('typed_signature', 'Candidate Full Name (typed signature)', TEXT, required=True),
+            _q('typed_signature', 'Candidate Full Name (typed signature)', TEXT,
+               required=True),
             _q('declaration_date', 'Declaration Date', DATE, required=True),
         ],
     },
@@ -525,21 +531,20 @@ STEPS += [
 
 
 # ── Presentation hints ───────────────────────────────────────────────────
-# Kept out of the question dicts so the 130-odd definitions above stay about
-# *what* is asked, not how it is laid out.
+# Kept out of the question dicts so the definitions above stay about *what* is
+# asked, not how it is laid out.
 
-# Fields short enough to sit two-per-row instead of spanning the form. Anything
-# not listed gets a full-width control.
+# Fields short enough to share a row. Anything unlisted spans the form.
 HALF_WIDTH_KEYS = frozenset({
-    'mobile_number', 'personal_email', 'nid_number', 'birth_certificate_number',
-    'date_of_birth', 'position_applied_for',
+    'mobile_number', 'personal_email', 'nid_number',
+    'birth_certificate_number', 'date_of_birth', 'position_applied_for',
     'masters_completion_date', 'bachelors_completion_date',
     'hsc_board', 'hsc_passing_year', 'hsc_result',
     'ssc_board', 'ssc_passing_year', 'ssc_result',
     'total_experience_years', 'notice_period_days', 'earliest_joining_date',
     'declaration_date', 'typed_signature',
-    'sales_target_achievement', 'sales_cycle_length',
-    'team_headcount',
+    'sales_target_achievement', 'sales_cycle_length', 'sales_portfolio_value',
+    'marketing_budget', 'ops_team_size',
     *(f'employer_{i}_hr_contact' for i in range(1, 5)),
     *(f'employer_{i}_hr_email' for i in range(1, 5)),
     *(f'employer_{i}_start_date' for i in range(1, 5)),
@@ -562,12 +567,27 @@ def _employer_groups(index):
             f'employer_{index}_end_date',
             f'employer_{index}_reason_leaving',
         ]),
-        ('', [f'employer_{index}_another']),
+        ('Verification', [f'employer_{index}_contact_permission']),
     ]
 
 
-# Sub-headings inside a step, so a 24-question page reads as a handful of short
-# blocks. A step absent from here renders as one ungrouped block.
+def _reference_groups(index):
+    return [
+        (f'Reference {index}', [
+            f'reference_{index}_name',
+            f'reference_{index}_designation',
+            f'reference_{index}_relationship',
+        ]),
+        ('How we reach them', [
+            f'reference_{index}_contact',
+            f'reference_{index}_email',
+        ]),
+        ('Verification', [f'reference_{index}_contact_permission']),
+    ]
+
+
+# Sub-headings inside a step, so a 24-question page reads as a few short blocks.
+# A step absent from here renders as one ungrouped block.
 STEP_GROUPS = {
     'section_a': [
         ('Your details', [
@@ -577,17 +597,15 @@ STEP_GROUPS = {
         ('How we reach you', [
             'mobile_number', 'personal_email', 'position_applied_for',
         ]),
-        ('Addresses', [
-            'present_address', 'permanent_address', 'address_same',
-        ]),
+        ('Addresses', ['present_address', 'permanent_address', 'address_same']),
         ('Identity documents', ['nid_copy', 'birth_certificate_copy']),
         ('Consent', ['verification_consent']),
     ],
     'section_b': [
         ('', ['highest_degree']),
-        ("Master's / Postgraduate  ·  optional", [
-            'masters_institution', 'masters_degree_name', 'masters_major',
-            'masters_completion_date', 'masters_certificate',
+        ("Master's / Postgraduate", [
+            'has_masters', 'masters_institution', 'masters_degree_name',
+            'masters_major', 'masters_completion_date', 'masters_certificate',
         ]),
         ("Undergraduate / Bachelor's", [
             'bachelors_institution', 'bachelors_degree_name', 'bachelors_major',
@@ -608,18 +626,18 @@ STEP_GROUPS = {
     'employer_1': _employer_groups(1),
     'employer_2': _employer_groups(2),
     'employer_3': _employer_groups(3),
-    'employer_4': _employer_groups(4),
+    'employer_4': _employer_groups(4) + [
+        ('More than four employers', ['additional_employment_history']),
+    ],
+    'reference_1': _reference_groups(1),
+    'reference_2': _reference_groups(2),
     'd7_declaration': [
         ('Experience & availability', [
             'total_experience_years', 'notice_period_days',
             'earliest_joining_date', 'availability_status',
         ]),
-        ('Your current role', [
-            'current_responsibilities', 'measurable_achievements',
-        ]),
-        ('Declaration', [
-            'declaration_agreement', 'typed_signature', 'declaration_date',
-        ]),
+        ('Your current role', ['current_responsibilities', 'measurable_achievements']),
+        ('Declaration', ['declaration_agreement', 'typed_signature', 'declaration_date']),
     ],
 }
 
@@ -629,9 +647,7 @@ STEPS_BY_KEY = {step['key']: step for step in STEPS}
 FIRST_STEP = STEPS[0]['key']
 FINAL_STEP = 'd7_declaration'
 
-QUESTIONS_BY_KEY = {
-    q['key']: q for step in STEPS for q in step['questions']
-}
+QUESTIONS_BY_KEY = {q['key']: q for step in STEPS for q in step['questions']}
 
 FILE_QUESTION_KEYS = frozenset(
     q['key'] for q in QUESTIONS_BY_KEY.values() if q['type'] in FILE_TYPES
@@ -643,11 +659,7 @@ def get_step(step_key):
 
 
 def next_step_key(step_key, answers):
-    """Resolve the step after `step_key`, skipping sections that have no questions.
-
-    Empty sections are the D2-D6 placeholders; skipping them here means a
-    candidate never lands on a blank page while those pages are still missing.
-    """
+    """Resolve the step after `step_key`, skipping any section with no questions."""
     seen = set()
     current = step_key
     while True:
@@ -671,11 +683,10 @@ def next_step_key(step_key, answers):
 
 
 def step_path(answers):
-    """The ordered list of step keys this candidate's answers actually lead through.
+    """The ordered step keys these answers lead through.
 
-    Used for Back navigation and progress ("step 4 of 12"): with branching, the
-    path length depends on the answers, so it is replayed from the start rather
-    than assumed.
+    Replayed from the start rather than assumed, because Section D branches on
+    the chosen department.
     """
     path = [FIRST_STEP]
     guard = 0
@@ -689,11 +700,7 @@ def step_path(answers):
 
 
 def numbered_questions(step_key, answers):
-    """Questions for a step, each with the number shown to the candidate.
-
-    Numbering is sequential over the candidate's own path so it always reads
-    1, 2, 3... with no gaps, regardless of the Google Form's numbering quirks.
-    """
+    """A step's questions, each with the number shown to the candidate."""
     path = step_path(answers)
     number = 1
     for key in path:
@@ -701,29 +708,19 @@ def numbered_questions(step_key, answers):
         if key != step_key:
             number += len(step['questions'])
             continue
-        return [dict(q, number=number + offset) for offset, q in enumerate(step['questions'])]
-    # Step is off the current path (e.g. answers changed) -- number from 1.
+        return [dict(q, number=number + offset)
+                for offset, q in enumerate(step['questions'])]
     step = STEPS_BY_KEY.get(step_key)
     if not step:
         return []
     return [dict(q, number=offset + 1) for offset, q in enumerate(step['questions'])]
 
 
-def choice_label(question_key, value):
-    """Human-readable label for a stored choice value."""
-    q = QUESTIONS_BY_KEY.get(question_key)
-    if not q or 'choices' not in q:
-        return value
-    return dict(q['choices']).get(value, value)
-
-
 def question_groups(step_key, answers):
     """A step's questions arranged into titled blocks for rendering.
 
-    Falls back to one untitled block when the step has no entry in
-    STEP_GROUPS, so a new section works without touching this file twice.
-    Any question missing from the group definition is appended rather than
-    silently dropped — a typo in STEP_GROUPS must not hide a question.
+    Any question missing from STEP_GROUPS is appended rather than dropped -- a
+    typo there must not hide a question.
     """
     questions = numbered_questions(step_key, answers)
     by_key = {q['key']: q for q in questions}
@@ -747,24 +744,32 @@ def question_groups(step_key, answers):
 
 def is_half_width(question) -> bool:
     """Whether a control should share its row with the next one."""
-    if question['type'] in (TEXTAREA, CHECKBOX, RADIO) or question['type'] in FILE_TYPES:
+    if question['type'] in FILE_TYPES or question['type'] in (TEXTAREA, CHECKBOX, RADIO):
         return False
     return question['key'] in HALF_WIDTH_KEYS
 
 
+def choice_label(question_key, value):
+    """Human-readable label for a stored choice value."""
+    q = QUESTIONS_BY_KEY.get(question_key)
+    if not q or 'choices' not in q:
+        return value
+    return dict(q['choices']).get(value, value)
+
+
 # Labels shortened for the wizard only, where the group heading already carries
 # the context ("MASTER'S / POSTGRADUATE" above "Institution / University Name").
-# The full label from the source form stays authoritative everywhere the heading
-# is absent -- the recruiter review page, CSV export, the admin.
+# The full label stays authoritative everywhere the heading is absent -- the
+# recruiter review page, CSV export, the admin.
 def _short_labels():
     out = {}
     for prefix, keys in [
         ("Master's / Postgraduate Degree — ", [
-            'masters_institution', 'masters_degree_name', 'masters_major',
-            'masters_completion_date', 'masters_certificate']),
+            'has_masters', 'masters_institution', 'masters_degree_name',
+            'masters_major', 'masters_completion_date', 'masters_certificate']),
         ("Undergraduate / Bachelor's Degree — ", [
             'bachelors_institution', 'bachelors_degree_name', 'bachelors_major',
-            'bachelors_certificate']),
+            'bachelors_completion_date', 'bachelors_certificate']),
         ('HSC / A Level / Equivalent — ', [
             'hsc_institution', 'hsc_board', 'hsc_passing_year', 'hsc_result',
             'hsc_certificate']),
@@ -777,18 +782,17 @@ def _short_labels():
             if label.startswith(prefix):
                 out[key] = label[len(prefix):]
 
-    # "Undergraduate / Bachelor's Degree - Completion date." uses a hyphen, not
-    # the em dash the sibling labels use, so it needs its own entry.
-    out['bachelors_completion_date'] = 'Completion date'
-
     for index in range(1, 5):
         out[f'employer_{index}_name'] = 'Employer name'
         out[f'employer_{index}_hr_contact'] = 'HR / official contact number'
         out[f'employer_{index}_hr_email'] = 'HR / official email address'
         out[f'employer_{index}_position'] = 'Your position / designation'
-        out[f'employer_{index}_start_date'] = 'Start date'
-        out[f'employer_{index}_end_date'] = 'End date'
+        out[f'employer_{index}_start_date'] = 'Claimed start date'
+        out[f'employer_{index}_end_date'] = 'Claimed end date'
         out[f'employer_{index}_reason_leaving'] = 'Reason for leaving'
+        out[f'employer_{index}_contact_permission'] = (
+            'May we contact this employer for verification?'
+        )
 
     for index in (1, 2):
         out[f'reference_{index}_name'] = 'Name'
@@ -796,6 +800,7 @@ def _short_labels():
         out[f'reference_{index}_relationship'] = 'Relationship to you'
         out[f'reference_{index}_contact'] = 'Contact number'
         out[f'reference_{index}_email'] = 'Official / work email address'
+        out[f'reference_{index}_contact_permission'] = 'May we contact this reference?'
 
     return out
 

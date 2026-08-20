@@ -72,10 +72,9 @@ KEY_FACT_KEYS = [
 ]
 
 # Sections rendered by the purpose-built blocks above, so the generic list must
-# not repeat them. `employment_gate` is only the fresher yes/no, which the
-# employment block already states in words.
+# not repeat them.
 SPECIALISED_STEPS = frozenset(
-    {'section_b', 'employment_gate', 'reference_1', 'reference_2'}
+    {'section_b', 'reference_1', 'reference_2'}
     | {f'employer_{i}' for i in range(1, 5)}
 )
 
@@ -148,8 +147,12 @@ def training(form):
 
 
 def employers(form):
-    """One card per employer the candidate actually declared."""
-    answers = form.answers or {}
+    """One card per employer the candidate actually declared.
+
+    Employers 2-4 are optional, so a candidate with one previous job produces one
+    card rather than three empty ones. `may_contact` matters to whoever runs the
+    background check: a "No" means that employer must not be approached.
+    """
     out = []
     for index in range(1, 5):
         name = _value(form, f'employer_{index}_name')
@@ -164,9 +167,13 @@ def employers(form):
             'reason': _value(form, f'employer_{index}_reason_leaving'),
             'hr_contact': _value(form, f'employer_{index}_hr_contact'),
             'hr_email': _value(form, f'employer_{index}_hr_email'),
+            'may_contact': (form.answers or {}).get(
+                f'employer_{index}_contact_permission', ''),
         })
-    is_fresher = answers.get('has_employment') == 'no'
-    return {'items': out, 'is_fresher': is_fresher}
+    return {
+        'items': out,
+        'additional': _value(form, 'additional_employment_history'),
+    }
 
 
 def references(form):
@@ -183,6 +190,8 @@ def references(form):
             'relationship': _value(form, f'reference_{index}_relationship'),
             'contact': _value(form, f'reference_{index}_contact'),
             'email': _value(form, f'reference_{index}_email'),
+            'may_contact': (form.answers or {}).get(
+                f'reference_{index}_contact_permission', ''),
         })
     return out
 

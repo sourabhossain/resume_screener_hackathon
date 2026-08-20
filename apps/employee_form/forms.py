@@ -70,6 +70,15 @@ DATE_RANGE_PAIRS = tuple(
     (f'employer_{i}_start_date', f'employer_{i}_end_date') for i in range(1, 5)
 )
 
+# An employer block is all-or-nothing: naming an employer commits you to the rest
+# of it. No block is required outright, so a fresher submits them all blank —
+# but a half-filled employer would go to a background-check agency with no way to
+# reach them, which is worse than no entry at all.
+EMPLOYER_REQUIRED_ONCE_NAMED = (
+    'hr_contact', 'hr_email', 'position', 'start_date', 'end_date',
+    'contact_permission',
+)
+
 
 def _validate_upload(upload):
     """Size, extension and magic-byte checks for one uploaded document."""
@@ -245,7 +254,25 @@ class StepForm(AriaInvalidMixin, forms.Form):
             if start and end and end < start:
                 self.add_error(end_key, 'The end date cannot be before the start date.')
 
+        self._validate_employer_block(cleaned)
         return cleaned
+
+    def _validate_employer_block(self, cleaned):
+        """Naming an employer makes the rest of that employer required."""
+        for index in range(1, 5):
+            name_key = f'employer_{index}_name'
+            if name_key not in self.fields:
+                continue
+            if not (cleaned.get(name_key) or '').strip():
+                continue
+            for suffix in EMPLOYER_REQUIRED_ONCE_NAMED:
+                key = f'employer_{index}_{suffix}'
+                if key in self.fields and not cleaned.get(key):
+                    self.add_error(
+                        key,
+                        'Required once you name this employer. Clear the employer '
+                        'name to skip this section.',
+                    )
 
     def question_fields(self):
         """(question, bound field) pairs in schema order.
