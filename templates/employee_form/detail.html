@@ -1,112 +1,335 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block title %}Information form · {{ resume.candidate_name|title }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-4xl pb-16">
+<style>
+    @media print {
+        nav, header, footer, .print\:hidden { display: none !important; }
+        body { background: #fff; }
+        .ef-card { break-inside: avoid; box-shadow: none !important; }
+    }
+    .ef-anchor { scroll-margin-top: 5.5rem; }
+</style>
 
-    <nav class="mb-6 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
-        <a href="{% url 'core:job_detail' slug=resume.job.slug %}" class="rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
-            {{ resume.job.title|truncatechars:34 }}
+{{ documents_json|json_script:"ef-documents" }}
+
+<div x-data="{
+        viewerOpen: false,
+        index: 0,
+        docs: JSON.parse(document.getElementById('ef-documents').textContent),
+        get current() { return this.docs[this.index] || {}; },
+        openViewer(i) { this.index = i; this.viewerOpen = true; document.body.style.overflow = 'hidden'; },
+        closeViewer() { this.viewerOpen = false; document.body.style.overflow = ''; },
+        nextDoc() { if (this.docs.length) this.index = (this.index + 1) % this.docs.length; },
+        prevDoc() { if (this.docs.length) this.index = (this.index - 1 + this.docs.length) % this.docs.length; }
+     }">
+
+<div class="mx-auto max-w-5xl pb-20">
+
+    <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm print:hidden" aria-label="Breadcrumb">
+        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to {{ resume.candidate_name|title|truncatechars:24 }}
         </a>
-        <svg class="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-        </svg>
-        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}" class="rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
-            {{ resume.candidate_name|title }}
-        </a>
-        <svg class="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-        </svg>
-        <span class="truncate px-1 font-semibold text-zinc-900 dark:text-white">Information form</span>
     </nav>
 
-    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+    <header class="ef-card overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
         <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
-        <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">Employee Information Form</h1>
-                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    {{ resume.candidate_name|title }} &middot; {{ resume.job.title }}
+
+        <div class="flex flex-wrap items-start justify-between gap-4 px-6 pt-6">
+            <div class="min-w-0">
+                <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-primary-600 dark:text-primary-400">
+                    Employee Information Form
+                </p>
+                <h1 class="mt-1 truncate text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                    {{ resume.candidate_name|title }}
+                </h1>
+                <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                    {{ resume.job.title }}
+                    {% if form_obj.submitted_at %}
+                    <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+                    submitted {{ form_obj.submitted_at|naturaltime }}
+                    {% endif %}
                 </p>
             </div>
-            {% include 'employee_form/partials/status_chip.html' %}
+
+            <div class="flex flex-wrap items-center gap-2">
+                {% include 'employee_form/partials/status_chip.html' %}
+                <button type="button" onclick="window.print()"
+                        class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 print:hidden">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    Print
+                </button>
+            </div>
         </div>
 
-        <dl class="grid grid-cols-2 gap-px border-t border-zinc-100 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800 sm:grid-cols-4">
-            <div class="bg-white px-5 py-4 dark:bg-zinc-900">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Invite sent</dt>
-                <dd class="mt-1 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                    {% if form_obj.invited_at %}{{ form_obj.invited_at|date:"j M Y" }}{% else %}—{% endif %}
-                </dd>
+        {% if review.key_facts %}
+        <dl class="mt-5 flex flex-wrap gap-x-8 gap-y-4 border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+            {% for fact in review.key_facts %}
+            <div>
+                <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">{{ fact.label }}</dt>
+                <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ fact.value }}</dd>
             </div>
-            <div class="bg-white px-5 py-4 dark:bg-zinc-900">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Times sent</dt>
-                <dd class="mt-1 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ form_obj.invite_count }}</dd>
-            </div>
-            <div class="bg-white px-5 py-4 dark:bg-zinc-900">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Submitted</dt>
-                <dd class="mt-1 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                    {% if form_obj.submitted_at %}{{ form_obj.submitted_at|date:"j M Y" }}{% else %}—{% endif %}
-                </dd>
-            </div>
-            <div class="bg-white px-5 py-4 dark:bg-zinc-900">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Progress</dt>
-                <dd class="mt-1 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                    {% if form_obj.is_submitted %}Complete{% else %}Step {{ form_obj.step_number }} of {{ form_obj.total_steps }}{% endif %}
-                </dd>
-            </div>
+            {% endfor %}
         </dl>
-    </div>
+        {% endif %}
+
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-zinc-100 bg-zinc-50/70 px-6 py-3 text-xs dark:border-zinc-800 dark:bg-zinc-900/60">
+            <span class="inline-flex items-center gap-1.5 font-semibold {% if form_obj.declaration_summary == 'I Agree' %}text-emerald-700 dark:text-emerald-400{% elif form_obj.declaration_summary == 'I Do Not Agree' %}text-rose-700 dark:text-rose-400{% else %}text-zinc-400{% endif %}">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Declaration: {{ form_obj.declaration_summary }}
+            </span>
+            <span class="text-zinc-500 dark:text-zinc-400">{{ documents|length }} document{{ documents|length|pluralize }}</span>
+            {% if form_obj.invited_at %}
+            <span class="text-zinc-500 dark:text-zinc-400">
+                Invited {{ form_obj.invited_at|date:"j M Y" }}{% if form_obj.invite_count > 1 %} ({{ form_obj.invite_count }}×){% endif %}
+            </span>
+            {% endif %}
+        </div>
+    </header>
 
     {% if not form_obj.is_submitted %}
-    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-        <p class="text-sm font-semibold text-amber-900 dark:text-amber-300">Not submitted yet</p>
-        <p class="mt-1 text-sm leading-relaxed text-amber-800 dark:text-amber-400">
-            The answers below are what the candidate has filled in so far and may still change.
-        </p>
+    <div class="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div>
+            <p class="text-sm font-semibold text-amber-900 dark:text-amber-300">Still in progress — not submitted</p>
+            <p class="mt-0.5 text-sm text-amber-800 dark:text-amber-400">
+                At step {{ form_obj.step_number }} of {{ form_obj.total_steps }}. Anything below may still change.
+            </p>
+        </div>
     </div>
     {% endif %}
 
-    {% for section in sections %}
-    <div class="mt-4 overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-        <div class="border-b border-zinc-100 bg-zinc-50/80 px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-            <h2 class="text-sm font-bold text-zinc-900 dark:text-white">{{ section.section }}</h2>
+    {% if documents %}
+    <section id="documents" class="ef-anchor ef-card mt-4 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="flex items-center justify-between px-6 pt-5">
+            <h2 class="text-base font-bold text-zinc-900 dark:text-white">Documents</h2>
+            <span class="text-xs text-zinc-400 print:hidden">Click to view &middot; ← → to page</span>
         </div>
-
-        <dl class="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {% for row in section.rows %}
-            <div class="px-5 py-3.5 sm:flex sm:gap-6">
-                <dt class="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400 sm:w-1/2 sm:shrink-0">
-                    <span class="text-zinc-400 dark:text-zinc-600">{{ row.number }}.</span> {{ row.label }}
-                </dt>
-                <dd class="mt-1 text-sm font-medium leading-relaxed text-zinc-900 dark:text-zinc-100 sm:mt-0 sm:flex-1">
-                    {% if row.files %}
-                        <ul class="space-y-1.5">
-                        {% for upload in row.files %}
-                            <li>
-                                <a href="{{ upload.file.url }}" target="_blank" rel="noopener"
-                                   class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-300">
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                                    {{ upload.original_name|default:"Document"|truncatechars:44 }}
-                                </a>
-                            </li>
-                        {% endfor %}
-                        </ul>
-                    {% elif row.value %}
-                        <span class="whitespace-pre-line">{{ row.value }}</span>
+        <div class="grid grid-cols-2 gap-3 p-6 sm:grid-cols-3 lg:grid-cols-4">
+            {% for doc in documents %}
+            <button type="button" @click="openViewer({{ doc.position }})"
+                    class="group overflow-hidden rounded-xl border border-zinc-200 text-left transition hover:border-primary-400 hover:shadow-md dark:border-zinc-700 dark:hover:border-primary-600">
+                <div class="flex h-24 items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-950/60">
+                    {% if doc.kind == 'image' %}
+                    <img src="{{ doc.view_url }}" alt="{{ doc.label }}" class="h-full w-full object-cover transition group-hover:scale-[1.04]">
                     {% else %}
-                        <span class="text-zinc-300 dark:text-zinc-600">Not answered</span>
+                    <span class="rounded-md bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 shadow-sm dark:bg-zinc-800 dark:text-zinc-400">{{ doc.extension }}</span>
+                    {% endif %}
+                </div>
+                <div class="px-3 py-2">
+                    <p class="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">{{ doc.label }}</p>
+                    <p class="mt-0.5 truncate text-[11px] text-zinc-400">{{ doc.size_display }}</p>
+                </div>
+            </button>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section id="education" class="ef-anchor ef-card mt-4 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <h2 class="px-6 pt-5 text-base font-bold text-zinc-900 dark:text-white">Education</h2>
+
+        {% if review.education %}
+        <div class="mt-4 overflow-x-auto">
+            <table class="w-full min-w-[46rem] text-sm">
+                <thead>
+                    <tr class="border-y border-zinc-100 bg-zinc-50/70 text-left dark:border-zinc-800 dark:bg-zinc-900/60">
+                        <th class="px-6 py-2.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Level</th>
+                        <th class="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Institution</th>
+                        <th class="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Degree / Board</th>
+                        <th class="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Result</th>
+                        <th class="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Finished</th>
+                        <th class="px-6 py-2.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Certificate</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {% for row in review.education %}
+                    <tr>
+                        <td class="px-6 py-3 font-semibold text-zinc-900 dark:text-zinc-100">{{ row.level }}</td>
+                        <td class="px-4 py-3 text-zinc-700 dark:text-zinc-300">{{ row.institution|default:"—" }}</td>
+                        <td class="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                            {{ row.qualification|default:"—" }}
+                            {% if row.major %}<span class="block text-xs text-zinc-400">{{ row.major }}</span>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">{{ row.result|default:"—" }}</td>
+                        <td class="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">{{ row.finished|default:"—" }}</td>
+                        <td class="px-6 py-3">
+                            {% for upload in row.files %}
+                            <button type="button" @click="openViewer({{ upload.position }})"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-300">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                View
+                            </button>
+                            {% empty %}
+                            <span class="text-xs text-zinc-300 dark:text-zinc-600">Not uploaded</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="px-6 py-5 text-sm text-zinc-400">No education details provided.</p>
+        {% endif %}
+
+        {% if review.training.names or review.training.files %}
+        <div class="border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+            <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Training & certifications</p>
+            {% if review.training.names %}
+            <p class="mt-1.5 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{{ review.training.names }}</p>
+            {% endif %}
+            {% if review.training.files %}
+            <div class="mt-2 flex flex-wrap gap-2">
+                {% for upload in review.training.files %}
+                <button type="button" @click="openViewer({{ upload.position }})"
+                        class="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-300">
+                    <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    <span class="truncate">{{ upload.original_name|default:"Document"|truncatechars:34 }}</span>
+                </button>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+
+    <section id="employment" class="ef-anchor mt-4">
+        <h2 class="px-1 pb-3 text-base font-bold text-zinc-900 dark:text-white">Employment history</h2>
+
+        {% if review.employers.items %}
+        <div class="grid gap-3 sm:grid-cols-2">
+            {% for job in review.employers.items %}
+            <div class="ef-card rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+                <div class="flex items-baseline justify-between gap-3">
+                    <h3 class="min-w-0 truncate font-bold text-zinc-900 dark:text-white">{{ job.name }}</h3>
+                    <span class="shrink-0 text-[11px] font-bold uppercase tracking-wide text-zinc-400">#{{ job.index }}</span>
+                </div>
+                <p class="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{{ job.position }}</p>
+                <p class="mt-1 text-xs tabular-nums text-zinc-500 dark:text-zinc-500">
+                    {{ job.start|default:"—" }} &rarr; {{ job.end|default:"—" }}
+                </p>
+
+                {% if job.reason %}
+                <p class="mt-3 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Reason for leaving</span><br>
+                    {{ job.reason }}
+                </p>
+                {% endif %}
+
+                <dl class="mt-3 space-y-1 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
+                    <div class="flex gap-2">
+                        <dt class="shrink-0 text-zinc-400">HR contact</dt>
+                        <dd class="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-200">{{ job.hr_contact|default:"—" }}</dd>
+                    </div>
+                    <div class="flex gap-2">
+                        <dt class="shrink-0 text-zinc-400">HR email</dt>
+                        <dd class="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-200">{{ job.hr_email|default:"—" }}</dd>
+                    </div>
+                </dl>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
+            <p class="text-sm text-zinc-600 dark:text-zinc-400">
+                {% if review.employers.is_fresher %}
+                The candidate declared no previous employment — applying as a fresher.
+                {% else %}
+                No employment history provided.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </section>
+
+    {% if review.references %}
+    <section id="references" class="ef-anchor mt-4">
+        <h2 class="px-1 pb-3 text-base font-bold text-zinc-900 dark:text-white">Professional references</h2>
+        <div class="grid gap-3 sm:grid-cols-2">
+            {% for ref in review.references %}
+            <div class="ef-card rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+                <div class="flex items-start gap-3">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                        {{ ref.name|slice:":1"|upper }}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="truncate font-bold text-zinc-900 dark:text-white">{{ ref.name }}</h3>
+                        <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ ref.designation }}</p>
+                    </div>
+                </div>
+                {% if ref.relationship %}
+                <span class="mt-3 inline-block rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    {{ ref.relationship }}
+                </span>
+                {% endif %}
+                <dl class="mt-3 space-y-1 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
+                    <div class="flex gap-2">
+                        <dt class="shrink-0 text-zinc-400">Phone</dt>
+                        <dd class="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-200">{{ ref.contact|default:"—" }}</dd>
+                    </div>
+                    <div class="flex gap-2">
+                        <dt class="shrink-0 text-zinc-400">Email</dt>
+                        <dd class="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-200">{{ ref.email|default:"—" }}</dd>
+                    </div>
+                </dl>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% for section in review.narrative %}
+    <section id="{{ section.key }}" class="ef-anchor ef-card mt-4 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <h2 class="px-6 pt-5 text-base font-bold text-zinc-900 dark:text-white">{{ section.title }}</h2>
+
+        <dl class="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {% for row in section.answered %}
+            <div class="px-6 py-3.5 sm:grid sm:grid-cols-5 sm:gap-6">
+                <dt class="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400 sm:col-span-2">{{ row.label }}</dt>
+                <dd class="mt-1 min-w-0 text-sm font-medium leading-relaxed text-zinc-900 dark:text-zinc-100 sm:col-span-3 sm:mt-0">
+                    {% if row.files %}
+                    <div class="flex flex-wrap gap-2">
+                        {% for upload in row.files %}
+                        <button type="button" @click="openViewer({{ upload.position }})"
+                                class="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-300">
+                            <span class="truncate">{{ upload.original_name|default:"Document"|truncatechars:34 }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="whitespace-pre-line break-words">{{ row.value }}</span>
                     {% endif %}
                 </dd>
             </div>
             {% endfor %}
         </dl>
-    </div>
-    {% empty %}
-    <div class="mt-4 rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-        <p class="text-sm text-zinc-500 dark:text-zinc-400">The candidate has not answered anything yet.</p>
-    </div>
+
+        {% if section.missing %}
+        <div x-data="{ open: false }" class="border-t border-zinc-100 dark:border-zinc-800">
+            <button type="button" @click="open = !open"
+                    class="flex w-full items-center gap-2 px-6 py-3 text-left text-xs font-semibold text-zinc-400 transition hover:text-zinc-600 dark:hover:text-zinc-300 print:hidden">
+                <svg class="h-3.5 w-3.5 transition-transform" :class="open && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                {{ section.missing|length }} question{{ section.missing|length|pluralize }} left unanswered
+            </button>
+            <dl x-show="open" x-cloak class="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
+                {% for row in section.missing %}
+                <div class="px-6 py-2.5 sm:grid sm:grid-cols-5 sm:gap-6">
+                    <dt class="text-sm text-zinc-400 sm:col-span-2">{{ row.label }}</dt>
+                    <dd class="text-sm text-zinc-300 dark:text-zinc-600 sm:col-span-3">Not answered</dd>
+                </div>
+                {% endfor %}
+            </dl>
+        </div>
+        {% endif %}
+    </section>
     {% endfor %}
+</div>
+
+{% include 'employee_form/partials/document_viewer.html' %}
 </div>
 {% endblock %}

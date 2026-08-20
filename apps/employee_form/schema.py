@@ -524,6 +524,106 @@ STEPS += [
 ]
 
 
+# ── Presentation hints ───────────────────────────────────────────────────
+# Kept out of the question dicts so the 130-odd definitions above stay about
+# *what* is asked, not how it is laid out.
+
+# Fields short enough to sit two-per-row instead of spanning the form. Anything
+# not listed gets a full-width control.
+HALF_WIDTH_KEYS = frozenset({
+    'mobile_number', 'personal_email', 'nid_number', 'birth_certificate_number',
+    'date_of_birth', 'position_applied_for',
+    'masters_completion_date', 'bachelors_completion_date',
+    'hsc_board', 'hsc_passing_year', 'hsc_result',
+    'ssc_board', 'ssc_passing_year', 'ssc_result',
+    'total_experience_years', 'notice_period_days', 'earliest_joining_date',
+    'declaration_date', 'typed_signature',
+    'sales_target_achievement', 'sales_cycle_length',
+    'team_headcount',
+    *(f'employer_{i}_hr_contact' for i in range(1, 5)),
+    *(f'employer_{i}_hr_email' for i in range(1, 5)),
+    *(f'employer_{i}_start_date' for i in range(1, 5)),
+    *(f'employer_{i}_end_date' for i in range(1, 5)),
+    *(f'reference_{i}_contact' for i in range(1, 3)),
+    *(f'reference_{i}_email' for i in range(1, 3)),
+})
+
+
+def _employer_groups(index):
+    return [
+        (f'Employer {index}', [
+            f'employer_{index}_name',
+            f'employer_{index}_hr_contact',
+            f'employer_{index}_hr_email',
+        ]),
+        ('Your role there', [
+            f'employer_{index}_position',
+            f'employer_{index}_start_date',
+            f'employer_{index}_end_date',
+            f'employer_{index}_reason_leaving',
+        ]),
+        ('', [f'employer_{index}_another']),
+    ]
+
+
+# Sub-headings inside a step, so a 24-question page reads as a handful of short
+# blocks. A step absent from here renders as one ungrouped block.
+STEP_GROUPS = {
+    'section_a': [
+        ('Your details', [
+            'candidate_full_name', 'date_of_birth',
+            'nid_number', 'birth_certificate_number',
+        ]),
+        ('How we reach you', [
+            'mobile_number', 'personal_email', 'position_applied_for',
+        ]),
+        ('Addresses', [
+            'present_address', 'permanent_address', 'address_same',
+        ]),
+        ('Identity documents', ['nid_copy', 'birth_certificate_copy']),
+        ('Consent', ['verification_consent']),
+    ],
+    'section_b': [
+        ('', ['highest_degree']),
+        ("Master's / Postgraduate  ·  optional", [
+            'masters_institution', 'masters_degree_name', 'masters_major',
+            'masters_completion_date', 'masters_certificate',
+        ]),
+        ("Undergraduate / Bachelor's", [
+            'bachelors_institution', 'bachelors_degree_name', 'bachelors_major',
+            'bachelors_completion_date', 'bachelors_certificate',
+        ]),
+        ('HSC / A Level / Equivalent', [
+            'hsc_institution', 'hsc_board', 'hsc_passing_year', 'hsc_result',
+            'hsc_certificate',
+        ]),
+        ('SSC / O Level / Equivalent', [
+            'ssc_institution', 'ssc_board', 'ssc_passing_year', 'ssc_result',
+            'ssc_certificate',
+        ]),
+        ('Training & professional certifications', [
+            'training_certification_names', 'training_certificates',
+        ]),
+    ],
+    'employer_1': _employer_groups(1),
+    'employer_2': _employer_groups(2),
+    'employer_3': _employer_groups(3),
+    'employer_4': _employer_groups(4),
+    'd7_declaration': [
+        ('Experience & availability', [
+            'total_experience_years', 'notice_period_days',
+            'earliest_joining_date', 'availability_status',
+        ]),
+        ('Your current role', [
+            'current_responsibilities', 'measurable_achievements',
+        ]),
+        ('Declaration', [
+            'declaration_agreement', 'typed_signature', 'declaration_date',
+        ]),
+    ],
+}
+
+
 # ── Lookups and traversal ────────────────────────────────────────────────
 STEPS_BY_KEY = {step['key']: step for step in STEPS}
 FIRST_STEP = STEPS[0]['key']
@@ -615,3 +715,94 @@ def choice_label(question_key, value):
     if not q or 'choices' not in q:
         return value
     return dict(q['choices']).get(value, value)
+
+
+def question_groups(step_key, answers):
+    """A step's questions arranged into titled blocks for rendering.
+
+    Falls back to one untitled block when the step has no entry in
+    STEP_GROUPS, so a new section works without touching this file twice.
+    Any question missing from the group definition is appended rather than
+    silently dropped — a typo in STEP_GROUPS must not hide a question.
+    """
+    questions = numbered_questions(step_key, answers)
+    by_key = {q['key']: q for q in questions}
+
+    groups = STEP_GROUPS.get(step_key)
+    if not groups:
+        return [{'title': '', 'questions': questions}]
+
+    out, placed = [], set()
+    for title, keys in groups:
+        block = [by_key[k] for k in keys if k in by_key]
+        placed.update(k for k in keys if k in by_key)
+        if block:
+            out.append({'title': title, 'questions': block})
+
+    leftover = [q for q in questions if q['key'] not in placed]
+    if leftover:
+        out.append({'title': '', 'questions': leftover})
+    return out
+
+
+def is_half_width(question) -> bool:
+    """Whether a control should share its row with the next one."""
+    if question['type'] in (TEXTAREA, CHECKBOX, RADIO) or question['type'] in FILE_TYPES:
+        return False
+    return question['key'] in HALF_WIDTH_KEYS
+
+
+# Labels shortened for the wizard only, where the group heading already carries
+# the context ("MASTER'S / POSTGRADUATE" above "Institution / University Name").
+# The full label from the source form stays authoritative everywhere the heading
+# is absent -- the recruiter review page, CSV export, the admin.
+def _short_labels():
+    out = {}
+    for prefix, keys in [
+        ("Master's / Postgraduate Degree — ", [
+            'masters_institution', 'masters_degree_name', 'masters_major',
+            'masters_completion_date', 'masters_certificate']),
+        ("Undergraduate / Bachelor's Degree — ", [
+            'bachelors_institution', 'bachelors_degree_name', 'bachelors_major',
+            'bachelors_certificate']),
+        ('HSC / A Level / Equivalent — ', [
+            'hsc_institution', 'hsc_board', 'hsc_passing_year', 'hsc_result',
+            'hsc_certificate']),
+        ('SSC / O Level / Equivalent — ', [
+            'ssc_institution', 'ssc_board', 'ssc_passing_year', 'ssc_result',
+            'ssc_certificate']),
+    ]:
+        for key in keys:
+            label = QUESTIONS_BY_KEY[key]['label']
+            if label.startswith(prefix):
+                out[key] = label[len(prefix):]
+
+    # "Undergraduate / Bachelor's Degree - Completion date." uses a hyphen, not
+    # the em dash the sibling labels use, so it needs its own entry.
+    out['bachelors_completion_date'] = 'Completion date'
+
+    for index in range(1, 5):
+        out[f'employer_{index}_name'] = 'Employer name'
+        out[f'employer_{index}_hr_contact'] = 'HR / official contact number'
+        out[f'employer_{index}_hr_email'] = 'HR / official email address'
+        out[f'employer_{index}_position'] = 'Your position / designation'
+        out[f'employer_{index}_start_date'] = 'Start date'
+        out[f'employer_{index}_end_date'] = 'End date'
+        out[f'employer_{index}_reason_leaving'] = 'Reason for leaving'
+
+    for index in (1, 2):
+        out[f'reference_{index}_name'] = 'Name'
+        out[f'reference_{index}_designation'] = 'Designation & company'
+        out[f'reference_{index}_relationship'] = 'Relationship to you'
+        out[f'reference_{index}_contact'] = 'Contact number'
+        out[f'reference_{index}_email'] = 'Official / work email address'
+
+    return out
+
+
+SHORT_LABELS = _short_labels()
+
+
+def wizard_label(question) -> str:
+    """The label to show on the candidate form."""
+    return SHORT_LABELS.get(question['key'], question['label'])

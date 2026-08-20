@@ -445,3 +445,43 @@ def test_prefilled_values_are_stored_when_the_step_is_submitted(client, candidat
 
     form.refresh_from_db()
     assert form.answers['position_applied_for'] == candidate.job.title
+
+
+# ── Layout metadata ──────────────────────────────────────────────────────
+def test_grouping_never_drops_a_question():
+    """A typo in STEP_GROUPS must not silently hide a question."""
+    for step in schema.STEPS:
+        if not step['questions']:
+            continue
+        grouped = schema.question_groups(step['key'], {})
+        keys = [q['key'] for block in grouped for q in block['questions']]
+        assert sorted(keys) == sorted(q['key'] for q in step['questions']), step['key']
+        assert len(keys) == len(set(keys)), f"{step['key']} renders a question twice"
+
+
+def test_short_labels_only_shorten_never_invent():
+    """Every wizard label must be derived from the source label, not replaced."""
+    for key, short in schema.SHORT_LABELS.items():
+        assert key in schema.QUESTIONS_BY_KEY, key
+        assert short.strip(), key
+        full = schema.QUESTIONS_BY_KEY[key]['label']
+        assert len(short) <= len(full), f'{key}: short label is longer than the source'
+
+
+def test_full_labels_survive_on_the_review_page(client, candidate):
+    """The recruiter view has no group headings, so it keeps the source wording."""
+    form = issue_invite(candidate)
+    form.answers = {'hsc_board': 'Dhaka'}
+    form.save(update_fields=['answers'])
+
+    rows = [r for s in form.answered_sections() for r in s['rows']]
+    labels = {r['key']: r['label'] for r in rows}
+    assert labels['hsc_board'] == 'HSC / A Level / Equivalent — Education Board'
+
+
+def test_wide_fields_are_never_half_width():
+    """Textareas, radios and uploads always take a full row."""
+    for question in schema.QUESTIONS_BY_KEY.values():
+        if question['type'] in schema.FILE_TYPES or question['type'] in (
+                schema.TEXTAREA, schema.RADIO, schema.CHECKBOX):
+            assert not schema.is_half_width(question), question['key']

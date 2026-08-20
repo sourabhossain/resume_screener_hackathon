@@ -446,12 +446,26 @@ def serve_protected_media(request, path):
         raise Http404
     if not os.path.exists(full_path):
         raise Http404
-    # Inline only for PDFs (safe to render); everything else stays a download.
-    inline = request.GET.get('inline') == '1' and full_path.lower().endswith('.pdf')
+    # Inline rendering is opt-in per request and restricted to formats a browser
+    # displays without executing anything author-controlled. Images are included
+    # so recruiters can actually look at an NID scan or certificate photo instead
+    # of downloading it. SVG and HTML are deliberately absent — both can carry
+    # script and would run against this origin. Office documents stay downloads
+    # because no browser renders them anyway.
+    INLINE_SAFE_SUFFIXES = ('.pdf', '.jpg', '.jpeg', '.png', '.webp')
+    inline = (
+        request.GET.get('inline') == '1'
+        and full_path.lower().endswith(INLINE_SAFE_SUFFIXES)
+    )
     response = FileResponse(open(full_path, 'rb'), as_attachment=not inline)
     if inline:
         response['X-Frame-Options'] = 'SAMEORIGIN'
-        response['Content-Security-Policy'] = "frame-ancestors 'self'"
+        response['Content-Security-Policy'] = (
+            "default-src 'none'; img-src 'self'; object-src 'self'; "
+            "frame-ancestors 'self'"
+        )
+        # Stop a mislabelled file from being sniffed into something executable.
+        response['X-Content-Type-Options'] = 'nosniff'
     return response
 
 

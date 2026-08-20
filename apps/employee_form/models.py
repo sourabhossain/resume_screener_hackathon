@@ -169,6 +169,17 @@ class EmployeeForm(models.Model):
         return path[index - 1] if index > 0 else None
 
     # ── Reading answers back ─────────────────────────────────────────────
+    def documents(self):
+        """Every uploaded document, each tagged with its viewer position.
+
+        Built once and reused by both the document gallery and the per-question
+        file chips so a chip always opens the viewer on the right document.
+        """
+        uploads = list(self.files.all())
+        for position, upload in enumerate(uploads):
+            upload.position = position
+        return uploads
+
     def answered_sections(self):
         """Answers grouped by step, for the recruiter-facing view.
 
@@ -176,7 +187,7 @@ class EmployeeForm(models.Model):
         candidate's report does not show empty Finance or Technology sections.
         """
         files_by_key = {}
-        for upload in self.files.all():
+        for upload in self.documents():
             files_by_key.setdefault(upload.question_key, []).append(upload)
 
         sections = []
@@ -187,6 +198,7 @@ class EmployeeForm(models.Model):
             rows = []
             for question in schema.numbered_questions(step_key, self.answers or {}):
                 rows.append({
+                    'key': question['key'],
                     'number': question['number'],
                     'label': question['label'],
                     'type': question['type'],
@@ -288,3 +300,44 @@ class EmployeeFormFile(models.Model):
     def label(self) -> str:
         q = schema.QUESTIONS_BY_KEY.get(self.question_key)
         return q['label'] if q else self.question_key
+
+    IMAGE_SUFFIXES = ('.jpg', '.jpeg', '.png', '.webp')
+
+    @property
+    def extension(self) -> str:
+        name = self.original_name or self.file.name or ''
+        return name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+
+    @property
+    def kind(self) -> str:
+        """How the viewer should render this: 'image', 'pdf' or 'file'.
+
+        'file' covers doc/docx, which no browser displays — those are offered as
+        a download instead of being put in a dead iframe.
+        """
+        name = (self.original_name or self.file.name or '').lower()
+        if name.endswith(self.IMAGE_SUFFIXES):
+            return 'image'
+        if name.endswith('.pdf'):
+            return 'pdf'
+        return 'file'
+
+    @property
+    def view_url(self) -> str:
+        """URL that renders in the browser rather than downloading.
+
+        `serve_protected_media` only honours inline for formats it considers safe,
+        so this falls back to the plain (download) URL for anything else.
+        """
+        if self.kind == 'file':
+            return self.file.url
+        return f'{self.file.url}?inline=1'
+
+    @property
+    def size_display(self) -> str:
+        size = self.size_bytes or 0
+        if size >= 1024 * 1024:
+            return f'{size / (1024 * 1024):.1f} MB'
+        if size >= 1024:
+            return f'{size / 1024:.0f} KB'
+        return f'{size} B'

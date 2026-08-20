@@ -11,7 +11,7 @@ from django_ratelimit.decorators import ratelimit
 from apps.core.form_utils import form_errors_to_messages
 from apps.core.models import Resume
 
-from . import schema
+from . import review, schema
 from .forms import OtpForm, StepForm
 from .models import EmployeeForm, EmployeeFormFile
 from .prefill import pending_prefill
@@ -285,10 +285,28 @@ def detail(request, uuid):
         )
         return redirect('core:resume_detail', uuid=uuid)
 
+    documents = form.documents()
+
     return render(request, 'employee_form/detail.html', {
         'resume': resume,
         'form_obj': form,
-        'sections': form.answered_sections(),
+        'review': review.build(form),
+        'documents': documents,
+        # Serialised for the viewer via {{ ... |json_script }} rather than
+        # hand-built in the template: filenames are candidate-supplied, and
+        # assembling JS string literals from them invites an escaping mistake.
+        'documents_json': [
+            {
+                'label': doc.label,
+                'name': doc.original_name or 'Document',
+                'size': doc.size_display,
+                'kind': doc.kind,
+                'ext': doc.extension,
+                'view': doc.view_url,
+                'download': doc.file.url,
+            }
+            for doc in documents
+        ],
     })
 
 

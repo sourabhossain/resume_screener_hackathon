@@ -258,6 +258,28 @@ class StepForm(AriaInvalidMixin, forms.Form):
             for question in self.questions
         ]
 
+    def field_groups(self):
+        """Bound fields arranged into the step's titled blocks.
+
+        Mirrors `question_fields` but preserves `schema.STEP_GROUPS`, so a step
+        with 23 questions renders as a few short sections instead of one wall.
+        """
+        return [
+            {
+                'title': block['title'],
+                'fields': [
+                    {
+                        'question': question,
+                        'field': self[question['key']],
+                        'half': schema.is_half_width(question),
+                        'label': schema.wizard_label(question),
+                    }
+                    for question in block['questions']
+                ],
+            }
+            for block in schema.question_groups(self.step_key, self.initial or {})
+        ]
+
     def storable_answers(self):
         """Cleaned non-file answers, JSON-serialisable for the answers field."""
         out = {}
