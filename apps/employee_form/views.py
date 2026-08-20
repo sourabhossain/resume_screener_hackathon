@@ -37,6 +37,19 @@ def _rate_key(group, request) -> str:
     return f'{group}:{token}'
 
 
+def _stale_branch_keys(step_key, saved_answers, cleaned):
+    """Question keys belonging to a role section the candidate has routed away from."""
+    stale = []
+    for branch_key in schema.INLINE_BRANCHES:
+        if branch_key not in cleaned:
+            continue
+        was = schema.inline_target(step_key, saved_answers)
+        now = schema.inline_target(step_key, {**saved_answers, **cleaned})
+        if was and was != now:
+            stale += [q['key'] for q in schema.get_step(was)['questions']]
+    return stale
+
+
 def _session_key(form) -> str:
     return f'employee_form_verified:{form.token}'
 
@@ -219,6 +232,13 @@ def step(request, token, step_key):
                 )
 
         if valid:
+            # Changing department re-routes the page to a different role section.
+            # Whatever was typed into the previous one is dropped, so a Finance
+            # candidate's answers never linger on a submission that now says
+            # Engineering.
+            for key in _stale_branch_keys(step_key, answers, step_form.cleaned_data):
+                answers.pop(key, None)
+
             answers = {**answers, **step_form.storable_answers()}
             form.answers = answers
 
@@ -256,10 +276,37 @@ def step(request, token, step_key):
         .values_list('question_key', flat=True)
     )
 
+    # Section D shows its role questions on this same page, so the template gets
+    # the step's own blocks and the absorbed ones separately -- only the absorbed
+    # part is re-fetched when the department changes.
+    branch_key = next(
+        (k for k in schema.INLINE_BRANCHES if k in step_form.fields), None
+    )
+    own_keys = {q['key'] for q in schema.get_step(step_key)['questions']}
+    all_groups = step_form.field_groups()
+    if branch_key:
+        own_groups = [
+            g for g in all_groups
+            if all(i['question']['key'] in own_keys for i in g['fields'])
+        ]
+        branch_groups = [g for g in all_groups if g not in own_groups]
+        branch_target = schema.inline_target(step_key, {**answers, **(
+            {branch_key: request.POST.get(branch_key)} if request.method == 'POST' else {}
+        )})
+        branch_section = (
+            schema.get_step(branch_target)['section'] if branch_target else ''
+        )
+    else:
+        own_groups, branch_groups, branch_section = all_groups, [], ''
+
     return render(request, 'employee_form/step.html', {
         'form_obj': form,
         'step': schema.get_step(step_key),
         'step_form': step_form,
+        'own_groups': own_groups,
+        'branch_key': branch_key,
+        'branch_groups': branch_groups,
+        'branch_section': branch_section,
         'step_key': step_key,
         'previous_step': form.previous_step(step_key),
         'step_number': form.path.index(step_key) + 1,
@@ -269,6 +316,46 @@ def step(request, token, step_key):
         # not as something already confirmed by the candidate.
         'prefilled_keys': set(prefill),
         'is_final': schema.next_step_key(step_key, answers) is None,
+    })
+
+
+def role_fields(request, token, step_key):
+    """The role-section block for the department currently chosen (htmx).
+
+    Section D renders its role questions on the same page, but the server is what
+    knows which questions a department maps to -- so the select fetches this
+    fragment on change instead of shipping all six sections as hidden inputs.
+    """
+    form = _get_form(token)
+    if not form.is_open or not _is_verified(request, form):
+        raise Http404
+
+    if step_key not in schema.INLINE_BRANCHES:
+        raise Http404('That step has no role section.')
+
+    answers = form.answers or {}
+    # The chosen value comes from the live select, not from what is saved.
+    chosen = {**answers, step_key: request.GET.get(step_key, '')}
+    target = schema.inline_target(step_key, chosen)
+
+    step_form = StepForm(
+        step_key=step_key, already_uploaded=(),
+        initial={**pending_prefill(form.resume, answers), **answers,
+                 step_key: chosen[step_key]},
+    )
+    # Only the absorbed section's blocks; the select itself stays on the page.
+    own_keys = {q['key'] for q in schema.get_step(step_key)['questions']}
+    groups = [
+        group for group in step_form.field_groups()
+        if any(item['question']['key'] not in own_keys for item in group['fields'])
+    ]
+
+    return render(request, 'employee_form/partials/role_fields.html', {
+        'form_obj': form,
+        'groups': groups,
+        'section': schema.get_step(target)['section'] if target else '',
+        'prefilled_keys': set(),
+        'uploaded_keys': set(),
     })
 
 

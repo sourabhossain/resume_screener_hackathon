@@ -89,8 +89,9 @@ STEP_DATA = {
         'reference_2_email': 'nusrat@bergerbd.com',
         'reference_2_contact_permission': 'no',
     },
-    'department': lambda: {'department': 'banking_financial_services'},
-    'd1_sales': lambda: {
+    # Section D and its role block share a page, so they post together.
+    'department': lambda: {
+        'department': 'banking_financial_services',
         'sales_target_achievement': '112',
         'sales_key_accounts': 'Retail banking clients',
         'sales_portfolio_value': 'BDT 2 crore',
@@ -166,10 +167,11 @@ def test_full_submission(verified):
     # though only the first is filled in. Banking routes through D1 only.
     for index in (1, 2, 3, 4):
         assert f'employer_{index}' in visited
-    assert 'd1_sales' in visited
-    for other in ('d2_marketing', 'd3_finance', 'd4_technology',
-                  'd5_operations', 'd6_corporate'):
-        assert other not in visited
+    # D1 is answered on the department page, so it is never a step of its own.
+    assert 'department' in visited
+    assert 'd1_sales' not in visited
+    assert form.answers['sales_target_achievement'] == '112'
+    assert form.answers['sales_new_business']
 
     # Answers stored under their schema keys, with choices kept as values.
     assert form.answers['candidate_full_name'] == 'Ayesha Rahman'

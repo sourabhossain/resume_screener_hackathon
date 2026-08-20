@@ -312,9 +312,13 @@ def test_no_employer_block_is_hard_required():
 
 def test_banking_department_routes_to_d1_sales():
     """The one department-to-section mapping confirmed by the client's own form."""
-    path = schema.step_path({'department': 'banking_financial_services'})
-    assert 'd1_sales' in path
-    assert path[-1] == schema.FINAL_STEP
+    answers = {'department': 'banking_financial_services'}
+    # D1 is rendered inside the department page, so it is absorbed rather than
+    # being its own step -- but it still names itself for the recruiter view.
+    assert schema.inline_target('department', answers) == 'd1_sales'
+    assert 'd1_sales' not in schema.step_path(answers)
+    assert 'd1_sales' in schema.review_path(answers)
+    assert schema.step_path(answers)[-1] == schema.FINAL_STEP
 
 
 def test_each_department_reaches_its_mapped_role_section():
@@ -322,18 +326,29 @@ def test_each_department_reaches_its_mapped_role_section():
     for value, label in schema.DEPARTMENT_CHOICES:
         target = schema.DEPARTMENT_ROUTING.get(value)
         assert target, f'{value} has no routing entry'
-        path = schema.step_path({'department': value})
-        assert target in path, f'{label} never reaches {target}'
-        assert path[-1] == schema.FINAL_STEP, f'{label} does not reach the declaration'
+        answers = {'department': value}
+        assert schema.inline_target('department', answers) == target, (
+            f'{label} does not route to {target}')
+        keys = {q['key'] for q in schema.wizard_questions('department', answers)}
+        assert keys >= {q['key'] for q in schema.get_step(target)['questions']}, (
+            f'{label} does not render {target} on the department page')
+        assert schema.step_path(answers)[-1] == schema.FINAL_STEP, (
+            f'{label} does not reach the declaration')
 
 
 def test_only_one_role_section_is_ever_shown():
-    """A candidate must not be walked through another department's questions."""
+    """A candidate must not be asked another department's questions."""
     role_steps = {'d1_sales', 'd2_marketing', 'd3_finance',
                   'd4_technology', 'd5_operations', 'd6_corporate'}
     for value, label in schema.DEPARTMENT_CHOICES:
-        path = set(schema.step_path({'department': value}))
-        assert len(path & role_steps) == 1, f'{label} sees {path & role_steps}'
+        answers = {'department': value}
+        seen = set(schema.review_path(answers)) & role_steps
+        assert len(seen) == 1, f'{label} sees {seen}'
+        # And the rendered page carries exactly that section's questions.
+        asked = {q['key'] for q in schema.wizard_questions('department', answers)}
+        for other in role_steps - seen:
+            other_keys = {q['key'] for q in schema.get_step(other)['questions']}
+            assert not (asked & other_keys), f'{label} is asked {other} questions'
 
 
 def test_every_role_section_is_reachable_by_some_department():
@@ -366,9 +381,9 @@ def test_every_step_key_referenced_exists():
 
 
 def test_numbering_is_sequential_with_no_gaps():
-    answers = {'has_employment': 'no', 'department': 'banking_financial_services'}
+    answers = {'department': 'banking_financial_services'}
     numbers = []
-    for step_key in schema.step_path(answers):
+    for step_key in schema.review_path(answers):
         numbers += [q['number'] for q in schema.numbered_questions(step_key, answers)]
     assert numbers == list(range(1, len(numbers) + 1))
 
@@ -462,7 +477,8 @@ def test_grouping_never_drops_a_question():
             continue
         grouped = schema.question_groups(step['key'], {})
         keys = [q['key'] for block in grouped for q in block['questions']]
-        assert sorted(keys) == sorted(q['key'] for q in step['questions']), step['key']
+        expected = [q['key'] for q in schema.wizard_questions(step['key'], {})]
+        assert sorted(keys) == sorted(expected), step['key']
         assert len(keys) == len(set(keys)), f"{step['key']} renders a question twice"
 
 

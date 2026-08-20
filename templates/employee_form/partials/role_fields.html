@@ -1,0 +1,24 @@
+{% if groups %}
+{% if section %}
+<p class="px-1 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400">
+    {{ section }}
+</p>
+{% endif %}
+
+{% for group in groups %}
+<fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+    {% if group.title %}
+    <legend class="sr-only">{{ group.title }}</legend>
+    <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+        <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">{{ group.title }}</p>
+    </div>
+    {% endif %}
+
+    <div class="grid gap-x-5 gap-y-5 p-5 sm:grid-cols-2">
+        {% for item in group.fields %}
+        {% include 'employee_form/partials/field.html' with question=item.question field=item.field item=item %}
+        {% endfor %}
+    </div>
+</fieldset>
+{% endfor %}
+{% endif %}

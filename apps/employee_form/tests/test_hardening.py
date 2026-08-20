@@ -501,3 +501,88 @@ def test_unticking_later_detaches_the_masters_certificate(verified):
     form.refresh_from_db()
     assert not form.files.filter(question_key='masters_certificate').exists()
     assert form.answers['has_masters'] == 'no'
+
+
+# ── Section D renders its role questions on the same page ────────────────
+def _reach_department(client, form):
+    form.answers = {**(form.answers or {})}
+    form.current_step = 'department'
+    form.save(update_fields=['answers', 'current_step'])
+
+
+def test_department_page_asks_the_role_questions_too(verified):
+    """One page: pick the department and answer its section without a hop."""
+    client, form = verified
+    _reach_department(client, form)
+
+    response = _post(client, form, 'department', {
+        'department': 'finance_accounts',
+        'finance_software': 'Oracle Fusion',
+        'finance_audit_exposure': 'External and regulatory',
+    })
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['department'] == 'finance_accounts'
+    assert form.answers['finance_software'] == 'Oracle Fusion'
+    # And the next step is the declaration, not a separate role page.
+    assert form.current_step == schema.FINAL_STEP
+
+
+def test_changing_department_drops_the_previous_sections_answers(verified):
+    """A Finance answer must not survive on a submission that says Engineering."""
+    client, form = verified
+    _reach_department(client, form)
+
+    _post(client, form, 'department', {
+        'department': 'finance_accounts',
+        'finance_software': 'Oracle Fusion',
+    })
+    form.refresh_from_db()
+    assert form.answers['finance_software'] == 'Oracle Fusion'
+
+    form.current_step = 'department'
+    form.save(update_fields=['current_step'])
+    _post(client, form, 'department', {
+        'department': 'engineering',
+        'tech_stack': 'Django, Postgres',
+    })
+
+    form.refresh_from_db()
+    assert form.answers['department'] == 'engineering'
+    assert form.answers['tech_stack'] == 'Django, Postgres'
+    assert not form.answers.get('finance_software'), (
+        "the previous department's answers were kept"
+    )
+
+
+def test_role_fields_fragment_serves_only_the_chosen_section(verified):
+    client, form = verified
+    _reach_department(client, form)
+    url = reverse('employee_form:role_fields',
+                  kwargs={'token': form.token, 'step_key': 'department'})
+
+    response = client.get(url, {'department': 'engineering'})
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'name="tech_stack"' in body
+    assert 'name="finance_software"' not in body
+    assert 'name="department"' not in body, 'the select must not be duplicated'
+
+
+def test_role_fields_fragment_needs_a_verified_session(client, candidate):
+    form = issue_invite(candidate)
+    response = client.get(
+        reverse('employee_form:role_fields',
+                kwargs={'token': form.token, 'step_key': 'department'}),
+        {'department': 'engineering'})
+    assert response.status_code == 404
+
+
+def test_role_fields_fragment_rejects_a_step_with_no_role_section(verified):
+    client, form = verified
+    response = client.get(
+        reverse('employee_form:role_fields',
+                kwargs={'token': form.token, 'step_key': 'section_a'}))
+    assert response.status_code == 404

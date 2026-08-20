@@ -224,7 +224,7 @@ class StepForm(AriaInvalidMixin, forms.Form):
         self.already_uploaded = set(already_uploaded)
         self.questions = []
 
-        for question in schema.numbered_questions(step_key, kwargs.get('initial') or {}):
+        for question in schema.numbered_wizard_questions(step_key, self._branch_answers()):
             field = build_field(question)
             if question['type'] in schema.FILE_TYPES and question['key'] in self.already_uploaded:
                 # Already on file -- keep the input available for replacement
@@ -232,6 +232,21 @@ class StepForm(AriaInvalidMixin, forms.Form):
                 field.required = False
             self.fields[question['key']] = field
             self.questions.append(question)
+
+    def _branch_answers(self) -> dict:
+        """Answers that decide which questions this step actually asks.
+
+        Section D renders its role section on the same page, so the field set
+        depends on the department. On POST that has to come from `data` -- the
+        candidate may have just changed it -- and on GET from what was saved.
+        """
+        answers = dict(self.initial or {})
+        if self.is_bound:
+            for key in schema.INLINE_BRANCHES:
+                posted = self.data.get(key)
+                if posted:
+                    answers[key] = posted
+        return answers
 
     def clean(self):
         cleaned = super().clean()

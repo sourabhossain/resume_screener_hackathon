@@ -652,6 +652,53 @@ STEP_GROUPS = {
 }
 
 
+# ── Inline branches ──────────────────────────────────────────────────────
+# Steps whose branch target is rendered on the *same* page rather than as a
+# separate step. Section D is one dropdown; making the candidate submit a page to
+# answer it, only to be shown the role questions next, wasted a page transition.
+#
+# The server still has to learn the department before it knows which questions to
+# ask -- that round trip is unavoidable -- so `views.role_fields` serves just the
+# role block and the select swaps it in via htmx.
+INLINE_BRANCHES = {'department': _route_department}
+
+# The only sections an inline branch may pull onto its host page. Guards against
+# absorbing a resolver's fallback (see `inline_target`).
+INLINE_TARGETS = frozenset(DEPARTMENT_ROUTING.values())
+
+
+def inline_target(step_key, answers):
+    """The step whose questions are rendered inside `step_key`, if any.
+
+    Nothing is absorbed until the branch question is actually answered, and only
+    a genuine branch destination can be absorbed -- `_route_department` falls back
+    to the declaration for an unknown department, and pulling *that* onto the page
+    would put the signature block above the role questions.
+    """
+    resolve = INLINE_BRANCHES.get(step_key)
+    if not resolve:
+        return None
+    if not (answers or {}).get(step_key):
+        return None
+    target = resolve(answers)
+    if target not in INLINE_TARGETS:
+        return None
+    step = STEPS_BY_KEY.get(target)
+    return target if step and step['questions'] else None
+
+
+def wizard_questions(step_key, answers):
+    """A step's own questions plus any it absorbs, in render order."""
+    step = STEPS_BY_KEY.get(step_key)
+    if not step:
+        return []
+    questions = list(step['questions'])
+    target = inline_target(step_key, answers)
+    if target:
+        questions += STEPS_BY_KEY[target]['questions']
+    return questions
+
+
 # ── Lookups and traversal ────────────────────────────────────────────────
 STEPS_BY_KEY = {step['key']: step for step in STEPS}
 FIRST_STEP = STEPS[0]['key']
@@ -669,9 +716,16 @@ def get_step(step_key):
 
 
 def next_step_key(step_key, answers):
-    """Resolve the step after `step_key`, skipping any section with no questions."""
+    """Resolve the step after `step_key`, skipping any section with no questions.
+
+    A section absorbed into its host page (see INLINE_BRANCHES) is skipped too --
+    its questions were already answered on the host step.
+    """
     seen = set()
     current = step_key
+    absorbed = inline_target(step_key, answers)
+    if absorbed:
+        current = absorbed
     while True:
         step = STEPS_BY_KEY.get(current)
         if step is None:
@@ -709,21 +763,50 @@ def step_path(answers):
     return path
 
 
+def review_path(answers):
+    """`step_path`, with absorbed sections named in their own right.
+
+    The wizard renders an absorbed section inside its host page, but the
+    recruiter view still groups answers by section -- so it walks this instead.
+    """
+    out = []
+    for key in step_path(answers):
+        out.append(key)
+        target = inline_target(key, answers)
+        if target:
+            out.append(target)
+    return out
+
+
+def _question_numbers(answers):
+    """{question key: number} across the whole path these answers lead through."""
+    numbers, n = {}, 1
+    for key in review_path(answers):
+        for question in STEPS_BY_KEY[key]['questions']:
+            numbers[question['key']] = n
+            n += 1
+    return numbers
+
+
 def numbered_questions(step_key, answers):
-    """A step's questions, each with the number shown to the candidate."""
-    path = step_path(answers)
-    number = 1
-    for key in path:
-        step = STEPS_BY_KEY[key]
-        if key != step_key:
-            number += len(step['questions'])
-            continue
-        return [dict(q, number=number + offset)
-                for offset, q in enumerate(step['questions'])]
+    """A step's own questions, each with the number shown to the candidate."""
     step = STEPS_BY_KEY.get(step_key)
     if not step:
         return []
-    return [dict(q, number=offset + 1) for offset, q in enumerate(step['questions'])]
+    numbers = _question_numbers(answers)
+    return [
+        dict(q, number=numbers.get(q['key'], offset + 1))
+        for offset, q in enumerate(step['questions'])
+    ]
+
+
+def numbered_wizard_questions(step_key, answers):
+    """Everything the candidate fills in on `step_key`, absorbed sections included."""
+    numbers = _question_numbers(answers)
+    return [
+        dict(q, number=numbers.get(q['key'], offset + 1))
+        for offset, q in enumerate(wizard_questions(step_key, answers))
+    ]
 
 
 def question_groups(step_key, answers):
@@ -732,10 +815,19 @@ def question_groups(step_key, answers):
     Any question missing from STEP_GROUPS is appended rather than dropped -- a
     typo there must not hide a question.
     """
-    questions = numbered_questions(step_key, answers)
+    questions = numbered_wizard_questions(step_key, answers)
     by_key = {q['key']: q for q in questions}
 
-    groups = STEP_GROUPS.get(step_key)
+    groups = list(STEP_GROUPS.get(step_key) or [])
+    target = inline_target(step_key, answers)
+    if target:
+        # The absorbed section brings its own sub-headings, or one block titled
+        # after the section so the candidate sees what they were routed into.
+        groups += STEP_GROUPS.get(target) or [
+            (STEPS_BY_KEY[target]['title'],
+             [q['key'] for q in STEPS_BY_KEY[target]['questions']]),
+        ]
+
     if not groups:
         return [{'title': '', 'questions': questions}]
 

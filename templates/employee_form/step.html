@@ -47,7 +47,7 @@
         {% csrf_token %}
 
         <div class="space-y-4">
-            {% for group in step_form.field_groups %}
+            {% for group in own_groups %}
             <fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
                 {% if group.title %}
                 <legend class="sr-only">{{ group.title }}</legend>
@@ -63,6 +63,22 @@
                 </div>
             </fieldset>
             {% endfor %}
+
+            {% if branch_key %}
+            <div id="role-fields" class="space-y-4"
+                 hx-get="{% url 'employee_form:role_fields' token=form_obj.token step_key=step_key %}"
+                 hx-trigger="change from:#id_{{ branch_key }}"
+                 hx-include="#id_{{ branch_key }}"
+                 hx-target="#role-fields"
+                 hx-swap="innerHTML"
+                 hx-select="unset"
+                 hx-indicator="#role-loading">
+                {% include 'employee_form/partials/role_fields.html' with groups=branch_groups section=branch_section %}
+            </div>
+            <p id="role-loading" class="htmx-indicator px-1 text-xs font-medium text-zinc-500">
+                Loading the questions for this department…
+            </p>
+            {% endif %}
         </div>
 
         <div class="sticky bottom-0 z-20 mt-6 -mx-4 border-t border-zinc-200/80 bg-white/90 px-4 py-3.5 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/85 sm:mx-0 sm:rounded-2xl sm:border sm:px-5">

@@ -11,6 +11,8 @@ urlpatterns = [
     path('information-form/<uuid:token>/verify/', views.verify, name='verify'),
     path('information-form/<uuid:token>/resend-code/', views.resend_code, name='resend_code'),
     path('information-form/<uuid:token>/step/<slug:step_key>/', views.step, name='step'),
+    path('information-form/<uuid:token>/step/<slug:step_key>/role-fields/',
+         views.role_fields, name='role_fields'),
     path('information-form/<uuid:token>/done/', views.done, name='done'),
 
     # Recruiter portal
