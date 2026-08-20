@@ -552,3 +552,37 @@ def test_every_role_section_is_readable_back(candidate):
         assert target in sections, f'{label}: {target} missing from the review'
         values = [r['value'] for r in sections[target]['rows']]
         assert 'sample answer' in values, f'{label}: answer not shown'
+
+
+# ── An unknown link explains itself ──────────────────────────────────────
+def test_unknown_token_shows_a_readable_page(db, client):
+    """A superseded or truncated link must not dump a raw 404 on a candidate."""
+    import uuid as uuid_mod
+    stale = uuid_mod.uuid4()
+
+    for name, kwargs in [
+        ('entry', {}),
+        ('verify', {}),
+        ('done', {}),
+    ]:
+        response = client.get(
+            reverse(f'employee_form:{name}', kwargs={'token': stale, **kwargs})
+        )
+        assert response.status_code == 404, name
+        body = response.content.decode()
+        assert 'This link is no longer valid' in body, name
+        # Says nothing about whether that token ever existed.
+        assert 'deleted' not in body.lower()
+
+    response = client.get(reverse('employee_form:step', kwargs={
+        'token': stale, 'step_key': schema.FIRST_STEP}))
+    assert response.status_code == 404
+    assert 'This link is no longer valid' in response.content.decode()
+
+
+def test_unknown_token_on_the_htmx_fragment_is_a_plain_404(db, client):
+    import uuid as uuid_mod
+    response = client.get(reverse('employee_form:role_fields', kwargs={
+        'token': uuid_mod.uuid4(), 'step_key': 'department'}))
+    assert response.status_code == 404
+    assert 'This link is no longer valid' not in response.content.decode()

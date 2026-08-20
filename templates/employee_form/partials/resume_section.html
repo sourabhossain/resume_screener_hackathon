@@ -15,7 +15,18 @@
 
             {% if not form_obj.is_submitted %}
             <form method="post" action="{% url 'employee_form:send' uuid=resume.uuid %}" hx-boost="false"
-                  data-confirm="{% if form_obj %}Send {{ resume.candidate_name|title }} a new form link and code?{% else %}Send the information form to {{ resume.email|default:'this candidate' }}?{% endif %}">
+                  data-confirm
+                  data-confirm-safe data-confirm-icon="question"
+                  data-confirm-strong="{{ resume.email }}"
+                  {% if form_obj %}
+                  data-confirm-title="Send a new link and code?"
+                  data-confirm-text="The previous code stops working, so use this only if the candidate never received the first email or it has expired."
+                  data-confirm-button="Resend invitation"
+                  {% else %}
+                  data-confirm-title="Send the information form?"
+                  data-confirm-text="The candidate gets a link and a one-time code, valid for 7 days."
+                  data-confirm-button="Send invitation"
+                  {% endif %}>
                 {% csrf_token %}
                 <button type="submit"
                         class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">

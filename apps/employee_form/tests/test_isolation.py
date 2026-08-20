@@ -329,3 +329,29 @@ def test_the_broker_never_carries_a_plaintext_code(candidate, monkeypatch):
     assert str(form.pk) in flat
     # Nothing six-digit-shaped may appear in what is handed to the broker.
     assert not re.search(r'\b\d{6}\b', flat), f'possible OTP in task payload: {flat}'
+
+
+# ── A non-delivering backend must say so ─────────────────────────────────
+def test_a_console_backend_logs_that_nothing_was_delivered(candidate, settings, caplog):
+    """The worker runs in its own container and can sit on the console backend
+    while the site looks configured. Then the form still says "Invite sent" --
+    this log line is the only thing that tells the truth.
+    """
+    import logging
+    settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+    with caplog.at_level(logging.WARNING, logger='apps.employee_form.services'):
+        issue_invite(candidate)
+
+    assert any('invite_not_delivered' in r.message for r in caplog.records), (
+        'a non-SMTP backend sent nothing and said nothing'
+    )
+
+
+def test_a_real_smtp_backend_does_not_log_that_warning(candidate, settings, caplog):
+    import logging
+    settings.EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    # Django's test runner swaps in locmem regardless, so patch the send itself.
+    with caplog.at_level(logging.WARNING, logger='apps.employee_form.services'):
+        issue_invite(candidate)
+
+    assert not any('invite_not_delivered' in r.message for r in caplog.records)

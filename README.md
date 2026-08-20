@@ -86,8 +86,24 @@ Also required:
 - **Celery must be running.** Invitations are sent by
   `apps.employee_form.tasks.send_employee_form_invite` on the `screening` queue.
   Without a worker, forms are created but no email goes out.
-- **`docker compose up -d`, not `restart`**, after editing `.env` — compose only
-  re-reads the env file when a container is recreated.
+- **The email settings must reach the _worker_, not just `web`.** The worker is the
+  process that talks to SMTP. After editing `.env`, recreate every service —
+  `restart` does not re-read the env file:
+
+  ```bash
+  docker compose up -d --force-recreate web celery-screening celery-verification celery-beat
+  ```
+
+  Get this wrong and the symptom is confusing: the site looks correctly
+  configured, the form says **Invite sent**, and the email is quietly printed to
+  the worker's log instead. Verify with:
+
+  ```bash
+  docker compose exec celery-screening python -c \
+    "import django;django.setup();from django.conf import settings;print(settings.EMAIL_BACKEND, settings.EMAIL_HOST)"
+  ```
+
+  A non-SMTP backend also logs `employee_form.invite_not_delivered` on every send.
 
 A failed send is recorded on the form and shown to the recruiter as
 **Invite failed** with the reason, next to a Resend button — it never fails silently.

@@ -1,4 +1,5 @@
 import logging
+from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -59,10 +60,36 @@ def _is_verified(request, form) -> bool:
     return bool(form.otp_verified_at) and request.session.get(_session_key(form)) is True
 
 
+class InvalidLink(Exception):
+    """The token names no form. Rendered as a page, not a raw 404."""
+
+
 def _get_form(token):
-    return get_object_or_404(
-        EmployeeForm.objects.select_related('resume', 'resume__job'), token=token
-    )
+    """Look up the form behind a candidate's link.
+
+    Raises InvalidLink rather than Http404 so the candidate-facing views can
+    explain what happened. A bare "Page not found" gives someone holding a
+    superseded or truncated link nothing to act on, and this is a public page —
+    the message deliberately says nothing about whether the token ever existed.
+    """
+    try:
+        return EmployeeForm.objects.select_related('resume', 'resume__job').get(
+            token=token
+        )
+    except EmployeeForm.DoesNotExist as exc:
+        raise InvalidLink from exc
+
+
+def _candidate_page(view_fn):
+    """Turn an unknown token into the "link not valid" page."""
+    @wraps(view_fn)
+    def wrapper(request, token, *args, **kwargs):
+        try:
+            return view_fn(request, token, *args, **kwargs)
+        except InvalidLink:
+            logger.info('employee_form.invalid_link token=%s', token)
+            return render(request, 'employee_form/invalid_link.html', status=404)
+    return wrapper
 
 
 def _closed_response(request, form):
@@ -75,6 +102,7 @@ def _closed_response(request, form):
 
 
 # ── Candidate-facing (public, token + OTP) ───────────────────────────────
+@_candidate_page
 def entry(request, token):
     """Landing point for the emailed link: send to the OTP gate or resume work."""
     form = _get_form(token)
@@ -93,6 +121,7 @@ def entry(request, token):
 # host hammering many tokens at once.
 @ratelimit(key='ip', rate='300/h', method='POST', block=True)
 @ratelimit(key=_rate_key, rate='30/h', method='POST', block=True)
+@_candidate_page
 def verify(request, token):
     """The OTP gate. The code was emailed together with this link."""
     form = _get_form(token)
@@ -143,6 +172,7 @@ def verify(request, token):
 @require_POST
 @ratelimit(key='ip', rate='100/h', method='POST', block=True)
 @ratelimit(key=_rate_key, rate='5/h', method='POST', block=True)
+@_candidate_page
 def resend_code(request, token):
     """Candidate-triggered resend of the one-time code."""
     form = _get_form(token)
@@ -164,6 +194,7 @@ def resend_code(request, token):
     return redirect('employee_form:verify', token=token)
 
 
+@_candidate_page
 def step(request, token, step_key):
     """Render and accept one step of the wizard."""
     form = _get_form(token)
@@ -326,7 +357,13 @@ def role_fields(request, token, step_key):
     knows which questions a department maps to -- so the select fetches this
     fragment on change instead of shipping all six sections as hidden inputs.
     """
-    form = _get_form(token)
+    # An htmx fragment, never a page someone lands on, so an unknown token is a
+    # plain 404 rather than the "link not valid" page.
+    try:
+        form = _get_form(token)
+    except InvalidLink:
+        raise Http404('Unknown form.')
+
     if not form.is_open or not _is_verified(request, form):
         raise Http404
 
@@ -359,6 +396,7 @@ def role_fields(request, token, step_key):
     })
 
 
+@_candidate_page
 def done(request, token):
     form = _get_form(token)
     if not form.is_submitted:

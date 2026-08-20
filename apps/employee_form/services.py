@@ -59,6 +59,18 @@ def send_invite(form, *, otp: str) -> None:
     # recruiter sees, instead of a silently unsent invitation.
     message.send(fail_silently=False)
 
+    # Say plainly when nothing left the building. Delivery happens in the Celery
+    # worker, which is a *different container* from the web process -- so it can
+    # sit on the console backend while the site looks correctly configured, and
+    # the form would still report "Invite sent". This line is what tells you.
+    backend = settings.EMAIL_BACKEND
+    if 'smtp' not in backend:
+        logger.warning(
+            'employee_form.invite_not_delivered form=%s backend=%s — the email '
+            'was written to this process\'s output, not sent to %s',
+            form.pk, backend, recipient,
+        )
+
     logger.info(
         'employee_form.invite_sent resume=%s form=%s attempt=%s',
         form.resume_id, form.pk, form.invite_count + 1,
