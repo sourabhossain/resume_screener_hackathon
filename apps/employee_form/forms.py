@@ -70,6 +70,14 @@ DATE_RANGE_PAIRS = tuple(
     (f'employer_{i}_start_date', f'employer_{i}_end_date') for i in range(1, 5)
 )
 
+# Gated by the "I have a Master's" tick box. Untick and these are hidden in the
+# browser and cleared here, so the stored answers can never say "no Master's"
+# while carrying a university name -- the same reasoning as the address mirror.
+MASTERS_GATED_KEYS = (
+    'masters_institution', 'masters_degree_name', 'masters_major',
+    'masters_completion_date', 'masters_certificate',
+)
+
 # An employer block is all-or-nothing: naming an employer commits you to the rest
 # of it. No block is required outright, so a fresher submits them all blank —
 # but a half-filled employer would go to a background-check agency with no way to
@@ -103,6 +111,18 @@ def _validate_upload(upload):
             f'File content does not match {ext.upper()} format. Please upload a valid file.'
         )
     return upload
+
+
+class YesNoBooleanField(forms.BooleanField):
+    """A tick box that stores the PDF's 'yes' / 'no' rather than True / False.
+
+    Keeps the stored answer identical to what the old radio produced, so the
+    recruiter view, CSV export and any existing submission all still read it the
+    same way.
+    """
+
+    def clean(self, value):
+        return 'yes' if super().clean(value) else 'no'
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -173,6 +193,12 @@ def build_field(question):
         return forms.MultipleChoiceField(
             **common, choices=question['choices'],
             widget=forms.CheckboxSelectMultiple,
+        )
+    if qtype == schema.BOOLEAN:
+        # required is forced off: a tick box that must be ticked would mean
+        # "everyone's addresses are the same", not "answer the question".
+        return YesNoBooleanField(
+            label=question['label'], required=False, help_text=question['help'],
         )
     if qtype == schema.FILE:
         return forms.FileField(**common)
@@ -255,7 +281,51 @@ class StepForm(AriaInvalidMixin, forms.Form):
                 self.add_error(end_key, 'The end date cannot be before the start date.')
 
         self._validate_employer_block(cleaned)
+        self._mirror_permanent_address(cleaned)
+        self._apply_masters_gate(cleaned)
         return cleaned
+
+    def _apply_masters_gate(self, cleaned):
+        """Drop any Master's detail when the candidate says they have no Master's."""
+        if 'has_masters' not in self.fields:
+            return
+        if cleaned.get('has_masters') == 'yes':
+            return
+        for key in MASTERS_GATED_KEYS:
+            if key in self.fields:
+                cleaned[key] = None if key in schema.FILE_QUESTION_KEYS else ''
+                self.errors.pop(key, None)
+
+    def gated_off_file_keys(self):
+        """File questions whose answer was gated away, for the view to unlink.
+
+        Clearing the text answers is not enough: an upload made before the tick
+        box was cleared would otherwise stay attached to a Master's the candidate
+        now says they do not have.
+        """
+        if 'has_masters' not in self.fields:
+            return []
+        if (self.cleaned_data or {}).get('has_masters') == 'yes':
+            return []
+        return [k for k in MASTERS_GATED_KEYS if k in schema.FILE_QUESTION_KEYS]
+
+    def _mirror_permanent_address(self, cleaned):
+        """When "same as present" is ticked, derive the permanent address here.
+
+        The tick box copies the field in the browser too, but that is a
+        convenience: this is the authoritative copy. Trusting the posted value
+        would let a tampered or JS-disabled submission store "Yes" alongside two
+        different addresses -- exactly the contradiction the tick box replaces.
+        """
+        if 'address_same' not in self.fields or 'permanent_address' not in self.fields:
+            return
+        if cleaned.get('address_same') != 'yes':
+            return
+        present = (cleaned.get('present_address') or '').strip()
+        if present:
+            cleaned['permanent_address'] = present
+            # Clear any "this field is required" raised while it was mirrored.
+            self.errors.pop('permanent_address', None)
 
     def _validate_employer_block(self, cleaned):
         """Naming an employer makes the rest of that employer required."""

@@ -54,7 +54,6 @@ SECTION_A = {
 
 SECTION_B = {
     'highest_degree': 'bachelors',
-    'has_masters': 'no',
     'bachelors_institution': 'X', 'bachelors_degree_name': 'BBA',
     'bachelors_major': 'M', 'bachelors_completion_date': '2019-01-31',
     'hsc_institution': 'H', 'hsc_board': 'D', 'hsc_passing_year': '2014',
@@ -359,3 +358,146 @@ def test_a_fully_named_employer_is_accepted(verified):
     form.refresh_from_db()
     assert form.answers['employer_1_name'] == 'Acme Ltd'
     assert form.current_step == 'employer_2'
+
+
+# ── "Same as present address" tick box ───────────────────────────────────
+def test_ticking_same_address_copies_present_to_permanent(verified):
+    """Server-side copy: the browser mirror is convenience, this is the truth."""
+    client, form = verified
+    data = dict(SECTION_A)
+    data['address_same'] = 'on'
+    data['present_address'] = 'House 42, Banani, Dhaka'
+    data['permanent_address'] = 'SOMETHING COMPLETELY DIFFERENT'
+    data['nid_copy'] = _pdf('n.pdf')
+
+    response = _post(client, form, 'section_a', data)
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['address_same'] == 'yes'
+    assert form.answers['permanent_address'] == 'House 42, Banani, Dhaka'
+    assert 'DIFFERENT' not in form.answers['permanent_address']
+
+
+def test_ticking_same_address_does_not_need_the_permanent_field(verified):
+    """With the field mirrored and locked, the browser may post it empty."""
+    client, form = verified
+    data = dict(SECTION_A)
+    data['address_same'] = 'on'
+    data['present_address'] = 'House 42, Banani, Dhaka'
+    data['permanent_address'] = ''
+    data['nid_copy'] = _pdf('n.pdf')
+
+    response = _post(client, form, 'section_a', data)
+
+    assert response.status_code == 302, 'a mirrored permanent address was rejected'
+    form.refresh_from_db()
+    assert form.answers['permanent_address'] == 'House 42, Banani, Dhaka'
+
+
+def test_unticked_keeps_two_separate_addresses(verified):
+    client, form = verified
+    data = dict(SECTION_A)
+    data.pop('address_same', None)
+    data['present_address'] = 'House 42, Banani, Dhaka'
+    data['permanent_address'] = 'Village Shibpur, Narsingdi'
+    data['nid_copy'] = _pdf('n.pdf')
+
+    response = _post(client, form, 'section_a', data)
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['address_same'] == 'no'
+    assert form.answers['permanent_address'] == 'Village Shibpur, Narsingdi'
+
+
+def test_permanent_address_is_still_required_when_not_ticked(verified):
+    client, form = verified
+    data = dict(SECTION_A)
+    data.pop('address_same', None)
+    data['permanent_address'] = ''
+    data['nid_copy'] = _pdf('n.pdf')
+
+    _post(client, form, 'section_a', data)
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_a'
+
+
+def test_recruiter_view_still_reads_the_pdf_question(verified):
+    """The stored answer stays yes/no, so Q11 is answered for the review page."""
+    client, form = verified
+    data = dict(SECTION_A)
+    data['address_same'] = 'on'
+    data['nid_copy'] = _pdf('n.pdf')
+    _post(client, form, 'section_a', data)
+
+    form.refresh_from_db()
+    rows = {r['key']: r for s in form.answered_sections() for r in s['rows']}
+    row = rows['address_same']
+    assert row['label'] == 'Is your Present Address the same as your Permanent Address?'
+    assert row['value'] == 'Yes'
+
+
+# ── The Master's tick box actually gates its fields ──────────────────────
+def _masters_payload():
+    return {
+        **SECTION_B,
+        'bachelors_certificate': _pdf('b.pdf'),
+        'hsc_certificate': _pdf('h.pdf'),
+        'ssc_certificate': _pdf('s.pdf'),
+        'masters_institution': 'BUET',
+        'masters_degree_name': 'MSc',
+        'masters_major': 'CSE',
+        'masters_completion_date': '2021-06-30',
+        'masters_certificate': _pdf('msc.pdf'),
+    }
+
+
+def test_unticked_masters_clears_its_details(verified):
+    """"No Master's" must not be stored alongside a university name."""
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+
+    data = _masters_payload()
+    data.pop('has_masters', None)                 # tick box left unticked
+    response = _post(client, form, 'section_b', data)
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['has_masters'] == 'no'
+    assert not form.answers.get('masters_institution')
+    assert not form.answers.get('masters_degree_name')
+    assert not form.files.filter(question_key='masters_certificate').exists()
+
+
+def test_ticked_masters_keeps_its_details(verified):
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+
+    data = _masters_payload()
+    data['has_masters'] = 'on'
+    response = _post(client, form, 'section_b', data)
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['has_masters'] == 'yes'
+    assert form.answers['masters_institution'] == 'BUET'
+    assert form.files.filter(question_key='masters_certificate').exists()
+
+
+def test_unticking_later_detaches_the_masters_certificate(verified):
+    """A certificate must not outlive the qualification it belongs to."""
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+    _post(client, form, 'section_b', {**_masters_payload(), 'has_masters': 'on'})
+    assert form.files.filter(question_key='masters_certificate').exists()
+
+    again = _masters_payload()
+    again.pop('has_masters', None)
+    again.pop('masters_certificate', None)
+    _post(client, form, 'section_b', again)
+
+    form.refresh_from_db()
+    assert not form.files.filter(question_key='masters_certificate').exists()
+    assert form.answers['has_masters'] == 'no'

@@ -1,4 +1,24 @@
-<div class="{% if item.half %}sm:col-span-1{% else %}sm:col-span-2{% endif %}">
+<div data-question="{{ question.key }}"
+     class="{% if item.half %}sm:col-span-1{% else %}sm:col-span-2{% endif %}">
+
+    {% if question.type == 'boolean' %}
+    <label class="-mt-1 inline-flex cursor-pointer items-start gap-2.5 rounded-lg py-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <input type="checkbox"
+               name="{{ field.html_name }}"
+               id="{{ field.id_for_label }}"
+               {% if field.value %}checked{% endif %}
+               class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600 dark:bg-zinc-900">
+        <span>{{ item.label|default:question.label }}</span>
+    </label>
+    {% if question.help %}
+    <p class="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">{{ question.help }}</p>
+    {% endif %}
+    {% if field.errors %}
+    <p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ field.errors|join:" " }}</p>
+    {% endif %}
+
+    {% else %}
+
     <label {% if question.type != 'radio' and question.type != 'checkbox' %}for="{{ field.id_for_label }}"{% endif %}
            class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">
         {{ item.label|default:question.label }}{% if question.required %}<span class="ml-0.5 text-rose-500">*</span>{% endif %}
@@ -77,4 +97,5 @@
         {{ field.errors|join:" " }}
     </p>
     {% endif %}
+{% endif %}
 </div>

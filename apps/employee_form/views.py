@@ -222,6 +222,12 @@ def step(request, token, step_key):
             answers = {**answers, **step_form.storable_answers()}
             form.answers = answers
 
+            # Unticking "I have a Master's" also detaches its certificate, so a
+            # document cannot outlive the qualification it belongs to.
+            for question_key in step_form.gated_off_file_keys():
+                for upload in form.files.filter(question_key=question_key):
+                    upload.delete()
+
             next_key = schema.next_step_key(step_key, answers)
             if next_key is None:
                 form.is_submitted = True

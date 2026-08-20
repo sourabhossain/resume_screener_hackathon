@@ -31,11 +31,12 @@ DATE = 'date'
 RADIO = 'radio'
 SELECT = 'select'
 CHECKBOX = 'checkbox'   # multi-select
+BOOLEAN = 'boolean'     # single tick box; stores 'yes' / 'no'
 FILE = 'file'
 FILES = 'files'         # multiple uploads for one question
 
 FILE_TYPES = frozenset({FILE, FILES})
-CHOICE_TYPES = frozenset({RADIO, SELECT, CHECKBOX})
+CHOICE_TYPES = frozenset({RADIO, SELECT, CHECKBOX, BOOLEAN})
 
 YES_NO = [('yes', 'Yes'), ('no', 'No')]
 
@@ -198,8 +199,13 @@ STEPS = [
                help='Full address, for police verification.'),
             _q('permanent_address', 'Permanent Address', TEXTAREA, required=True,
                help='Full address, for police verification.'),
+            # Rendered as a tick box between the two address fields: ticking it
+            # copies Present into Permanent. A yes/no radio *beside* two free-text
+            # addresses let a candidate answer "Yes" while typing two different
+            # ones, and that contradiction went to police verification. Not
+            # required -- unticked is a complete answer ("no").
             _q('address_same', 'Is your Present Address the same as your Permanent Address?',
-               RADIO, required=True, choices=YES_NO),
+               BOOLEAN, choices=YES_NO),
             _q('nid_copy', 'Upload NID Copy', FILE, required=True, help=_UPLOAD_HELP),
             _q('birth_certificate_copy', 'Upload Birth Certificate Copy (if applicable)',
                FILE, help=_UPLOAD_HELP),
@@ -226,10 +232,13 @@ STEPS = [
             _q('highest_degree', 'Highest / Last Completed Degree', SELECT, required=True,
                choices=DEGREE_CHOICES),
 
+            # Tick box rather than a yes/no pair: it reads as the heading for the
+            # five fields it gates, and untick hides (and clears) them. Not
+            # required -- unticked is a complete answer ("no").
             _q('has_masters',
                "Master's / Postgraduate Degree — Do you have a Master's / Postgraduate "
                "Degree?",
-               RADIO, required=True, choices=YES_NO),
+               BOOLEAN, choices=YES_NO),
             _q('masters_institution',
                "Master's / Postgraduate Degree — Institution / University Name"),
             _q('masters_degree_name', "Master's / Postgraduate Degree — Degree Name"),
@@ -356,7 +365,7 @@ def _reference_step(index, next_key):
             _q(f'reference_{index}_designation',
                f'Reference {index} Designation & Company', TEXT, required=True),
             _q(f'reference_{index}_relationship',
-               f'Reference {index} Relationship to You', RADIO, required=True,
+               f'Reference {index} Relationship to You', SELECT, required=True,
                choices=RELATIONSHIP_CHOICES),
             _q(f'reference_{index}_contact', f'Reference {index} Contact Number',
                PHONE, required=True),
@@ -383,7 +392,8 @@ STEPS += [
         ),
         'next': _route_department,
         'questions': [
-            _q('department', 'Department', RADIO, required=True, choices=DEPARTMENT_CHOICES),
+            _q('department', 'Department', SELECT, required=True,
+               choices=DEPARTMENT_CHOICES),
         ],
     },
     {
@@ -597,7 +607,7 @@ STEP_GROUPS = {
         ('How we reach you', [
             'mobile_number', 'personal_email', 'position_applied_for',
         ]),
-        ('Addresses', ['present_address', 'permanent_address', 'address_same']),
+        ('Addresses', ['present_address', 'address_same', 'permanent_address']),
         ('Identity documents', ['nid_copy', 'birth_certificate_copy']),
         ('Consent', ['verification_consent']),
     ],
@@ -781,6 +791,9 @@ def _short_labels():
             label = QUESTIONS_BY_KEY[key]['label']
             if label.startswith(prefix):
                 out[key] = label[len(prefix):]
+
+    out['address_same'] = 'Same as my Present Address'
+    out['has_masters'] = "I have a Master's / Postgraduate degree"
 
     for index in range(1, 5):
         out[f'employer_{index}_name'] = 'Employer name'

@@ -41,8 +41,7 @@ STEP_DATA = {
     },
     'section_b': lambda: {
         'highest_degree': 'bachelors',
-        'has_masters': 'no',
-        'bachelors_institution': 'University of Dhaka',
+            'bachelors_institution': 'University of Dhaka',
         'bachelors_degree_name': 'BBA',
         'bachelors_major': 'Marketing',
         'bachelors_completion_date': '2019-01-31',

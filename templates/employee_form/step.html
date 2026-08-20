@@ -90,4 +90,62 @@
         </div>
     </form>
 </div>
+
+<script>
+    // "Same as my Present Address": mirror Present into Permanent and lock it.
+    // Convenience only -- StepForm._mirror_permanent_address does the same on the
+    // server, so a tampered or scripting-disabled submission cannot store "same"
+    // alongside two different addresses.
+    (function () {
+        const tick = document.getElementById('id_address_same');
+        const present = document.getElementById('id_present_address');
+        const permanent = document.getElementById('id_permanent_address');
+        if (!tick || !present || !permanent) return;
+
+        // Remembered so unticking gives back whatever they had typed before.
+        let previous = permanent.value;
+
+        function apply() {
+            if (tick.checked) {
+                previous = permanent.readOnly ? previous : permanent.value;
+                permanent.value = present.value;
+                permanent.readOnly = true;
+                permanent.setAttribute('aria-readonly', 'true');
+                permanent.classList.add('cursor-not-allowed', 'opacity-60');
+            } else {
+                permanent.readOnly = false;
+                permanent.removeAttribute('aria-readonly');
+                permanent.classList.remove('cursor-not-allowed', 'opacity-60');
+                permanent.value = previous;
+            }
+        }
+
+        tick.addEventListener('change', apply);
+        present.addEventListener('input', function () {
+            if (tick.checked) permanent.value = present.value;
+        });
+        apply();
+    })();
+
+    // "I have a Master's / Postgraduate degree" gates the five fields below it.
+    // Cosmetic only: StepForm._apply_masters_gate clears those answers on the
+    // server, and the view detaches the certificate, so hidden fields cannot be
+    // submitted round the back.
+    (function () {
+        const tick = document.getElementById('id_has_masters');
+        if (!tick) return;
+        const keys = ['masters_institution', 'masters_degree_name', 'masters_major',
+                      'masters_completion_date', 'masters_certificate'];
+        const blocks = keys
+            .map((k) => document.querySelector('[data-question="' + k + '"]'))
+            .filter(Boolean);
+        if (!blocks.length) return;
+
+        function apply() {
+            blocks.forEach((el) => { el.hidden = !tick.checked; });
+        }
+        tick.addEventListener('change', apply);
+        apply();
+    })();
+</script>
 {% endblock %}
