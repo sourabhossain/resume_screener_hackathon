@@ -400,6 +400,9 @@ def resume_detail(request, uuid):
         'hr_verification_can_start': (
             resume.recruiter_status in STATUSES_ALLOWING_START
         ),
+        # Same gate and same audience as the verification above it: both are
+        # HR-only instruments that open once the candidate reaches interviewing.
+        'candidate_mapping': getattr(resume, 'candidate_mapping', None),
     })
 
 

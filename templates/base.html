@@ -263,11 +263,39 @@
             });
         }
 
+        // A "select all that apply" question that must have at least one tick.
+        // The browser cannot check these: `required` on a multi-checkbox would
+        // demand every box, so Django leaves the attribute off and the server is
+        // the only thing that notices. These carry data-required-group instead.
+        function djEmptyRequiredGroups(form) {
+            return Array.from(form.querySelectorAll('[data-required-group]'))
+                .filter(function (group) { return !group.querySelector('input:checked'); });
+        }
+
+        function djMarkEmptyGroup(group) {
+            if (group.dataset.djInvalid === '1') return;
+            djPaint(group, DJ_MARK_OPTIONS);
+            const boxes = Array.from(group.querySelectorAll('input'));
+            boxes.forEach(function (el) { el.setAttribute('aria-invalid', 'true'); });
+
+            const clear = function () {
+                if (group.querySelector('input:checked')) {
+                    djUnpaint(group);
+                    boxes.forEach(function (el) { el.removeAttribute('aria-invalid'); });
+                }
+            };
+            boxes.forEach(function (el) {
+                if (el.dataset.djWatched === '1') return;
+                el.dataset.djWatched = '1';
+                el.addEventListener('change', clear);
+            });
+        }
+
         // Show a validation toast for an invalid field — with a graceful fallback
         // to the browser's native message if SweetAlert2 didn't load.
-        function djFieldValidationToast(field) {
+        function djFieldValidationToast(field, override) {
             const label = djFieldLabel(field);
-            const msg = field.validationMessage || 'Please complete this field.';
+            const msg = override || field.validationMessage || 'Please complete this field.';
             if (window.Swal && window.Toast) {
                 window.Toast.fire({
                     icon: 'warning',
@@ -297,21 +325,37 @@
         document.addEventListener('submit', function (e) {
             const form = e.target;
 
-            // 1) Constraint validation (we disabled native UI above).
-            if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+            // 1) Constraint validation (we disabled native UI above), plus the
+            //    multi-select groups the browser cannot check for us.
+            const failsConstraints = (typeof form.checkValidity === 'function'
+                                      && !form.checkValidity());
+            const emptyGroups = djEmptyRequiredGroups(form);
+            if (failsConstraints || emptyGroups.length) {
                 e.preventDefault();
                 e.stopPropagation(); // keep the form's own @submit (e.g. spinner) from firing
-                // Mark every offending field, not just the first: on a long step
+                // Mark every offending answer, not just the first: on a long step
                 // the candidate would otherwise fix one and be sent back again.
-                const invalid = form.querySelectorAll(DJ_INVALID_CONTROLS);
+                const invalid = Array.from(form.querySelectorAll(DJ_INVALID_CONTROLS));
                 invalid.forEach(djMarkInvalid);
-                const field = invalid[0];
+                emptyGroups.forEach(djMarkEmptyGroup);
+
+                // Whichever comes first on the page, so the toast names the
+                // answer they will actually be looking at.
+                const first = invalid[0];
+                const group = emptyGroups[0];
+                const groupFirst = group && (!first ||
+                    (group.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING));
+                const field = groupFirst ? group.querySelector('input') : first;
+
                 if (field) {
-                    djFieldValidationToast(field);
-                    // Centred rather than scrolled to the edge, so the field does
-                    // not land under the sticky action bar.
-                    if (field.offsetParent !== null) {
-                        try { field.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+                    djFieldValidationToast(
+                        field, groupFirst ? 'Select at least one option.' : ''
+                    );
+                    // Centred rather than scrolled to the edge, so the answer
+                    // does not land under the sticky action bar.
+                    const anchor = groupFirst ? group : field;
+                    if (anchor.offsetParent !== null) {
+                        try { anchor.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
                     }
                     try { field.focus({ preventScroll: true }); } catch (_) {}
                 }

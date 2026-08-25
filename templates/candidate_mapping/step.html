@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ step.title }} · Candidate Mapping · {{ resume.candidate_name|title }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl pb-28">
+
+    <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to {{ resume.candidate_name|title|truncatechars:24 }}
+        </a>
+        <a href="{% url 'candidate_mapping:detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            Review all sections
+        </a>
+    </nav>
+
+    <div class="mb-6">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
+            Candidate Mapping &amp; Assessment
+        </p>
+        <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+            {{ step.title }}
+        </h1>
+        <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            {{ resume.candidate_name|title }}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            {{ resume.job.title }}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            Section {{ step_number }} of {{ total_steps }}
+        </p>
+    </div>
+
+    <div class="mb-6 flex flex-wrap gap-2">
+        {% for item in sections %}
+        <a href="{% url 'candidate_mapping:step' uuid=resume.uuid step_key=item.key %}"
+           class="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition {% if item.current %}border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300{% else %}border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800{% endif %}">
+            {% if item.complete %}
+            <svg class="h-3.5 w-3.5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            {% else %}
+            <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-zinc-300 dark:border-zinc-600"></span>
+            {% endif %}
+            {{ item.title }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="mb-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-sm leading-relaxed text-amber-900 dark:text-amber-300">
+            Confidential — HR use only. Completed by the assessor, not the candidate.
+            Sections save one at a time, so you can leave and come back.
+            {% if step.description %} {{ step.description }}{% endif %}
+        </p>
+    </div>
+
+    {% if show_safeguard %}
+    <div class="mb-5 flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <p class="text-sm leading-relaxed text-rose-900 dark:text-rose-300">
+            <span class="font-semibold">Verification safeguard.</span> {{ safeguard_text }}
+        </p>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" hx-boost="false"
+          x-data="{ submitting: false }" @submit="submitting = true">
+        {% csrf_token %}
+
+        <div class="space-y-4">
+            {% for group in groups %}
+            <fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+                {% if group.title %}
+                <legend class="sr-only">{{ group.title }}</legend>
+                <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">{{ group.title }}</p>
+                </div>
+                {% endif %}
+
+                {% if group.title == 'Assessor declaration' and declaration_text %}
+                <div class="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+                    <p class="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ declaration_text }}</p>
+                </div>
+                {% endif %}
+
+                <div class="grid gap-x-5 gap-y-5 p-5 sm:grid-cols-2">
+                    {% for item in group.fields %}
+                    {% include 'employee_form/partials/field.html' with question=item.question field=item.field item=item %}
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% endfor %}
+        </div>
+
+        <div class="sticky bottom-0 z-20 mt-6 -mx-4 border-t border-zinc-200/80 bg-white/90 px-4 py-3.5 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/85 sm:mx-0 sm:rounded-2xl sm:border sm:px-5">
+            <div class="flex items-center gap-3">
+                {% if previous_step %}
+                <a href="{% url 'candidate_mapping:step' uuid=resume.uuid step_key=previous_step %}"
+                   class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    Back
+                </a>
+                {% endif %}
+
+                <p class="hidden min-w-0 flex-1 text-xs leading-snug text-zinc-500 dark:text-zinc-500 sm:block">
+                    {{ mapping.completed_count }} of {{ total_steps }} sections saved.
+                    Sign-off is on the review page.
+                </p>
+
+                <button type="submit" :disabled="submitting"
+                        class="btn-primary inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none">
+                    <span x-show="!submitting">{% if is_final %}Save and review{% else %}Save and continue{% endif %}</span>
+                    <span x-show="submitting" x-cloak>Saving…</span>
+                    <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{{ conditional_rules|json_script:"cm-conditional-rules" }}
+<script>
+    // "Yes (describe below)" only asks for the description when Yes is the
+    // answer -- the same rule StepForm enforces on POST. Mirrored here so the
+    // asterisk appears as the answer is picked, rather than the rule revealing
+    // itself as an error after a save.
+    (function () {
+        const source = document.getElementById('cm-conditional-rules');
+        if (!source) return;
+        let rules = [];
+        try { rules = JSON.parse(source.textContent); } catch (_) { return; }
+
+        rules.forEach(function (rule) {
+            const triggers = Array.from(
+                document.querySelectorAll('[name="' + rule.trigger + '"]'));
+            const targets = rule.keys
+                .map(function (key) { return document.querySelector('[name="' + key + '"]'); })
+                .filter(Boolean);
+            if (!triggers.length || !targets.length) return;
+
+            function chosen() {
+                // One control for a dropdown, many for a multi-select.
+                if (triggers.length === 1 && triggers[0].tagName === 'SELECT') {
+                    return [triggers[0].value];
+                }
+                return triggers.filter(function (el) { return el.checked; })
+                               .map(function (el) { return el.value; });
+            }
+
+            function apply() {
+                const values = chosen();
+                const on = rule.when.some(function (v) { return values.includes(v); });
+                targets.forEach(function (el) {
+                    el.required = on;
+                    const question = el.closest('[data-question]');
+                    const label = question && question.querySelector('label');
+                    if (!label) return;
+                    let star = label.querySelector('[data-conditional-star]');
+                    if (on && !star) {
+                        star = document.createElement('span');
+                        star.setAttribute('data-conditional-star', '');
+                        star.className = 'ml-0.5 text-rose-500';
+                        star.textContent = '*';
+                        label.appendChild(star);
+                    } else if (!on && star) {
+                        star.remove();
+                    }
+                });
+            }
+
+            triggers.forEach(function (el) {
+                el.addEventListener('change', apply);
+                el.addEventListener('input', apply);
+            });
+            apply();
+        });
+    })();
+
+    // Signature pad. Only posted when something was actually drawn -- an
+    // untouched pad would otherwise submit a blank image and satisfy a required
+    // signature with nothing in it.
+    (function () {
+        document.querySelectorAll('[data-signature]').forEach(function (block) {
+            const canvas = block.querySelector('[data-signature-pad]');
+            const hidden = block.querySelector('[data-signature-data]');
+            const clearBtn = block.querySelector('[data-signature-clear]');
+            const status = block.querySelector('[data-signature-status]');
+            const file = block.querySelector('input[type="file"]');
+            if (!canvas || !hidden) return;
+
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            let signed = false;
+
+            function say(text) { if (status) status.textContent = text; }
+
+            function reset() {
+                // Sized in device pixels so the line is not blurry on a phone;
+                // the CSS size stays whatever the layout says.
+                const ratio = window.devicePixelRatio || 1;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.round(rect.width * ratio);
+                canvas.height = Math.round(rect.height * ratio);
+                ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#18181b';
+                ctx.clearRect(0, 0, rect.width, rect.height);
+            }
+
+            function at(e) {
+                const rect = canvas.getBoundingClientRect();
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+
+            canvas.addEventListener('pointerdown', function (e) {
+                // Last line of defence against a zero-sized backing store,
+                // which would swallow every stroke silently.
+                if (!canvas.width && canvas.clientWidth) {
+                    width = canvas.clientWidth;
+                    reset();
+                }
+                drawing = true;
+                canvas.setPointerCapture(e.pointerId);
+                const p = at(e);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+            });
+
+            canvas.addEventListener('pointermove', function (e) {
+                if (!drawing) return;
+                const p = at(e);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+                if (!signed) { signed = true; say('Signed'); }
+            });
+
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (name) {
+                canvas.addEventListener(name, function () { drawing = false; });
+            });
+
+            function wipe() { reset(); signed = false; hidden.value = ''; say(''); }
+            if (clearBtn) clearBtn.addEventListener('click', wipe);
+
+            // Resizing rebuilds the backing store, which erases the drawing, so
+            // only react to an actual width change -- and never to a width of 0,
+            // which is what the pad measures while hidden behind Upload.
+            let width = 0;
+            window.addEventListener('resize', function () {
+                if (!canvas.clientWidth || canvas.clientWidth === width) return;
+                width = canvas.clientWidth;
+                wipe();
+            });
+            width = canvas.clientWidth;
+            reset();
+
+            const form = block.closest('form');
+            if (form) {
+                form.addEventListener('submit', function () {
+                    // An upload wins over a drawing, matching the server.
+                    const picked = file && file.files && file.files.length;
+                    hidden.value = (signed && !picked) ? canvas.toDataURL('image/png') : '';
+                });
+            }
+        });
+    })();
+</script>
+{% endblock %}
