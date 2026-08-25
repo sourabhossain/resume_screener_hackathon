@@ -37,8 +37,12 @@ FILES = 'files'         # multiple uploads for one question
 INTEGER = 'integer'     # whole number
 DECIMAL = 'decimal'     # number that may carry a fractional part
 YEAR = 'year'           # four-digit year, never in the future
+SIGNATURE = 'signature'  # drawn in the browser or uploaded; stored as a file
 
-FILE_TYPES = frozenset({FILE, FILES})
+# SIGNATURE belongs here: however it was produced it ends up as a stored file,
+# so upload validation, protected serving, replacement and cleanup all apply to
+# it unchanged. Only the widget and how the answer arrives differ.
+FILE_TYPES = frozenset({FILE, FILES, SIGNATURE})
 CHOICE_TYPES = frozenset({RADIO, SELECT, CHECKBOX, BOOLEAN})
 NUMERIC_TYPES = frozenset({INTEGER, DECIMAL, YEAR})
 
@@ -142,6 +146,11 @@ def _q(key, label, qtype=TEXT, required=False, help='', choices=None, max_files=
         q['choices'] = choices
     if qtype == FILES:
         q['max_files'] = max_files or MAX_FILES_PER_QUESTION
+    if qtype == SIGNATURE:
+        # A signature drawn on the canvas cannot travel as a file upload, so it
+        # posts as a data: URL under this companion name. Defined once here so
+        # the form and the template cannot drift apart.
+        q['drawn_key'] = f'{key}_drawn'
     if qtype in NUMERIC_TYPES:
         # Bounds are part of the question, not of the widget: they are enforced
         # server-side and mirrored onto the input so the browser catches a bad
@@ -557,9 +566,9 @@ STEPS += [
                'recruitment purposes.',
                RADIO, required=True,
                choices=[('agree', 'I Agree'), ('disagree', 'I Do Not Agree')]),
-            _q('typed_signature', 'Candidate Full Name (typed signature)', TEXT,
-               required=True),
-            _q('declaration_date', 'Declaration Date', DATE, required=True),
+            _q('signature', 'Signature', SIGNATURE, required=True,
+               help='Sign in the box, or upload a photo or scan of your signature. '
+                    'The declaration is dated automatically when you submit.'),
         ],
     },
 ]
@@ -577,7 +586,6 @@ HALF_WIDTH_KEYS = frozenset({
     'hsc_board', 'hsc_passing_year', 'hsc_result',
     'ssc_board', 'ssc_passing_year', 'ssc_result',
     'total_experience_years', 'notice_period_days', 'earliest_joining_date',
-    'declaration_date', 'typed_signature',
     'sales_target_achievement', 'sales_cycle_length', 'sales_portfolio_value',
     'marketing_budget', 'ops_team_size',
     *(f'employer_{i}_hr_contact' for i in range(1, 5)),
@@ -672,7 +680,7 @@ STEP_GROUPS = {
             'earliest_joining_date', 'availability_status',
         ]),
         ('Your current role', ['current_responsibilities', 'measurable_achievements']),
-        ('Declaration', ['declaration_agreement', 'typed_signature', 'declaration_date']),
+        ('Declaration', ['declaration_agreement', 'signature']),
     ],
 }
 

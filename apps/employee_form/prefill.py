@@ -21,9 +21,6 @@ Note on provenance, because it is not uniform:
 Every prefilled value stays editable, and the step template labels it as coming
 from the earlier submission so the candidate is prompted to check, not assume.
 """
-from django.utils import timezone
-
-
 def prefill_answers(resume) -> dict:
     """Starting answers for a candidate's form, keyed by schema question."""
     values = {
@@ -34,9 +31,9 @@ def prefill_answers(resume) -> dict:
         'personal_email': (resume.email or '').strip(),
         # From the Job record.
         'position_applied_for': (resume.job.title or '').strip(),
-        # Today, the way a paper form is dated on signing. The typed signature
-        # itself is never prefilled — that would defeat the point of it.
-        'declaration_date': timezone.localdate().isoformat(),
+        # The signature is never prefilled or suggested — that would defeat the
+        # point of it. The declaration's date comes from submitted_at, not from
+        # anything the candidate can set.
     }
     return {key: value for key, value in values.items() if value}
 

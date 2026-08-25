@@ -39,6 +39,63 @@
             {% endfor %}
         </div>
 
+        {% elif question.type == 'signature' %}
+        <div data-signature="{{ field.id_for_label }}" x-data="{ mode: 'draw', picked: '' }">
+            <div class="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+                <button type="button" @click="mode = 'draw'"
+                        :class="mode === 'draw' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'text-zinc-600 dark:text-zinc-300'"
+                        class="rounded-md px-3 py-1.5 text-xs font-semibold transition">Draw</button>
+                <button type="button" @click="mode = 'upload'"
+                        :class="mode === 'upload' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'text-zinc-600 dark:text-zinc-300'"
+                        class="rounded-md px-3 py-1.5 text-xs font-semibold transition">Upload</button>
+            </div>
+
+            <div x-show="mode === 'draw'" class="mt-2">
+                <canvas data-signature-pad
+                        style="height: 10rem; cursor: crosshair; touch-action: none;"
+                        class="block w-full rounded-xl border border-dashed border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-950"></canvas>
+                <div class="mt-1.5 flex items-center gap-3">
+                    <button type="button" data-signature-clear
+                            class="text-xs font-semibold text-zinc-500 hover:underline dark:text-zinc-400">Clear</button>
+                    <span data-signature-status class="text-xs text-zinc-500 dark:text-zinc-500"></span>
+                </div>
+            </div>
+
+            <div x-show="mode === 'upload'" x-cloak class="mt-2">
+                <label class="group flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-primary-400 hover:bg-primary-50/40 dark:border-zinc-700 dark:bg-zinc-950/40 dark:hover:border-primary-700">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-400 shadow-sm ring-1 ring-zinc-200 group-hover:text-primary-600 dark:bg-zinc-900 dark:ring-zinc-700">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                            {% if question.key in uploaded_keys %}Replace signature{% else %}Choose a file{% endif %}
+                        </span>
+                        <span class="block truncate text-xs text-zinc-500 dark:text-zinc-500">
+                            A photo or scan &middot; JPG, PNG or PDF
+                        </span>
+                    </span>
+                    <input type="file"
+                           name="{{ field.html_name }}"
+                           id="{{ field.id_for_label }}"
+                           accept=".pdf,.jpg,.jpeg,.png,.webp"
+                           @change="picked = $event.target.files.length ? $event.target.files[0].name : ''"
+                           class="sr-only">
+                </label>
+                <p x-show="picked" x-cloak class="mt-2 flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                    <svg class="h-3.5 w-3.5 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    <span x-text="picked"></span>
+                </p>
+            </div>
+
+            <input type="hidden" name="{{ question.drawn_key }}" data-signature-data>
+        </div>
+        {% if question.key in uploaded_keys %}
+        <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Signature already on file
+        </p>
+        {% endif %}
+
         {% elif question.type == 'file' or question.type == 'files' %}
         <div x-data="{ picked: [] }">
             <label class="group flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/60 px-4 py-3 transition-colors hover:border-primary-400 hover:bg-primary-50/40 dark:border-zinc-700 dark:bg-zinc-950/40 dark:hover:border-primary-700">

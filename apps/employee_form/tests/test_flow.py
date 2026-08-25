@@ -9,6 +9,7 @@ from apps.core.models import Resume
 from apps.employee_form import schema
 from apps.employee_form.models import EmployeeForm
 from apps.employee_form.services import InviteError, issue_invite
+from apps.employee_form.tests.helpers import SIGNATURE_DATA_URL
 
 
 @pytest.fixture
@@ -261,8 +262,7 @@ def test_cannot_submit_by_posting_the_final_step_early(client, candidate):
             'measurable_achievements': 'Many',
             'availability_status': 'immediately_available',
             'declaration_agreement': 'agree',
-            'typed_signature': 'Ayesha Rahman',
-            'declaration_date': '2026-08-20',
+            'signature_drawn': SIGNATURE_DATA_URL,
         },
     )
 
@@ -425,8 +425,10 @@ def test_ai_extracted_fields_are_not_prefilled(client, db, sample_job):
 def test_signature_is_never_prefilled(candidate):
     from apps.employee_form.prefill import prefill_answers
     values = prefill_answers(candidate)
-    assert 'typed_signature' not in values
-    assert values['declaration_date']
+    assert 'signature' not in values
+    # The declaration's date comes from submitted_at, so there is nothing to
+    # prefill and nothing the candidate can backdate.
+    assert 'declaration_date' not in values
 
 
 def test_saved_answers_are_never_overwritten_by_prefill(client, candidate):

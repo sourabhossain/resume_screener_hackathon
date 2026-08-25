@@ -10,6 +10,7 @@ from apps.core.models import Resume
 from apps.employee_form import schema
 from apps.employee_form.models import EmployeeForm
 from apps.employee_form.services import issue_invite
+from apps.employee_form.tests.helpers import SIGNATURE_DATA_URL
 
 PDF = b'%PDF-1.4 minimal test document'
 PNG = b'\x89PNG\r\n\x1a\n' + b'0' * 40
@@ -108,8 +109,9 @@ STEP_DATA = {
         'measurable_achievements': '112% of target FY24; Best Employee Award.',
         'availability_status': 'serving_notice',
         'declaration_agreement': 'agree',
-        'typed_signature': 'Ayesha Rahman',
-        'declaration_date': '2026-08-20',
+        # Drawn on the canvas rather than uploaded, so the full submission
+        # exercises the data: URL path end to end.
+        'signature_drawn': SIGNATURE_DATA_URL,
     },
 }
 
@@ -192,9 +194,14 @@ def test_full_submission(verified):
     keys = set(form.files.values_list('question_key', flat=True))
     assert keys == {
         'nid_copy', 'bachelors_certificate', 'hsc_certificate',
-        'ssc_certificate', 'training_certificates',
+        'ssc_certificate', 'training_certificates', 'signature',
     }
     assert form.files.filter(question_key='training_certificates').count() == 2
+
+    # The signature was drawn, not uploaded, and still landed as a stored PNG.
+    signature = form.files.get(question_key='signature')
+    assert signature.file.name.endswith('.png')
+    assert 'signature' not in form.answers
 
 
 def test_submitted_form_renders_for_the_recruiter(verified, authenticated_client):

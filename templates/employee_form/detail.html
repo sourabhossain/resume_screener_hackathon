@@ -82,6 +82,11 @@
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Declaration: {{ form_obj.declaration_summary }}
             </span>
+            {% if form_obj.submitted_at %}
+            <span class="text-zinc-500 dark:text-zinc-400">
+                Dated {{ form_obj.submitted_at|date:"j M Y" }}
+            </span>
+            {% endif %}
             <span class="text-zinc-500 dark:text-zinc-400">{{ documents|length }} document{{ documents|length|pluralize }}</span>
             {% if form_obj.invited_at %}
             <span class="text-zinc-500 dark:text-zinc-400">

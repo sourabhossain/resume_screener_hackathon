@@ -143,6 +143,101 @@
         apply();
     })();
 
+    // Signature pad. The canvas is only posted when something was actually
+    // drawn -- an untouched pad would otherwise submit a blank white image and
+    // satisfy a required signature with nothing in it.
+    (function () {
+        document.querySelectorAll('[data-signature]').forEach(function (block) {
+            const canvas = block.querySelector('[data-signature-pad]');
+            const hidden = block.querySelector('[data-signature-data]');
+            const clearBtn = block.querySelector('[data-signature-clear]');
+            const status = block.querySelector('[data-signature-status]');
+            const file = block.querySelector('input[type="file"]');
+            if (!canvas || !hidden) return;
+
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            let signed = false;
+
+            function say(text) {
+                if (status) status.textContent = text;
+            }
+
+            function reset() {
+                // The backing store is sized in device pixels so the line is not
+                // blurry on a phone; the CSS size stays whatever the layout says.
+                const ratio = window.devicePixelRatio || 1;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.round(rect.width * ratio);
+                canvas.height = Math.round(rect.height * ratio);
+                ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#18181b';
+                ctx.clearRect(0, 0, rect.width, rect.height);
+            }
+
+            function at(e) {
+                const rect = canvas.getBoundingClientRect();
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+
+            canvas.addEventListener('pointerdown', function (e) {
+                drawing = true;
+                canvas.setPointerCapture(e.pointerId);
+                const p = at(e);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+            });
+
+            canvas.addEventListener('pointermove', function (e) {
+                if (!drawing) return;
+                const p = at(e);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+                if (!signed) {
+                    signed = true;
+                    say('Signed');
+                }
+            });
+
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (name) {
+                canvas.addEventListener(name, function () { drawing = false; });
+            });
+
+            function wipe() {
+                reset();
+                signed = false;
+                hidden.value = '';
+                say('');
+            }
+
+            if (clearBtn) clearBtn.addEventListener('click', wipe);
+
+            // Resizing rebuilds the backing store, which erases the drawing, so
+            // only react to an actual width change -- not to a mobile browser
+            // hiding its address bar, which fires resize without one.
+            let width = 0;
+            window.addEventListener('resize', function () {
+                if (canvas.clientWidth === width) return;
+                width = canvas.clientWidth;
+                wipe();
+            });
+            width = canvas.clientWidth;
+            reset();
+
+            const form = block.closest('form');
+            if (form) {
+                form.addEventListener('submit', function () {
+                    // An upload wins over a drawing, matching what the server does.
+                    const picked = file && file.files && file.files.length;
+                    hidden.value = (signed && !picked) ? canvas.toDataURL('image/png') : '';
+                });
+            }
+        });
+    })();
+
     // "I have a Master's / Postgraduate degree" gates the five fields below it.
     // Cosmetic only: StepForm._apply_masters_gate clears those answers on the
     // server, and the view detaches the certificate, so hidden fields cannot be

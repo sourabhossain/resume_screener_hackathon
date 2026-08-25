@@ -3,10 +3,14 @@
 One class handles every step: the questions for the step are turned into form
 fields, so there is no per-step form class to keep in sync with the schema.
 """
+import base64
+import binascii
 import os
+import re
 from decimal import Decimal
 
 from django import forms
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
 from apps.core.form_utils import (
@@ -51,7 +55,13 @@ def _header_matches(ext: str, header: bytes) -> bool:
 # core apply. Everything else (addresses, ID numbers, narrative answers) is left
 # as plain text: NID numbers and addresses legitimately contain characters the
 # name validator rejects.
-PERSON_TEXT_KEYS = frozenset({'candidate_full_name', 'typed_signature'})
+PERSON_TEXT_KEYS = frozenset({'candidate_full_name'})
+
+# A signature drawn on the canvas arrives as a base64 PNG data: URL. Only PNG is
+# accepted, and a ceiling is applied before decoding -- the string is candidate
+# controlled, and a multi-megabyte one would be decoded into memory otherwise.
+DRAWN_SIGNATURE_PREFIX = re.compile(r'^data:image/png;base64,')
+MAX_DRAWN_SIGNATURE_CHARS = 2 * 1024 * 1024
 
 # Dates that record something that has already happened. A future value is a
 # typo, and this data is handed to a background-check agency, so it is rejected
@@ -61,7 +71,6 @@ NOT_FUTURE_DATE_KEYS = frozenset({
     'date_of_birth',
     'masters_completion_date',
     'bachelors_completion_date',
-    'declaration_date',
     *(f'employer_{i}_start_date' for i in range(1, 5)),
     *(f'employer_{i}_end_date' for i in range(1, 5)),
 })
@@ -112,6 +121,42 @@ def _validate_upload(upload):
             f'File content does not match {ext.upper()} format. Please upload a valid file.'
         )
     return upload
+
+
+def _decode_drawn_signature(data_url):
+    """Turn the canvas's data: URL into an upload the rest of the code can handle.
+
+    The result still goes through `_validate_upload`, so the decoded bytes face
+    the same magic-byte check as a file the candidate picked themselves.
+    """
+    unreadable = forms.ValidationError(
+        'Could not read the drawn signature. Please sign again or upload an image.'
+    )
+    if not DRAWN_SIGNATURE_PREFIX.match(data_url or ''):
+        raise unreadable
+    encoded = data_url.split(',', 1)[1]
+    if len(encoded) > MAX_DRAWN_SIGNATURE_CHARS:
+        raise forms.ValidationError('The drawn signature is too large.')
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise unreadable from exc
+    if not raw:
+        raise unreadable
+    return SimpleUploadedFile('signature.png', raw, content_type='image/png')
+
+
+class SignatureField(forms.FileField):
+    """A signature that may arrive as an upload or as a drawing.
+
+    Never required at this level: a drawn signature posts as text in a companion
+    field, so Django would reject it here as a missing file. StepForm.clean
+    enforces the requirement once both halves have been looked at.
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs['required'] = False
+        super().__init__(*args, **kwargs)
 
 
 class YesNoBooleanField(forms.BooleanField):
@@ -249,6 +294,10 @@ def build_field(question):
             step=str(Decimal(1).scaleb(-decimals)) if decimals else '1',
             decimal_places=decimals, max_digits=12,
         )
+    if qtype == schema.SIGNATURE:
+        return SignatureField(
+            label=question['label'], help_text=question['help'],
+        )
     if qtype == schema.FILE:
         return forms.FileField(**common)
     if qtype == schema.FILES:
@@ -305,6 +354,12 @@ class StepForm(AriaInvalidMixin, forms.Form):
                 continue
             value = cleaned[key]
 
+            # Before the general file branch: a signature is a file question,
+            # but its answer may have arrived as a drawing instead of an upload.
+            if question['type'] == schema.SIGNATURE:
+                self._clean_signature(cleaned, question)
+                continue
+
             if question['type'] in schema.FILE_TYPES:
                 try:
                     if question['type'] == schema.FILES:
@@ -348,6 +403,39 @@ class StepForm(AriaInvalidMixin, forms.Form):
         self._mirror_permanent_address(cleaned)
         self._apply_masters_gate(cleaned)
         return cleaned
+
+    def _clean_signature(self, cleaned, question):
+        """Resolve an uploaded or drawn signature into one validated upload.
+
+        An upload wins if both are present: the candidate picking a file after
+        drawing is them changing their mind, and the canvas keeps its strokes.
+        """
+        key = question['key']
+        upload = cleaned.get(key)
+
+        if not upload:
+            drawn = (self.data.get(question['drawn_key']) or '').strip()
+            if drawn:
+                try:
+                    upload = _decode_drawn_signature(drawn)
+                except forms.ValidationError as exc:
+                    self.add_error(key, exc)
+                    return
+
+        if upload:
+            try:
+                cleaned[key] = _validate_upload(upload)
+            except forms.ValidationError as exc:
+                self.add_error(key, exc)
+            return
+
+        cleaned[key] = None
+        # `already_uploaded` means a signature is on file from an earlier visit,
+        # so returning to this step via Back must not demand it again.
+        if question['required'] and key not in self.already_uploaded:
+            self.add_error(
+                key, 'Please sign in the box, or upload an image of your signature.'
+            )
 
     def _apply_masters_gate(self, cleaned):
         """Drop any Master's detail when the candidate says they have no Master's."""
