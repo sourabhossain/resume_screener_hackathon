@@ -59,7 +59,7 @@ class StepForm(AriaInvalidMixin, forms.Form):
         self.step_key = step_key
         self.step = schema.get_step(step_key)
         self.already_uploaded = set(already_uploaded)
-        self.questions = schema.numbered_questions(step_key)
+        self.questions = schema.questions(step_key)
 
         for question in self.questions:
             field = build_field(question)

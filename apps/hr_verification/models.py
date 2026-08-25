@@ -124,6 +124,17 @@ class HRVerification(models.Model):
             return schema.choice_label(question['key'], raw)
         return raw
 
+    def _is_answered(self, question, files_by_key) -> bool:
+        """Whether a question carries an answer, a stored file counting as one.
+
+        Not a truth test on the displayed value: a numeric 0 -- no direct
+        reports, a notice period of none -- is an answer, and truthiness would
+        drop the row off the review page entirely.
+        """
+        if files_by_key.get(question['key']):
+            return True
+        return self.display_value(question) != ''
+
     def answered_sections(self):
         """Every section with its answers, for the read-only review page."""
         files_by_key = {}
@@ -136,13 +147,13 @@ class HRVerification(models.Model):
             rows = [
                 {
                     'key': question['key'],
-                    'number': question['number'],
                     'label': question['label'],
                     'type': question['type'],
                     'value': self.display_value(question),
                     'files': files_by_key.get(question['key'], []),
+                    'answered': self._is_answered(question, files_by_key),
                 }
-                for question in schema.numbered_questions(step_key)
+                for question in schema.questions(step_key)
             ]
             out.append({
                 'key': step_key,

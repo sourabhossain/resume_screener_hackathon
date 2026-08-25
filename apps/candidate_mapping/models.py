@@ -112,6 +112,17 @@ class CandidateMapping(models.Model):
             return schema.choice_label(question['key'], raw)
         return raw
 
+    def _is_answered(self, question, files_by_key) -> bool:
+        """Whether a question carries an answer, a stored file counting as one.
+
+        Not a truth test on the displayed value: a numeric 0 -- no direct
+        reports, a notice period of none -- is an answer, and truthiness would
+        drop the row off the review page entirely.
+        """
+        if files_by_key.get(question['key']):
+            return True
+        return self.display_value(question) != ''
+
     def answered_sections(self):
         """Every section with its answers, for the read-only review page."""
         files_by_key = {}
@@ -129,13 +140,13 @@ class CandidateMapping(models.Model):
                 'rows': [
                     {
                         'key': question['key'],
-                        'number': question['number'],
                         'label': question['label'],
                         'type': question['type'],
                         'value': self.display_value(question),
                         'files': files_by_key.get(question['key'], []),
+                        'answered': self._is_answered(question, files_by_key),
                     }
-                    for question in schema.numbered_questions(step_key)
+                    for question in schema.questions(step_key)
                 ],
             })
         return out
@@ -146,17 +157,38 @@ class CandidateMapping(models.Model):
         question = schema.QUESTIONS_BY_KEY.get('mapping_outcome')
         return self.display_value(question) if question else ''
 
+    # Risk question -> what to call it when the answer is a concern.
+    _FINDING_LABELS = {
+        'adverse_record': 'Adverse record',
+        'performance_concerns': 'Performance concerns',
+        'integrity_issues': 'Integrity issues',
+        'short_tenure_pattern': 'Short tenures',
+    }
+
     @property
     def flagged_findings(self) -> list:
-        """Risk questions answered "Yes", for the card's at-a-glance line."""
-        labels = {
-            'adverse_record': 'Adverse record',
-            'performance_concerns': 'Performance concerns',
-            'integrity_issues': 'Integrity issues',
-            'short_tenure_pattern': 'Short tenures',
-        }
+        """Risk questions whose answer is a concern."""
         answers = self.answers or {}
-        return [label for key, label in labels.items() if answers.get(key) == 'yes']
+        found = [label for key, label in self._FINDING_LABELS.items()
+                 if answers.get(key) == 'yes']
+        # Involuntary separation is a flag in its own right, even where every
+        # question above came back clean.
+        if answers.get('separation_type') == 'terminated':
+            found.append('Involuntary separation')
+        return found
+
+    @property
+    def risk_summary(self) -> str:
+        """One honest line for the card and the review header.
+
+        "None flagged" is only said once the questions have actually been
+        answered. Before that the line says so, rather than letting an
+        unperformed check read as a clean result.
+        """
+        answers = self.answers or {}
+        if any(answers.get(key) in (None, '', []) for key in self._FINDING_LABELS):
+            return 'Not assessed'
+        return ', '.join(self.flagged_findings) or 'None flagged'
 
 
 def upload_to(instance, filename):

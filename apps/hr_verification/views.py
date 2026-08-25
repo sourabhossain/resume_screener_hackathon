@@ -232,7 +232,6 @@ def step(request, uuid, step_key):
             {
                 'key': key,
                 'title': schema.get_step(key)['title'],
-                'number': schema.step_number(key),
                 'complete': verification.is_step_complete(key),
                 'current': key == step_key,
             }
@@ -266,7 +265,11 @@ def submit(request, uuid):
                         step_key=verification.next_unfinished_step)
 
     verification.submit(user=request.user)
-    verification.save()
+    # Only the sign-off columns: a bare save() would write back the `answers`
+    # and `completed_steps` this request read earlier, losing a section another
+    # reviewer saved in the meantime.
+    verification.save(update_fields=['is_submitted', 'submitted_at', 'submitted_by',
+                                'updated_at'])
     logger.info(
         'hr_verification.signed_off verification=%s resume=%s by=%s',
         verification.pk, resume.pk, request.user.pk,

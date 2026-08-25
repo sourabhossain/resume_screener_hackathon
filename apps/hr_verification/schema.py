@@ -14,9 +14,10 @@ staff over days rather than in one sitting, so every section saves on its own.
 
 Two deliberate departures from the PDF, both mirroring the Employee Information
 Form:
-  * The PDF's Q1 Requisition ID is dropped, so this form has 200 questions and
-    our Q1 is the PDF's Q2. `QUESTION_NUMBERS` renumbers from position, so a
-    number shown to HR is this form's own -- not the PDF's.
+  * The PDF's Q1 Requisition ID is dropped, so this form has 200 questions.
+    Item numbers are not shown at all: with unanswered rows hidden on the review
+    page they read as a broken sequence (8, then 14), and every question here is
+    self-describing without one.
   * The PDF marks Employer 1-4 required, which would make the form
     unsubmittable for a candidate with fewer than four previous jobs -- or any
     at all. Here each employer block is optional until its name is given, at
@@ -769,29 +770,6 @@ def questions(step_key):
     return list(step['questions']) if step else []
 
 
-def _numbers():
-    """This form's own question number per key, generated from position.
-
-    Not the PDF's numbers: dropping its Q1 Requisition ID shifts everything up
-    one, so our Q1 is its Q2. Generated rather than written down so adding or
-    removing a question cannot leave the numbering stale.
-    """
-    out, n = {}, 0
-    for step in STEPS:
-        for question in step['questions']:
-            n += 1
-            out[question['key']] = n
-    return out
-
-
-QUESTION_NUMBERS = _numbers()
-
-
-def numbered_questions(step_key):
-    return [
-        {**question, 'number': QUESTION_NUMBERS[question['key']]}
-        for question in questions(step_key)
-    ]
 
 
 def question_groups(step_key):
@@ -800,7 +778,7 @@ def question_groups(step_key):
     Anything not named in STEP_GROUPS still renders, in a trailing untitled
     block, so adding a question cannot make it silently disappear.
     """
-    numbered = {q['key']: q for q in numbered_questions(step_key)}
+    numbered = {q['key']: q for q in questions(step_key)}
     blocks, placed = [], set()
     for title, keys in STEP_GROUPS.get(step_key, []):
         chosen = [numbered[k] for k in keys if k in numbered]

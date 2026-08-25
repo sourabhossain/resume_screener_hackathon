@@ -254,16 +254,22 @@ STEPS = [
                        'something is suspected.',
         'next': 'summary',
         'questions': [
+            # Required, though the PDF does not mark them. Left optional, a
+            # section could be saved and the whole mapping signed off with every
+            # finding blank, while the record reported "None flagged" -- an
+            # unperformed check presented as a clean one. "Unable to verify" is
+            # here precisely so there is an honest answer when nothing is known,
+            # so requiring these cannot deadlock anyone.
             _q('adverse_record',
                'Any adverse professional record in previous organizations?',
-               SELECT, choices=FINDING_CHOICES),
+               SELECT, required=True, choices=FINDING_CHOICES),
             _q('adverse_record_details', 'Describe the adverse record', TEXTAREA),
             _q('performance_concerns', 'Any performance-related concerns?', SELECT,
-               choices=FINDING_CHOICES),
+               required=True, choices=FINDING_CHOICES),
             _q('performance_concerns_details', 'Describe the performance concerns',
                TEXTAREA),
             _q('integrity_issues', 'Any disciplinary or integrity-related issues?',
-               SELECT, choices=FINDING_CHOICES),
+               SELECT, required=True, choices=FINDING_CHOICES),
             _q('integrity_issues_details',
                'Describe the disciplinary / integrity issues', TEXTAREA),
             _q('reasons_for_leaving',
@@ -271,10 +277,10 @@ STEPS = [
                required=True),
             _q('separation_type',
                'Did the candidate resign voluntarily, or was asked to leave / '
-               'terminated?', SELECT, choices=SEPARATION_CHOICES),
+               'terminated?', SELECT, required=True, choices=SEPARATION_CHOICES),
             _q('short_tenure_pattern',
                'Is there a pattern of repeated short tenures or frequent job '
-               'changes?', SELECT, choices=NO_YES_CHOICES),
+               'changes?', SELECT, required=True, choices=NO_YES_CHOICES),
             _q('short_tenure_details', 'Explain the pattern', TEXTAREA),
             _q('serving_notice', 'Is the candidate currently serving a notice period?',
                SELECT, choices=NO_YES_CHOICES),
@@ -439,24 +445,6 @@ def questions(step_key):
     return list(step['questions']) if step else []
 
 
-def _numbers():
-    """This form's own item number per key, generated from position."""
-    out, n = {}, 0
-    for step in STEPS:
-        for question in step['questions']:
-            n += 1
-            out[question['key']] = n
-    return out
-
-
-QUESTION_NUMBERS = _numbers()
-
-
-def numbered_questions(step_key):
-    return [
-        {**question, 'number': QUESTION_NUMBERS[question['key']]}
-        for question in questions(step_key)
-    ]
 
 
 def question_groups(step_key):
@@ -465,7 +453,7 @@ def question_groups(step_key):
     Anything not named in STEP_GROUPS still renders, in a trailing untitled
     block, so adding a question cannot make it silently disappear.
     """
-    numbered = {q['key']: q for q in numbered_questions(step_key)}
+    numbered = {q['key']: q for q in questions(step_key)}
     blocks, placed = [], set()
     for title, keys in STEP_GROUPS.get(step_key, []):
         chosen = [numbered[k] for k in keys if k in numbered]

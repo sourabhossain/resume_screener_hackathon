@@ -64,6 +64,7 @@ RISK_SECTION = {
     'adverse_record': 'none_known',
     'performance_concerns': 'none_known',
     'integrity_issues': 'none_known',
+    'separation_type': 'resigned',
     'short_tenure_pattern': 'no',
     'serving_notice': 'no',
 }
@@ -584,3 +585,104 @@ def test_an_empty_required_multi_select_is_rejected_server_side(hr_client, candi
 
     mapping.refresh_from_db()
     assert not mapping.is_step_complete('reporting')
+
+
+def test_item_numbers_are_not_shown(hr_client, candidate):
+    """They read as a broken sequence once blank rows are hidden."""
+    _start(hr_client, candidate)
+    hr_client.post(_url('step', candidate, step_key='candidate'), CANDIDATE_SECTION)
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+
+    assert 'Date of Assessment' in body
+    assert not re.search(r'>\s*\d+\.\s*</span>', body)
+    assert not hasattr(schema, 'QUESTION_NUMBERS')
+
+
+# ── Regressions found reviewing this app ─────────────────────────────────
+def test_a_zero_count_shows_on_the_review_page(hr_client, candidate):
+    """An individual contributor has 0 direct reports; that is an answer.
+
+    The review page used `{% if row.value %}`, which dropped the row entirely.
+    """
+    mapping = _start(hr_client, candidate)
+    hr_client.post(_url('step', candidate, step_key='team'), {
+        'team_structure': 'Worked inside a squad of six',
+        'direct_reports_count': '0',
+        'indirect_reports_count': '0',
+        'team_functions': 'Payments integration',
+        'authority_level': 'Technical decisions within the squad',
+    })
+    mapping.refresh_from_db()
+    assert mapping.answers['direct_reports_count'] == 0
+
+    rows = [r for section in mapping.answered_sections()
+            for r in section['rows']
+            if r['key'] in ('direct_reports_count', 'indirect_reports_count')]
+    assert all(r['answered'] for r in rows), '0 was filed as unanswered'
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+    assert 'People under direct supervision' in body
+
+
+def test_the_risk_questions_cannot_be_left_blank(hr_client, candidate):
+    """A blank check must not sign off looking like a clean one."""
+    mapping = _start(hr_client, candidate)
+
+    hr_client.post(_url('step', candidate, step_key='risk'),
+                   {'reasons_for_leaving': 'Career growth'})
+
+    mapping.refresh_from_db()
+    assert not mapping.is_step_complete('risk')
+
+
+def test_an_unassessed_risk_profile_says_so(hr_client, candidate):
+    """Before the questions are answered the line must not read "None flagged"."""
+    mapping = _start(hr_client, candidate)
+
+    assert mapping.risk_summary == 'Not assessed'
+    assert mapping.flagged_findings == []
+
+    hr_client.post(_url('step', candidate, step_key='risk'), RISK_SECTION)
+    mapping.refresh_from_db()
+    assert mapping.risk_summary == 'None flagged'
+
+
+def test_involuntary_separation_is_flagged_on_its_own(hr_client, candidate):
+    """Every finding clean but "asked to leave" is still a flag."""
+    mapping = _start(hr_client, candidate)
+
+    hr_client.post(_url('step', candidate, step_key='risk'),
+                   {**RISK_SECTION, 'separation_type': 'terminated'})
+
+    mapping.refresh_from_db()
+    assert mapping.flagged_findings == ['Involuntary separation']
+    assert mapping.risk_summary == 'Involuntary separation'
+
+
+def test_sign_off_does_not_clobber_a_concurrent_section_save(hr_client, candidate):
+    """submit() used a bare save(), writing back the answers it read earlier."""
+    mapping = _start(hr_client, candidate)
+    mapping.completed_steps = list(schema.STEP_KEYS)
+    mapping.save()
+    # Stand in for another assessor's save landing after this request read the row.
+    CandidateMapping.objects.filter(pk=mapping.pk).update(
+        answers={'suitability_summary': 'Written by the other assessor'})
+
+    hr_client.post(_url('submit', candidate))
+
+    mapping.refresh_from_db()
+    assert mapping.is_submitted
+    assert mapping.answers['suitability_summary'] == 'Written by the other assessor'
+
+
+def test_the_sign_off_dialog_names_this_record(hr_client, candidate):
+    """Both HR instruments sit on the same resume; the wording said "verification"."""
+    mapping = _start(hr_client, candidate)
+    mapping.completed_steps = list(schema.STEP_KEYS)
+    mapping.save()
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+
+    assert 'Sign off this candidate mapping?' in body
+    assert 'Sign off this verification?' not in body

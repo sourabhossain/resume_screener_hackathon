@@ -247,7 +247,11 @@ def submit(request, uuid):
                         step_key=mapping.next_unfinished_step)
 
     mapping.submit(user=request.user)
-    mapping.save()
+    # Only the sign-off columns: a bare save() would write back the `answers`
+    # and `completed_steps` this request read earlier, losing a section another
+    # reviewer saved in the meantime.
+    mapping.save(update_fields=['is_submitted', 'submitted_at', 'submitted_by',
+                                'updated_at'])
     logger.info(
         'candidate_mapping.signed_off mapping=%s resume=%s by=%s',
         mapping.pk, resume.pk, request.user.pk,

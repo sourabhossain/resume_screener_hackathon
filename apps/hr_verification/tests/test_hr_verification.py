@@ -4,6 +4,8 @@ Covers who may open it, when it opens, that sections save independently, that
 sign-off cannot skip a section, and that the candidate's own answers are carried
 across rather than retyped.
 """
+import re
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -427,15 +429,16 @@ def test_every_question_renders_in_a_titled_block():
         assert all(b['title'] for b in blocks), f'{step_key} has an untitled block'
 
 
-def test_question_numbers_run_from_one_with_no_gaps():
-    """Dropping the PDF's Q1 shifts every number up one; ours start at 1."""
-    assert schema.QUESTION_NUMBERS['candidate_full_name'] == 1
-    assert schema.QUESTION_NUMBERS['candidate_nid_number'] == 14
-    assert schema.QUESTION_NUMBERS['highest_degree'] == 31
-    assert schema.QUESTION_NUMBERS['employer_1_name'] == 69
-    assert schema.QUESTION_NUMBERS['reference_1_name'] == 146
-    assert schema.QUESTION_NUMBERS['hr_legal_review_completed'] == 200
-    assert sorted(schema.QUESTION_NUMBERS.values()) == list(range(1, 201))
+def test_item_numbers_are_not_shown(hr_client, candidate):
+    """They read as a broken sequence once blank rows are hidden: 8, then 14."""
+    _start(hr_client, candidate)
+    hr_client.post(_url('step', candidate, step_key='hr_review'), SECTION_A)
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+
+    assert 'HR Reviewer Designation' in body
+    assert not re.search(r'>\s*\d+\.\s*</span>', body)
+    assert not hasattr(schema, 'QUESTION_NUMBERS')
 
 
 def test_every_section_renders_for_hr(hr_client, candidate):
@@ -652,3 +655,84 @@ def test_no_page_shows_a_section_letter(hr_client, candidate):
 
     body = hr_client.get(_url('detail', candidate)).content.decode()
     assert not re.search(r'\bSection [A-F]\b', body)
+
+
+def test_a_numeric_zero_counts_as_answered(hr_client, candidate):
+    """The review page used `{% if row.value %}`, which hides a 0.
+
+    No question on this form can legitimately be 0 today, so this guards the
+    shared helper rather than a live case -- add one numeric question and the
+    row would otherwise vanish silently.
+    """
+    verification = _start(hr_client, candidate)
+    question = schema.QUESTIONS_BY_KEY['hsc_passing_year']
+    verification.answers = {'hsc_passing_year': 0}
+
+    assert verification._is_answered(question, {}) is True
+    assert verification._is_answered(
+        schema.QUESTIONS_BY_KEY['identity_police_remarks'], {}) is False
+
+
+def test_sign_off_does_not_clobber_a_concurrent_section_save(hr_client, candidate):
+    verification = _start(hr_client, candidate)
+    verification.completed_steps = list(schema.STEP_KEYS)
+    verification.save()
+    HRVerification.objects.filter(pk=verification.pk).update(
+        answers={'finding_details': 'Recorded by the other reviewer'})
+
+    hr_client.post(_url('submit', candidate))
+
+    verification.refresh_from_db()
+    assert verification.is_submitted
+    assert verification.answers['finding_details'] == 'Recorded by the other reviewer'
+
+
+def test_records_saved_before_the_section_rename_are_carried_across(candidate):
+    """Without the remap a record saved earlier reads as "Not started"."""
+    from importlib import import_module
+
+    from django.apps import apps as app_registry
+
+    module = import_module(
+        'apps.hr_verification.migrations.0002_rename_section_keys')
+    assert set(module.SECTION_KEYS.values()) == set(schema.STEP_KEYS)
+
+    # A row as it was stored before the rename.
+    verification = HRVerification.objects.create(
+        resume=candidate,
+        completed_steps=['section_a', 'section_b', 'section_c',
+                         'section_d', 'section_e', 'section_f'],
+        answers={'section_e_completion_date': '2026-07-01',
+                 'hr_reviewer_name': 'Hasan Rahman'},
+    )
+    assert verification.completed_count == 0, 'precondition: old keys do not count'
+    assert not verification.can_submit
+
+    module.forwards(app_registry, None)
+
+    verification.refresh_from_db()
+    assert verification.completed_steps == schema.STEP_KEYS
+    assert verification.completed_count == 6
+    assert verification.can_submit
+    assert verification.answers['verification_completion_date'] == '2026-07-01'
+    assert 'section_e_completion_date' not in verification.answers
+    assert verification.answers['hr_reviewer_name'] == 'Hasan Rahman'
+
+
+def test_the_rename_migration_is_reversible(candidate):
+    from importlib import import_module
+
+    from django.apps import apps as app_registry
+
+    module = import_module(
+        'apps.hr_verification.migrations.0002_rename_section_keys')
+    verification = HRVerification.objects.create(
+        resume=candidate, completed_steps=['hr_review', 'clearance'],
+        answers={'verification_completion_date': '2026-07-01'},
+    )
+
+    module.backwards(app_registry, None)
+
+    verification.refresh_from_db()
+    assert verification.completed_steps == ['section_a', 'section_f']
+    assert verification.answers['section_e_completion_date'] == '2026-07-01'
