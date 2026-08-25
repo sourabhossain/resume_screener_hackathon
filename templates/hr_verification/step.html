@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ step.title }} · HR Verification · {{ resume.candidate_name|title }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl pb-28">
+
+    <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to {{ resume.candidate_name|title|truncatechars:24 }}
+        </a>
+        <a href="{% url 'hr_verification:detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            Review all sections
+        </a>
+    </nav>
+
+    <div class="mb-6">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
+            HR Background Verification &amp; Joining Clearance
+        </p>
+        <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+            {{ step.title }}
+        </h1>
+        <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            {{ resume.candidate_name|title }}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            {{ resume.job.title }}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            Section {{ step_number }} of {{ total_steps }}
+        </p>
+    </div>
+
+    <div class="mb-6 flex flex-wrap gap-2">
+        {% for item in sections %}
+        <a href="{% url 'hr_verification:step' uuid=resume.uuid step_key=item.key %}"
+           class="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition {% if item.current %}border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300{% else %}border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800{% endif %}">
+            {% if item.complete %}
+            <svg class="h-3.5 w-3.5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            {% else %}
+            <span class="h-3.5 w-3.5 shrink-0 rounded-full border border-zinc-300 dark:border-zinc-600"></span>
+            {% endif %}
+            {{ item.title }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="mb-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-sm leading-relaxed text-amber-900 dark:text-amber-300">
+            Confidential — HR and authorised reviewers only. Sections save one at a
+            time, so you can leave and come back.
+            {% if step.description %} {{ step.description }}{% endif %}
+        </p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" hx-boost="false"
+          x-data="{ submitting: false }" @submit="submitting = true">
+        {% csrf_token %}
+
+        <div class="space-y-4">
+            {% for group in groups %}
+            <fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+                {% if group.title %}
+                <legend class="sr-only">{{ group.title }}</legend>
+                <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">{{ group.title }}</p>
+                </div>
+                {% endif %}
+
+                <div class="grid gap-x-5 gap-y-5 p-5 sm:grid-cols-2">
+                    {% for item in group.fields %}
+                    {% include 'employee_form/partials/field.html' with question=item.question field=item.field item=item %}
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% endfor %}
+        </div>
+
+        <div class="sticky bottom-0 z-20 mt-6 -mx-4 border-t border-zinc-200/80 bg-white/90 px-4 py-3.5 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/85 sm:mx-0 sm:rounded-2xl sm:border sm:px-5">
+            <div class="flex items-center gap-3">
+                {% if previous_step %}
+                <a href="{% url 'hr_verification:step' uuid=resume.uuid step_key=previous_step %}"
+                   class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    Back
+                </a>
+                {% endif %}
+
+                <p class="hidden min-w-0 flex-1 text-xs leading-snug text-zinc-500 dark:text-zinc-500 sm:block">
+                    {{ verification.completed_count }} of {{ total_steps }} sections saved.
+                    Sign-off is on the review page.
+                </p>
+
+                <button type="submit" :disabled="submitting"
+                        class="btn-primary inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none">
+                    <span x-show="!submitting">{% if is_final %}Save Section F{% else %}Save and continue{% endif %}</span>
+                    <span x-show="submitting" x-cloak>Saving…</span>
+                    <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

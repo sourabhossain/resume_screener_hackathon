@@ -55,6 +55,7 @@ urlpatterns = [
     path('', include('apps.core.urls')),
     path('', include('apps.interviews.urls')),
     path('', include('apps.employee_form.urls')),
+    path('', include('apps.hr_verification.urls')),
 
     # API URLs
     path('api/', include('apps.core.api_urls')),

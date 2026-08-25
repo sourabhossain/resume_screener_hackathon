@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}HR verification · {{ resume.candidate_name|title }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl pb-20">
+
+    <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to {{ resume.candidate_name|title|truncatechars:24 }}
+        </a>
+    </nav>
+
+    <header class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
+
+        <div class="flex flex-wrap items-start justify-between gap-4 px-6 pt-6">
+            <div class="min-w-0">
+                <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-primary-600 dark:text-primary-400">
+                    HR Background Verification &amp; Joining Clearance
+                </p>
+                <h1 class="mt-1 truncate text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                    {{ resume.candidate_name|title }}
+                </h1>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    {{ resume.job.title }}
+                    <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+                    {{ verification.status_label }}
+                    {% if verification.submitted_at %}
+                    <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+                    signed off {{ verification.submitted_at|naturaltime }}
+                    {% endif %}
+                </p>
+            </div>
+
+            {% if not verification.is_submitted %}
+            <a href="{% url 'hr_verification:step' uuid=resume.uuid step_key=verification.next_unfinished_step %}"
+               class="btn-primary inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white">
+                Continue filling
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            {% endif %}
+        </div>
+
+        <dl class="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 px-6 sm:grid-cols-3">
+            <div>
+                <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Risk rating</dt>
+                <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ verification.risk_rating_label|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Recommendation</dt>
+                <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ verification.recommendation_label|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Joining clearance</dt>
+                <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ verification.joining_clearance_label|default:"—" }}</dd>
+            </div>
+        </dl>
+
+        <div class="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-zinc-100 bg-zinc-50/70 px-6 py-3 text-xs dark:border-zinc-800 dark:bg-zinc-900/60">
+            <span class="text-zinc-500 dark:text-zinc-400">{{ verification.completed_count }} of {{ verification.total_steps }} sections saved</span>
+            <span class="text-zinc-500 dark:text-zinc-400">{{ documents|length }} document{{ documents|length|pluralize }}</span>
+            {% if verification.started_by %}
+            <span class="text-zinc-500 dark:text-zinc-400">Started by {{ verification.started_by.get_full_name|default:verification.started_by.username }}</span>
+            {% endif %}
+            {% if verification.submitted_by %}
+            <span class="text-zinc-500 dark:text-zinc-400">Signed off by {{ verification.submitted_by.get_full_name|default:verification.submitted_by.username }}</span>
+            {% endif %}
+        </div>
+    </header>
+
+    {% if not verification.is_submitted %}
+    <div class="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/90 bg-white px-6 py-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <p class="min-w-0 text-sm text-zinc-600 dark:text-zinc-300">
+            {% if verification.can_submit %}
+            Every section has been saved. Signing off locks this record.
+            {% else %}
+            Save every section before signing off.
+            {% endif %}
+        </p>
+        <form method="post" action="{% url 'hr_verification:submit' uuid=resume.uuid %}" hx-boost="false"
+              data-confirm
+              data-confirm-title="Sign off this verification?"
+              data-confirm-text="The record is locked once signed off and cannot be edited."
+              data-confirm-button="Sign off">
+            {% csrf_token %}
+            <button type="submit" {% if not verification.can_submit %}disabled{% endif %}
+                    class="btn-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                Sign off
+            </button>
+        </form>
+    </div>
+    {% endif %}
+
+    {% for section in sections %}
+    <section class="mt-5 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+            <h2 class="min-w-0 text-base font-bold text-zinc-900 dark:text-white">{{ section.section }}</h2>
+            <div class="flex items-center gap-3">
+                {% if section.complete %}
+                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Saved
+                </span>
+                {% else %}
+                <span class="text-xs font-semibold text-zinc-400">Not saved</span>
+                {% endif %}
+                {% if not verification.is_submitted %}
+                <a href="{% url 'hr_verification:step' uuid=resume.uuid step_key=section.key %}"
+                   class="text-xs font-semibold text-primary-600 hover:underline dark:text-primary-400">Edit</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <dl class="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {% for row in section.rows %}
+            {% if row.value or row.files %}
+            <div class="grid gap-1 px-6 py-3 sm:grid-cols-3 sm:gap-4">
+                <dt class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <span class="tabular-nums text-zinc-400 dark:text-zinc-500">{{ row.number }}.</span>
+                    {{ row.label }}
+                </dt>
+                <dd class="sm:col-span-2 text-sm text-zinc-900 dark:text-zinc-100">
+                    {% if row.files %}
+                    <ul class="space-y-1">
+                        {% for doc in row.files %}
+                        <li>
+                            <a href="{% url 'protected_media' path=doc.file.name %}?inline=1" target="_blank" rel="noopener"
+                               class="inline-flex items-center gap-1.5 font-medium text-primary-600 hover:underline dark:text-primary-400">
+                                <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                {{ doc.original_name|default:"Document" }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    {{ row.value|linebreaksbr }}
+                    {% endif %}
+                </dd>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </dl>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

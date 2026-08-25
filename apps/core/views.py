@@ -380,13 +380,26 @@ def resume_create(request, job_slug):
 
 @login_required
 def resume_detail(request, uuid):
+    from apps.hr_verification.views import STATUSES_ALLOWING_START
+
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    hr_verification = getattr(resume, 'hr_verification', None)
     return render(request, 'core/resume_detail.html', {
         'resume': resume,
         # None until the candidate is shortlisted; the section renders a
         # "not sent yet" state rather than being hidden, so the recruiter can
         # always see where the information form stands.
         'employee_form': getattr(resume, 'employee_form', None),
+        # The HR section is rendered only for HR staff — it holds police
+        # verification and adverse findings, which ordinary recruiters must not
+        # see even as a status chip.
+        'hr_verification': hr_verification,
+        'hr_verification_visible': bool(
+            request.user.is_staff or request.user.is_superuser
+        ),
+        'hr_verification_can_start': (
+            resume.recruiter_status in STATUSES_ALLOWING_START
+        ),
     })
 
 
@@ -439,6 +452,14 @@ def resume_delete(request, uuid):
 @login_required
 @ratelimit(key='user', rate='60/m', block=True)
 def serve_protected_media(request, path):
+    # HR background-check evidence (agency reports, police verification papers)
+    # is HR-only, unlike candidate documents every recruiter works with. Gated on
+    # the path because that is where these uploads live -- see
+    # hr_verification.models.upload_to.
+    if path.startswith('hr_verifications/') and not (
+        request.user.is_staff or request.user.is_superuser
+    ):
+        raise Http404
     full_path = os.path.join(settings.MEDIA_ROOT, path)
     # os.sep prevents path traversal into sibling directories (e.g. /media/../secrets)
     media_root = os.path.abspath(settings.MEDIA_ROOT) + os.sep

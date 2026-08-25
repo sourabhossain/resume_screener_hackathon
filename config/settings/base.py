@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'apps.core',
     'apps.interviews',
     'apps.employee_form',
+    'apps.hr_verification',
 ]
 
 MIDDLEWARE = [
