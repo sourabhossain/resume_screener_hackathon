@@ -103,12 +103,7 @@
     {% include 'core/partials/recruiter_status_control.html' with resume=resume status_context='card' %}
 </div>
 
-{% include 'employee_form/partials/resume_section.html' with resume=resume form_obj=employee_form %}
-
-{% if hr_verification_visible %}
-{% include 'hr_verification/partials/resume_section.html' %}
-{% include 'candidate_mapping/partials/resume_section.html' %}
-{% endif %}
+{% include 'core/partials/candidate_forms.html' %}
 
 {% with interviews=resume.interviews.all %}
 <div class="mb-8 rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">

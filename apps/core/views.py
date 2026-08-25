@@ -378,32 +378,53 @@ def resume_create(request, job_slug):
     return render(request, 'core/resume_form.html', {'form': form, 'job': job, 'title': 'Add Resume'})
 
 
-@login_required
-def resume_detail(request, uuid):
+def _candidate_forms_context(request, resume) -> dict:
+    """Everything the three form cards on the candidate page need.
+
+    Shared with `resume_forms`, which re-renders the same block after a status
+    change: what these cards show depends on `recruiter_status`, so the two must
+    build it identically or the refreshed version would disagree with the page.
+    """
     from apps.hr_verification.views import STATUSES_ALLOWING_START
 
-    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
-    hr_verification = getattr(resume, 'hr_verification', None)
-    return render(request, 'core/resume_detail.html', {
+    return {
         'resume': resume,
         # None until the candidate is shortlisted; the section renders a
         # "not sent yet" state rather than being hidden, so the recruiter can
         # always see where the information form stands.
         'employee_form': getattr(resume, 'employee_form', None),
-        # The HR section is rendered only for HR staff — it holds police
+        # The HR sections render only for HR staff — they hold police
         # verification and adverse findings, which ordinary recruiters must not
         # see even as a status chip.
-        'hr_verification': hr_verification,
+        'hr_verification': getattr(resume, 'hr_verification', None),
+        'candidate_mapping': getattr(resume, 'candidate_mapping', None),
         'hr_verification_visible': bool(
             request.user.is_staff or request.user.is_superuser
         ),
         'hr_verification_can_start': (
             resume.recruiter_status in STATUSES_ALLOWING_START
         ),
-        # Same gate and same audience as the verification above it: both are
-        # HR-only instruments that open once the candidate reaches interviewing.
-        'candidate_mapping': getattr(resume, 'candidate_mapping', None),
-    })
+    }
+
+
+@login_required
+def resume_detail(request, uuid):
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    return render(request, 'core/resume_detail.html',
+                  _candidate_forms_context(request, resume))
+
+
+@login_required
+def resume_forms(request, uuid):
+    """The three form cards, re-rendered after a recruiter-status change.
+
+    Shortlisting sends the information form and Interviewing opens the two HR
+    instruments, so a status change alters these cards -- and swapping only the
+    status control left them stale until the recruiter reloaded the page.
+    """
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    return render(request, 'core/partials/candidate_forms.html',
+                  _candidate_forms_context(request, resume))
 
 
 @login_required
@@ -949,14 +970,18 @@ def resume_status_update(request, uuid):
         response = render(
             request, template, {'resume': resume, 'status_context': status_context}
         )
+        # Announce the change so anything whose state depends on the status can
+        # re-render itself -- the candidate page's form cards listen for this.
+        # Only the control itself was swapped, so without it the cards would sit
+        # stale until the recruiter reloaded.
+        triggers = {'recruiter-status-changed': {'status': resume.recruiter_status}}
         if invite_note:
             # A fragment swap never includes #dj-messages, so a Django flash here
             # would be invisible now and then pop up on the next full page load.
             # Send it as an htmx trigger instead (see base.html).
             level, text = invite_note
-            response['HX-Trigger'] = json.dumps(
-                {'toast': {'level': level, 'text': text}}
-            )
+            triggers['toast'] = {'level': level, 'text': text}
+        response['HX-Trigger'] = json.dumps(triggers)
         return response
 
     if invite_note:

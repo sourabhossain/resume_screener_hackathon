@@ -1,0 +1,22 @@
+{% comment %}
+The three form cards, re-rendered in place when the recruiter status changes --
+shortlisting sends the information form, and Interviewing opens the two HR
+instruments, so the cards go stale the moment the status control is swapped.
+
+hx-target and hx-select are set explicitly, not left to inherit: <body> carries
+hx-boost with hx-target="#main-content" and hx-select="#main-content", and
+inheriting those would swap this fragment over the entire page.
+{% endcomment %}
+<div id="candidate-forms"
+     hx-get="{% url 'core:resume_forms' uuid=resume.uuid %}"
+     hx-trigger="recruiter-status-changed from:body"
+     hx-target="this"
+     hx-swap="outerHTML"
+     hx-select="unset">
+    {% include 'employee_form/partials/resume_section.html' with resume=resume form_obj=employee_form %}
+
+    {% if hr_verification_visible %}
+    {% include 'hr_verification/partials/resume_section.html' %}
+    {% include 'candidate_mapping/partials/resume_section.html' %}
+    {% endif %}
+</div>
