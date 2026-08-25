@@ -184,6 +184,12 @@
             }
 
             canvas.addEventListener('pointerdown', function (e) {
+                // Last line of defence against a zero-sized backing store, which
+                // would swallow every stroke silently.
+                if (!canvas.width && canvas.clientWidth) {
+                    width = canvas.clientWidth;
+                    reset();
+                }
                 drawing = true;
                 canvas.setPointerCapture(e.pointerId);
                 const p = at(e);
@@ -220,7 +226,10 @@
             // hiding its address bar, which fires resize without one.
             let width = 0;
             window.addEventListener('resize', function () {
-                if (canvas.clientWidth === width) return;
+                // Hidden behind the Upload tab the pad measures 0 wide. Rebuilding
+                // at that size leaves a 0x0 canvas that accepts strokes, shows
+                // none of them, and posts an empty image.
+                if (!canvas.clientWidth || canvas.clientWidth === width) return;
                 width = canvas.clientWidth;
                 wipe();
             });

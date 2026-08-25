@@ -168,41 +168,99 @@
         // unlabelled and nothing on screen marked.
         const DJ_INVALID_CONTROLS = 'input:invalid, select:invalid, textarea:invalid';
 
+        function djIsOption(field) {
+            return field.type === 'radio' || field.type === 'checkbox';
+        }
+
+        // Every input of one radio/checkbox question. They are a single answer,
+        // so they are marked and cleared together -- picking one option fires
+        // 'change' on that input alone, and the rest would stay marked forever.
+        function djOptionSiblings(field) {
+            if (!djIsOption(field) || !field.form || !field.name) return [field];
+            return Array.from(
+                field.form.querySelectorAll('[name="' + CSS.escape(field.name) + '"]')
+            );
+        }
+
         // Friendly label for a form control (used in validation toasts).
         function djFieldLabel(field) {
+            const block = field.closest('[data-question]');
+            // Each radio carries its own <label> ("I Agree"), so field.labels
+            // would name the option the user did not pick rather than the
+            // question they skipped. The block's first label is the question.
+            if (djIsOption(field) && block) {
+                const question = block.querySelector('label');
+                if (question) return question.textContent.replace('*', '').trim();
+            }
             if (field.labels && field.labels.length) {
                 return field.labels[0].textContent.replace('*', '').trim();
             }
-            // Radio and checkbox groups label the group, not each input, so fall
-            // back to the question block's own label.
-            const block = field.closest('[data-question]');
-            const own = block && block.querySelector('label');
-            if (own) return own.textContent.replace('*', '').trim();
             return field.getAttribute('aria-label') || field.placeholder || '';
         }
 
-        // Red outline on the field itself, cleared as soon as they start fixing it.
+        // What actually gets the red outline. For a radio/checkbox question that
+        // is the list of options, not each option: one answer is missing, and
+        // painting every choice red says all of them are wrong.
+        function djMarkTarget(field) {
+            if (!djIsOption(field)) return field;
+            const block = field.closest('[data-question]');
+            return (block && block.querySelector('[role="group"]')) || field;
+        }
+
         // Inline styles rather than utility classes: app.css is prebuilt, so a
         // class that isn't already in it would silently do nothing.
+        const DJ_MARK_FIELD = {
+            borderColor: '#e11d48',
+            boxShadow: '0 0 0 3px rgba(225, 29, 72, 0.15)',
+        };
+        const DJ_MARK_OPTIONS = {
+            outline: '2px solid #e11d48',
+            outlineOffset: '4px',
+            borderRadius: '10px',
+        };
+
+        function djPaint(el, style) {
+            const saved = {};
+            Object.keys(style).forEach(function (prop) {
+                saved[prop] = el.style[prop] || '';
+                el.style[prop] = style[prop];
+            });
+            el.dataset.djInvalid = '1';
+            el.dataset.djSaved = JSON.stringify(saved);
+        }
+
+        function djUnpaint(el) {
+            if (el.dataset.djInvalid !== '1') return;
+            const saved = JSON.parse(el.dataset.djSaved || '{}');
+            Object.keys(saved).forEach(function (prop) { el.style[prop] = saved[prop]; });
+            delete el.dataset.djInvalid;
+            delete el.dataset.djSaved;
+        }
+
+        // Red outline on the offending answer, cleared as soon as they start
+        // fixing it.
         function djMarkInvalid(field) {
-            if (field.dataset.djInvalid === '1') return;
-            field.dataset.djInvalid = '1';
-            field.dataset.djBorder = field.style.borderColor || '';
-            field.dataset.djShadow = field.style.boxShadow || '';
-            field.style.borderColor = '#e11d48';
-            field.style.boxShadow = '0 0 0 3px rgba(225, 29, 72, 0.15)';
-            field.setAttribute('aria-invalid', 'true');
+            const target = djMarkTarget(field);
+            if (target.dataset.djInvalid === '1') return;
+
+            const siblings = djOptionSiblings(field);
+            djPaint(target, djIsOption(field) ? DJ_MARK_OPTIONS : DJ_MARK_FIELD);
+            // aria-invalid goes on the inputs even when the outline is on their
+            // container, because that is what assistive tech reads.
+            siblings.forEach(function (el) { el.setAttribute('aria-invalid', 'true'); });
 
             const clear = function () {
-                field.style.borderColor = field.dataset.djBorder;
-                field.style.boxShadow = field.dataset.djShadow;
-                field.removeAttribute('aria-invalid');
-                delete field.dataset.djInvalid;
-                delete field.dataset.djBorder;
-                delete field.dataset.djShadow;
+                djUnpaint(target);
+                siblings.forEach(function (el) { el.removeAttribute('aria-invalid'); });
             };
-            field.addEventListener('input', clear, { once: true });
-            field.addEventListener('change', clear, { once: true });
+            siblings.forEach(function (el) {
+                // Bound once per element: re-marking after another failed submit
+                // must not stack another pair of listeners on it.
+                if (el.dataset.djWatched === '1') return;
+                el.dataset.djWatched = '1';
+                el.addEventListener('input', clear);
+                el.addEventListener('change', clear);
+            });
         }
 
         // Show a validation toast for an invalid field — with a graceful fallback

@@ -96,6 +96,16 @@ def _value(form, key):
     return form.display_value(question)
 
 
+def _is_blank(value) -> bool:
+    """Whether a displayed answer is actually missing.
+
+    Not a truth test: a numeric answer of 0 -- a fresher's 0 years of experience,
+    no notice period, a team of none -- is an answer, and truthiness would file
+    it as blank. `display_value` already returns '' for a genuinely empty one.
+    """
+    return value == ''
+
+
 def key_facts(form):
     """Identity facts for the header strip, skipping any left blank.
 
@@ -106,7 +116,7 @@ def key_facts(form):
     out, shown = [], set()
     for key, label in KEY_FACT_KEYS:
         value = _value(form, key)
-        if value:
+        if not _is_blank(value):
             out.append({'label': label, 'value': value})
             shown.add(key)
     return out, shown
@@ -197,13 +207,8 @@ def references(form):
 
 
 def _has_answer(row) -> bool:
-    """Whether a row carries an answer.
-
-    Not a truth test: a numeric answer of 0 -- no notice period, a team of none --
-    is an answer, and truthiness would file it under "not answered".
-    `display_value` already returns '' for a genuinely empty one.
-    """
-    return row['value'] != '' or bool(row['files'])
+    """Whether a row carries an answer, a stored file counting as one."""
+    return not _is_blank(row['value']) or bool(row['files'])
 
 
 def narrative_sections(form, suppress=frozenset()):

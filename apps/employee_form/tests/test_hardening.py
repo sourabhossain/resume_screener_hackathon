@@ -695,3 +695,17 @@ def test_a_zero_answer_counts_as_answered(verified):
     rows = [r for section in narrative_sections(form)
             for r in section['answered'] if r['key'] == 'notice_period_days']
     assert rows, '0 was filed as unanswered'
+
+
+def test_a_fresher_still_shows_experience_in_the_header(verified):
+    """0 years is a fresher, not a missing answer -- the header must say so."""
+    from apps.employee_form.review import key_facts
+
+    client, form = verified
+    form.answers = {'total_experience_years': 0.0}
+    form.save()
+
+    facts, shown = key_facts(form)
+    labels = [f['label'] for f in facts]
+    assert 'Experience (years)' in labels, '0 years vanished from the header strip'
+    assert 'total_experience_years' in shown
