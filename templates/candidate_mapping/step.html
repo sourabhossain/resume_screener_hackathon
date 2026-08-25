@@ -257,12 +257,28 @@
             width = canvas.clientWidth;
             reset();
 
+            // Exported over an opaque white sheet. The pad's backing store is
+            // transparent, so a bare toDataURL() stores near-black strokes on no
+            // background at all -- invisible against anything dark, which is
+            // exactly what an image viewer or a dark-themed page puts behind it.
+            function exportSignature() {
+                if (!canvas.width || !canvas.height) return '';
+                const flat = document.createElement('canvas');
+                flat.width = canvas.width;
+                flat.height = canvas.height;
+                const flatCtx = flat.getContext('2d');
+                flatCtx.fillStyle = '#ffffff';
+                flatCtx.fillRect(0, 0, flat.width, flat.height);
+                flatCtx.drawImage(canvas, 0, 0);
+                return flat.toDataURL('image/png');
+            }
+
             const form = block.closest('form');
             if (form) {
                 form.addEventListener('submit', function () {
                     // An upload wins over a drawing, matching the server.
                     const picked = file && file.files && file.files.length;
-                    hidden.value = (signed && !picked) ? canvas.toDataURL('image/png') : '';
+                    hidden.value = (signed && !picked) ? exportSignature() : '';
                 });
             }
         });

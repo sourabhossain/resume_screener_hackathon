@@ -232,3 +232,15 @@ class CandidateMappingFile(models.Model):
     def label(self) -> str:
         question = schema.QUESTIONS_BY_KEY.get(self.question_key)
         return question['label'] if question else self.question_key
+
+    IMAGE_SUFFIXES = ('.jpg', '.jpeg', '.png', '.webp')
+
+    @property
+    def is_image(self) -> bool:
+        """Whether the review page can show this inline.
+
+        A signature is only useful as a picture: as a filename it says nothing,
+        and it is the one thing on these forms a reader needs to actually look at.
+        """
+        name = (self.original_name or self.file.name or '').lower()
+        return name.endswith(self.IMAGE_SUFFIXES)

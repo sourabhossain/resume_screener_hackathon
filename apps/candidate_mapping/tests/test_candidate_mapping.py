@@ -686,3 +686,25 @@ def test_the_sign_off_dialog_names_this_record(hr_client, candidate):
 
     assert 'Sign off this candidate mapping?' in body
     assert 'Sign off this verification?' not in body
+
+
+def test_the_signature_is_shown_as_an_image_not_a_filename(hr_client, candidate):
+    """"signature.png" tells a reader nothing; the signature is the point."""
+    _start(hr_client, candidate)
+    hr_client.post(_url('step', candidate, step_key='summary'), SUMMARY_SECTION)
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+
+    assert '<img src="/media/hr_verifications/candidate_mappings/' in body
+    assert 'signature.png</a>' not in body
+
+
+def test_a_non_image_upload_stays_a_link(candidate):
+    from apps.candidate_mapping.models import CandidateMappingFile
+
+    mapping = CandidateMapping.objects.create(resume=candidate)
+    png = CandidateMappingFile(mapping=mapping, original_name='signature.png')
+    pdf = CandidateMappingFile(mapping=mapping, original_name='report.pdf')
+
+    assert png.is_image is True
+    assert pdf.is_image is False

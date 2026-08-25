@@ -115,3 +115,19 @@ def test_the_signature_is_stored_as_a_file_not_as_an_answer():
 
     assert 'signature' not in form.storable_answers()
     assert [key for key, _ in form.uploads()] == ['signature']
+
+
+def test_a_drawn_signature_is_stored_on_an_opaque_background():
+    """A transparent PNG of near-black strokes is invisible on anything dark.
+
+    The pad's backing store has no background, so the page composites the
+    strokes onto white before posting. Guarding the decode side here: whatever
+    arrives must still be a real PNG, and the browser-side compositing is
+    covered by the end-to-end run.
+    """
+    form = _form({'signature_drawn': SIGNATURE_DATA_URL})
+    assert form.is_valid(), form.errors
+
+    upload = form.cleaned_data['signature']
+    upload.seek(0)
+    assert upload.read().startswith(b'\x89PNG\r\n\x1a\n')
