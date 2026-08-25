@@ -586,3 +586,112 @@ def test_role_fields_fragment_rejects_a_step_with_no_role_section(verified):
         reverse('employee_form:role_fields',
                 kwargs={'token': form.token, 'step_key': 'section_a'}))
     assert response.status_code == 404
+
+
+# ── PROBE 8: numeric questions must not accept free text ────────────────
+def _walk_to_section_b(client, form):
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+
+
+def _section_b(**overrides):
+    """A section_b post that is complete apart from what the test changes.
+
+    The certificates matter: without them the step fails on the uploads alone,
+    and a test asserting "this was rejected" would pass for the wrong reason.
+    """
+    return {
+        **SECTION_B,
+        'bachelors_certificate': _pdf('b.pdf'),
+        'hsc_certificate': _pdf('h.pdf'),
+        'ssc_certificate': _pdf('s.pdf'),
+        **overrides,
+    }
+
+
+def test_valid_section_b_advances(verified):
+    """Control for the rejection tests below: the baseline post must succeed."""
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b', _section_b())
+
+    form.refresh_from_db()
+    assert form.current_step != 'section_b'
+
+
+@pytest.mark.parametrize('key', ['hsc_passing_year', 'hsc_result',
+                                 'ssc_passing_year', 'ssc_result'])
+def test_education_numbers_reject_text(verified, key):
+    """A passing year or GPA is a number; 'asdfasdf' used to be stored verbatim."""
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b', _section_b(**{key: 'asdfasdf'}))
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_b', f'{key} accepted free text'
+    assert (form.answers or {}).get(key) != 'asdfasdf'
+
+
+def test_passing_year_cannot_be_in_the_future(verified):
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b', _section_b(hsc_passing_year='2999'))
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_b', 'a future passing year was accepted'
+
+
+def test_gpa_above_the_scale_is_rejected(verified):
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b', _section_b(hsc_result='9.5'))
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_b', 'a GPA above the 5.00 scale was accepted'
+
+
+def test_numeric_answers_are_stored_as_numbers(verified):
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b',
+          _section_b(hsc_passing_year='2014', hsc_result='4.5'))
+
+    form.refresh_from_db()
+    assert form.answers['hsc_passing_year'] == 2014
+    assert form.answers['hsc_result'] == 4.5
+
+
+def test_numeric_inputs_carry_their_bounds_to_the_browser(verified):
+    """min/max/step on the input is what stops a bad value before a round trip."""
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+
+    body = client.get(reverse('employee_form:step',
+                              kwargs={'token': form.token,
+                                      'step_key': 'section_b'})).content.decode()
+
+    year = re.search(r'<input[^>]*name="hsc_passing_year"[^>]*>', body).group(0)
+    assert 'type="number"' in year
+    assert f'min="{schema.EARLIEST_PASSING_YEAR}"' in year
+    assert 'step="1"' in year
+
+    gpa = re.search(r'<input[^>]*name="hsc_result"[^>]*>', body).group(0)
+    assert 'type="number"' in gpa
+    assert 'max="5"' in gpa
+
+
+def test_a_zero_answer_counts_as_answered(verified):
+    """0 is an answer -- no notice period, a team of none -- not a blank."""
+    from apps.employee_form.review import narrative_sections
+
+    client, form = verified
+    form.answers = {'notice_period_days': 0}
+    form.save()
+
+    rows = [r for section in narrative_sections(form)
+            for r in section['answered'] if r['key'] == 'notice_period_days']
+    assert rows, '0 was filed as unanswered'

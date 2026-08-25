@@ -170,7 +170,13 @@ def test_full_submission(verified):
     # D1 is answered on the department page, so it is never a step of its own.
     assert 'department' in visited
     assert 'd1_sales' not in visited
-    assert form.answers['sales_target_achievement'] == '112'
+    # Numeric questions are stored as numbers, not as whatever string was typed.
+    assert form.answers['sales_target_achievement'] == 112.0
+    assert form.answers['hsc_passing_year'] == 2014
+    assert form.answers['ssc_passing_year'] == 2012
+    assert form.answers['hsc_result'] == 5.0
+    assert form.answers['total_experience_years'] == 5.0
+    assert form.answers['notice_period_days'] == 30
     assert form.answers['sales_new_business']
 
     # Answers stored under their schema keys, with choices kept as values.

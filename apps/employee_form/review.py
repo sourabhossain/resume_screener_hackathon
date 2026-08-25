@@ -196,6 +196,16 @@ def references(form):
     return out
 
 
+def _has_answer(row) -> bool:
+    """Whether a row carries an answer.
+
+    Not a truth test: a numeric answer of 0 -- no notice period, a team of none --
+    is an answer, and truthiness would file it under "not answered".
+    `display_value` already returns '' for a genuinely empty one.
+    """
+    return row['value'] != '' or bool(row['files'])
+
+
 def narrative_sections(form, suppress=frozenset()):
     """The remaining sections as answered/unanswered lists.
 
@@ -208,8 +218,8 @@ def narrative_sections(form, suppress=frozenset()):
         if section['key'] in SPECIALISED_STEPS:
             continue
         rows = [r for r in section['rows'] if r['key'] not in suppress]
-        answered = [r for r in rows if r['value'] or r['files']]
-        missing = [r for r in rows if not r['value'] and not r['files']]
+        answered = [r for r in rows if _has_answer(r)]
+        missing = [r for r in rows if not _has_answer(r)]
         if not answered and not missing:
             continue
         out.append({

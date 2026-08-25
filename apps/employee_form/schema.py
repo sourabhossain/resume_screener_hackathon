@@ -34,9 +34,19 @@ CHECKBOX = 'checkbox'   # multi-select
 BOOLEAN = 'boolean'     # single tick box; stores 'yes' / 'no'
 FILE = 'file'
 FILES = 'files'         # multiple uploads for one question
+INTEGER = 'integer'     # whole number
+DECIMAL = 'decimal'     # number that may carry a fractional part
+YEAR = 'year'           # four-digit year, never in the future
 
 FILE_TYPES = frozenset({FILE, FILES})
 CHOICE_TYPES = frozenset({RADIO, SELECT, CHECKBOX, BOOLEAN})
+NUMERIC_TYPES = frozenset({INTEGER, DECIMAL, YEAR})
+
+# Floor for any passing year. Old enough for any working candidate, low enough
+# not to reject anyone, but it still catches a mistyped or nonsense value. The
+# ceiling is the current year, applied in forms.py so it cannot go stale in a
+# long-running process.
+EARLIEST_PASSING_YEAR = 1950
 
 YES_NO = [('yes', 'Yes'), ('no', 'No')]
 
@@ -125,12 +135,21 @@ MAX_FILES_PER_QUESTION = 5
 _UPLOAD_HELP = f'PDF, document or image. Max {MAX_UPLOAD_MB} MB.'
 
 
-def _q(key, label, qtype=TEXT, required=False, help='', choices=None, max_files=None):
+def _q(key, label, qtype=TEXT, required=False, help='', choices=None, max_files=None,
+       min_value=None, max_value=None, decimals=2):
     q = {'key': key, 'label': label, 'type': qtype, 'required': required, 'help': help}
     if choices is not None:
         q['choices'] = choices
     if qtype == FILES:
         q['max_files'] = max_files or MAX_FILES_PER_QUESTION
+    if qtype in NUMERIC_TYPES:
+        # Bounds are part of the question, not of the widget: they are enforced
+        # server-side and mirrored onto the input so the browser catches a bad
+        # value before a round trip.
+        q['min_value'] = min_value
+        q['max_value'] = max_value
+        if qtype == DECIMAL:
+            q['decimals'] = decimals
     return q
 
 
@@ -265,9 +284,10 @@ STEPS = [
                TEXT, required=True),
             _q('hsc_board', 'HSC / A Level / Equivalent — Education Board', TEXT,
                required=True),
-            _q('hsc_passing_year', 'HSC / A Level / Equivalent — Passing Year', TEXT,
+            _q('hsc_passing_year', 'HSC / A Level / Equivalent — Passing Year', YEAR,
                required=True),
-            _q('hsc_result', 'HSC / A Level / Equivalent — Result / GPA', TEXT),
+            _q('hsc_result', 'HSC / A Level / Equivalent — Result / GPA', DECIMAL,
+               min_value=0, max_value=5, help='GPA on the 5.00 scale.'),
             _q('hsc_certificate', 'HSC / A Level / Equivalent — Certificate', FILE,
                required=True, help=_UPLOAD_HELP),
 
@@ -275,9 +295,10 @@ STEPS = [
                TEXT, required=True),
             _q('ssc_board', 'SSC / O Level / Equivalent — Education Board', TEXT,
                required=True),
-            _q('ssc_passing_year', 'SSC / O Level / Equivalent — Passing Year', TEXT,
+            _q('ssc_passing_year', 'SSC / O Level / Equivalent — Passing Year', YEAR,
                required=True),
-            _q('ssc_result', 'SSC / O Level / Equivalent — Result / GPA', TEXT),
+            _q('ssc_result', 'SSC / O Level / Equivalent — Result / GPA', DECIMAL,
+               min_value=0, max_value=5, help='GPA on the 5.00 scale.'),
             _q('ssc_certificate', 'SSC / O Level / Equivalent — Certificate', FILE,
                required=True, help=_UPLOAD_HELP),
 
@@ -404,7 +425,9 @@ STEPS += [
         'next': 'd7_declaration',
         'questions': [
             _q('sales_target_achievement',
-               'Revenue / Sales Target Achievement over the Last 12 Months (%)'),
+               'Revenue / Sales Target Achievement over the Last 12 Months (%)',
+               DECIMAL, min_value=0, max_value=1000,
+               help='Percentage of target achieved. Over 100 is fine.'),
             _q('sales_key_accounts', 'Key Accounts / Client Types Managed', TEXTAREA),
             _q('sales_portfolio_value', 'Approximate Portfolio Value / Deal Size Managed'),
             _q('sales_cycle_length', 'Average Sales Cycle Length'),
@@ -480,7 +503,8 @@ STEPS += [
         'questions': [
             _q('ops_processes_owned', 'Processes / SLAs / Projects Owned', TEXTAREA),
             _q('ops_kpis', 'Service / Operational KPIs Managed', TEXTAREA),
-            _q('ops_team_size', 'Team / Vendor Size Overseen'),
+            _q('ops_team_size', 'Team / Vendor Size Overseen', INTEGER,
+               min_value=0, max_value=100000, help='Number of people.'),
             _q('ops_tools', 'Systems / Tools Used for Operations or Project Management',
                TEXTAREA),
             _q('ops_stakeholder_exposure',
@@ -515,8 +539,9 @@ STEPS += [
         'next': None,
         'questions': [
             _q('total_experience_years', 'Total Years of Professional Experience',
-               TEXT, required=True),
-            _q('notice_period_days', 'Notice Period (days)', TEXT),
+               DECIMAL, required=True, min_value=0, max_value=60, decimals=1),
+            _q('notice_period_days', 'Notice Period (days)', INTEGER,
+               min_value=0, max_value=365),
             _q('earliest_joining_date', 'Earliest Possible Joining Date', DATE),
             _q('current_responsibilities',
                'Briefly describe your current / most recent key responsibilities',

@@ -4,6 +4,7 @@ One class handles every step: the questions for the step are turned into form
 fields, so there is no per-step form class to keep in sync with the schema.
 """
 import os
+from decimal import Decimal
 
 from django import forms
 from django.utils import timezone
@@ -148,6 +149,34 @@ class MultipleFileField(forms.FileField):
         return [super(MultipleFileField, self).clean(u, initial) for u in uploads]
 
 
+def _number_field(question, field_class, *, step, inputmode,
+                  min_value=None, max_value=None, **extra):
+    """A numeric field whose bounds are enforced twice.
+
+    Django re-checks them on POST, and the same min/max/step go onto the input so
+    the browser rejects a bad value before the round trip -- which is also what
+    stops free text being typed into a field that only ever holds a number.
+    """
+    low = min_value if min_value is not None else question.get('min_value')
+    high = max_value if max_value is not None else question.get('max_value')
+
+    attrs = {'class': 'form-input', 'inputmode': inputmode, 'step': step}
+    if low is not None:
+        attrs['min'] = low
+    if high is not None:
+        attrs['max'] = high
+
+    return field_class(
+        label=question['label'],
+        required=question['required'],
+        help_text=question['help'],
+        min_value=low,
+        max_value=high,
+        widget=forms.NumberInput(attrs=attrs),
+        **extra,
+    )
+
+
 def build_field(question):
     """Turn one schema question into a Django form field.
 
@@ -199,6 +228,26 @@ def build_field(question):
         # "everyone's addresses are the same", not "answer the question".
         return YesNoBooleanField(
             label=question['label'], required=False, help_text=question['help'],
+        )
+    if qtype == schema.YEAR:
+        # A passing year is always in the past. The ceiling is read per request
+        # rather than at import, so it stays right after a New Year without a
+        # restart -- the same reasoning as NOT_FUTURE_DATE_KEYS.
+        return _number_field(
+            question, forms.IntegerField, step='1', inputmode='numeric',
+            min_value=schema.EARLIEST_PASSING_YEAR,
+            max_value=timezone.localdate().year,
+        )
+    if qtype == schema.INTEGER:
+        return _number_field(
+            question, forms.IntegerField, step='1', inputmode='numeric',
+        )
+    if qtype == schema.DECIMAL:
+        decimals = question['decimals']
+        return _number_field(
+            question, forms.DecimalField, inputmode='decimal',
+            step=str(Decimal(1).scaleb(-decimals)) if decimals else '1',
+            decimal_places=decimals, max_digits=12,
         )
     if qtype == schema.FILE:
         return forms.FileField(**common)
@@ -392,6 +441,10 @@ class StepForm(AriaInvalidMixin, forms.Form):
             value = self.cleaned_data[key]
             if question['type'] == schema.DATE and value:
                 value = value.isoformat()
+            elif question['type'] == schema.DECIMAL and value is not None:
+                # `answers` is a JSONField and Decimal is not serialisable; float
+                # keeps the answer a number for the recruiter view and exports.
+                value = float(value)
             out[key] = value
         return out
 
