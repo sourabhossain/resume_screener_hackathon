@@ -4,9 +4,10 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from apps.core.documents import StoredDocumentMixin
+from apps.core.documents import StoredDocumentMixin, display_date
 
 from . import schema
+
 
 
 class HRVerification(models.Model):
@@ -124,6 +125,8 @@ class HRVerification(models.Model):
             return ', '.join(schema.choice_label(question['key'], v) for v in raw)
         if question['type'] in schema.CHOICE_TYPES:
             return schema.choice_label(question['key'], raw)
+        if question['type'] == schema.DATE:
+            return display_date(raw)
         return raw
 
     def _is_answered(self, question, files_by_key) -> bool:

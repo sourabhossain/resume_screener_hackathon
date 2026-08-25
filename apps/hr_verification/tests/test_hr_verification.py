@@ -736,3 +736,23 @@ def test_the_rename_migration_is_reversible(candidate):
     verification.refresh_from_db()
     assert verification.completed_steps == ['section_a', 'section_f']
     assert verification.answers['section_e_completion_date'] == '2026-07-01'
+
+
+def test_dates_read_as_dates_on_the_review_page(hr_client, candidate):
+    """Answers are JSON, so a date comes back as '2026-08-25' unless formatted."""
+    verification = _start(hr_client, candidate)
+    hr_client.post(_url('step', candidate, step_key='hr_review'), SECTION_A)
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+
+    assert '01 Aug 2026' in body
+    assert '2026-08-01' not in body
+
+
+def test_an_unparseable_date_still_shows(candidate):
+    """A hand-edited or older value must render, not raise."""
+    verification = HRVerification(
+        resume=candidate, answers={'verification_start_date': 'not a date'})
+    question = schema.QUESTIONS_BY_KEY['verification_start_date']
+
+    assert verification.display_value(question) == 'not a date'

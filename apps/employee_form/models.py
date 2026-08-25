@@ -7,7 +7,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
-from apps.core.documents import StoredDocumentMixin
+from apps.core.documents import StoredDocumentMixin, display_date
 
 from . import schema
 
@@ -244,6 +244,8 @@ class EmployeeForm(models.Model):
             return ', '.join(schema.choice_label(question['key'], v) for v in raw)
         if question['type'] in schema.CHOICE_TYPES:
             return schema.choice_label(question['key'], raw)
+        if question['type'] == schema.DATE:
+            return display_date(raw)
         return raw
 
     @property

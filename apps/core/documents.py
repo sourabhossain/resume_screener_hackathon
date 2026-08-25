@@ -1,11 +1,27 @@
-"""How a stored upload is described to a template.
+"""How a stored answer or upload is described to a template.
 
-Three apps store candidate and HR documents against a question key, and each was
-growing its own copy of "is this an image?" and "what URL renders it inline?".
-The rules belong in one place: they encode what `serve_protected_media` will
-actually agree to serve inline, and a copy that drifts from it renders a dead
-link or an <img> the server refuses.
+The three form apps keep their answers in JSON and their uploads against a
+question key, and each was growing its own copy of "is this an image?", "what
+URL renders it inline?" and "how does a stored date read?". They belong in one
+place: the upload rules encode what `serve_protected_media` will actually agree
+to serve inline, and a copy that drifts from it renders a dead link or an <img>
+the server refuses.
 """
+from datetime import date
+
+
+def display_date(raw):
+    """An ISO date stored in a JSON answer, rendered the way a person reads one.
+
+    Answers are JSON, so a date comes back as '2026-08-25'. Left alone it reaches
+    the review page raw, sitting next to prose -- and an unparseable value
+    (hand-edited, or left over from an older schema) still has to show rather
+    than blow the page up.
+    """
+    try:
+        return date.fromisoformat(str(raw)).strftime('%d %b %Y')
+    except (TypeError, ValueError):
+        return raw
 
 
 class StoredDocumentMixin:

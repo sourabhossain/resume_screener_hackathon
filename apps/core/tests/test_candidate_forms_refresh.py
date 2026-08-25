@@ -121,3 +121,31 @@ def test_the_page_and_the_fragment_agree(hr_client, candidate):
     for marker in ('Employee Information Form', 'HR Background Verification',
                    'Candidate Mapping', 'Start verification', 'Start mapping'):
         assert (marker in page) == (marker in fragment), marker
+
+
+def test_the_block_does_not_hand_its_wiring_to_the_links_inside(hr_client, candidate):
+    """htmx attributes are inherited by descendants.
+
+    Without hx-disinherit the boosted links in these cards ("View responses",
+    "View record", "Continue") pick up the block's own hx-target="this" /
+    hx-select="unset" and paste a whole page -- nav, footer and all -- inside the
+    card instead of navigating to it.
+    """
+    body = hr_client.get(_forms_url(candidate)).content.decode()
+
+    assert 'hx-disinherit=' in body
+    disinherited = body.split('hx-disinherit="')[1].split('"')[0].split()
+    for attr in ('hx-target', 'hx-select', 'hx-swap', 'hx-trigger'):
+        assert attr in disinherited, attr
+
+
+def test_the_cards_do_contain_boosted_links(hr_client, candidate):
+    """Guards the test above: it only means something while the links exist."""
+    candidate.recruiter_status = 'interviewing'
+    candidate.save()
+
+    body = hr_client.get(_forms_url(candidate)).content.decode()
+
+    assert 'information-form/' in body
+    assert 'hr-verification/' in body
+    assert 'candidate-mapping/' in body
