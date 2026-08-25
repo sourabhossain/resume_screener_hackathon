@@ -1,0 +1,113 @@
+{% comment %}
+Drives every [data-signature] block rendered by employee_form/partials/field.html.
+Included by each step template that can render a signature question -- kept here
+rather than copied per template, because a copy that goes missing renders a pad
+that accepts strokes and posts nothing.
+{% endcomment %}
+<script>
+    // Signature pad. Only posted when something was actually drawn -- an
+    // untouched pad would otherwise submit a blank image and satisfy a required
+    // signature with nothing in it.
+    (function () {
+        document.querySelectorAll('[data-signature]').forEach(function (block) {
+            const canvas = block.querySelector('[data-signature-pad]');
+            const hidden = block.querySelector('[data-signature-data]');
+            const clearBtn = block.querySelector('[data-signature-clear]');
+            const status = block.querySelector('[data-signature-status]');
+            const file = block.querySelector('input[type="file"]');
+            if (!canvas || !hidden) return;
+
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            let signed = false;
+
+            function say(text) { if (status) status.textContent = text; }
+
+            function reset() {
+                // Sized in device pixels so the line is not blurry on a phone;
+                // the CSS size stays whatever the layout says.
+                const ratio = window.devicePixelRatio || 1;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.round(rect.width * ratio);
+                canvas.height = Math.round(rect.height * ratio);
+                ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#18181b';
+                ctx.clearRect(0, 0, rect.width, rect.height);
+            }
+
+            function at(e) {
+                const rect = canvas.getBoundingClientRect();
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+
+            canvas.addEventListener('pointerdown', function (e) {
+                // Last line of defence against a zero-sized backing store,
+                // which would swallow every stroke silently.
+                if (!canvas.width && canvas.clientWidth) {
+                    width = canvas.clientWidth;
+                    reset();
+                }
+                drawing = true;
+                canvas.setPointerCapture(e.pointerId);
+                const p = at(e);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+            });
+
+            canvas.addEventListener('pointermove', function (e) {
+                if (!drawing) return;
+                const p = at(e);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+                if (!signed) { signed = true; say('Signed'); }
+            });
+
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (name) {
+                canvas.addEventListener(name, function () { drawing = false; });
+            });
+
+            function wipe() { reset(); signed = false; hidden.value = ''; say(''); }
+            if (clearBtn) clearBtn.addEventListener('click', wipe);
+
+            // Resizing rebuilds the backing store, which erases the drawing, so
+            // only react to an actual width change -- and never to a width of 0,
+            // which is what the pad measures while hidden behind Upload.
+            let width = 0;
+            window.addEventListener('resize', function () {
+                if (!canvas.clientWidth || canvas.clientWidth === width) return;
+                width = canvas.clientWidth;
+                wipe();
+            });
+            width = canvas.clientWidth;
+            reset();
+
+            // Exported over an opaque white sheet. The pad's backing store is
+            // transparent, so a bare toDataURL() stores near-black strokes on no
+            // background at all -- invisible against anything dark, which is
+            // exactly what an image viewer or a dark-themed page puts behind it.
+            function exportSignature() {
+                if (!canvas.width || !canvas.height) return '';
+                const flat = document.createElement('canvas');
+                flat.width = canvas.width;
+                flat.height = canvas.height;
+                const flatCtx = flat.getContext('2d');
+                flatCtx.fillStyle = '#ffffff';
+                flatCtx.fillRect(0, 0, flat.width, flat.height);
+                flatCtx.drawImage(canvas, 0, 0);
+                return flat.toDataURL('image/png');
+            }
+
+            const form = block.closest('form');
+            if (form) {
+                form.addEventListener('submit', function () {
+                    // An upload wins over a drawing, matching the server.
+                    const picked = file && file.files && file.files.length;
+                    hidden.value = (signed && !picked) ? exportSignature() : '';
+                });
+            }
+        });
+    })();
+</script>

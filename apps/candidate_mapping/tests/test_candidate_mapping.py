@@ -708,3 +708,25 @@ def test_a_non_image_upload_stays_a_link(candidate):
 
     assert png.is_image is True
     assert pdf.is_image is False
+
+
+def test_hr_evidence_is_not_cached_by_the_browser(hr_client, candidate, settings,
+                                                  tmp_path):
+    """NID scans, signatures and agency reports must not linger in a cache."""
+    from apps.candidate_mapping.models import CandidateMappingFile
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    mapping = CandidateMapping.objects.create(resume=candidate)
+    upload = CandidateMappingFile.objects.create(
+        mapping=mapping, question_key='assessor_signature',
+        file=SimpleUploadedFile('signature.png', b'\x89PNG\r\n\x1a\n' + b'0' * 40,
+                                content_type='image/png'),
+        original_name='signature.png',
+    )
+
+    response = hr_client.get(upload.view_url)
+
+    assert response.status_code == 200
+    assert 'no-store' in response['Cache-Control']
+    assert 'private' in response['Cache-Control']

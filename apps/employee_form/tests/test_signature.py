@@ -131,3 +131,34 @@ def test_a_drawn_signature_is_stored_on_an_opaque_background():
     upload = form.cleaned_data['signature']
     upload.seek(0)
     assert upload.read().startswith(b'\x89PNG\r\n\x1a\n')
+
+
+def test_the_pad_composites_onto_white_before_posting():
+    """A transparent PNG of near-black strokes is invisible on anything dark.
+
+    The compositing runs in the browser, so this guards the one thing a Django
+    test can: that the shared pad script still does it. Deleting
+    `exportSignature()` used to leave the whole suite green.
+    """
+    from django.template.loader import render_to_string
+
+    script = render_to_string('shared/signature_pad.html')
+
+    assert 'exportSignature' in script
+    assert "fillStyle = '#ffffff'" in script
+    assert 'fillRect' in script
+    # and the raw canvas export must not be what gets posted
+    assert "hidden.value = (signed && !picked) ? exportSignature() : ''" in script
+    assert "toDataURL('image/png')" in script.split('function exportSignature')[1]
+
+
+def test_every_step_template_that_can_render_a_pad_includes_the_script():
+    """A step template rendering the shared field partial without the script
+    would show a pad that accepts strokes and posts nothing."""
+    import pathlib
+
+    for name in ('employee_form', 'candidate_mapping', 'hr_verification'):
+        path = pathlib.Path(f'/app/templates/{name}/step.html')
+        body = path.read_text()
+        assert "employee_form/partials/field.html" in body, name
+        assert "shared/signature_pad.html" in body, name

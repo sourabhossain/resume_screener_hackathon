@@ -492,6 +492,10 @@ def serve_protected_media(request, path):
         and full_path.lower().endswith(INLINE_SAFE_SUFFIXES)
     )
     response = FileResponse(open(full_path, 'rb'), as_attachment=not inline)
+    # Candidate PII and HR evidence: NID scans, signatures, agency reports. Kept
+    # out of shared caches and off disk, so a document does not outlive the
+    # session that was allowed to see it.
+    response['Cache-Control'] = 'private, no-store, max-age=0'
     if inline:
         response['X-Frame-Options'] = 'SAMEORIGIN'
         response['Content-Security-Policy'] = (

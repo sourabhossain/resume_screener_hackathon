@@ -7,6 +7,8 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
+from apps.core.documents import StoredDocumentMixin
+
 from . import schema
 
 
@@ -293,7 +295,7 @@ def upload_to(instance, filename):
     )
 
 
-class EmployeeFormFile(models.Model):
+class EmployeeFormFile(StoredDocumentMixin, models.Model):
     """A document uploaded against one question (NID scan, certificate, ...).
 
     Served only through the login-protected media view, never from a public URL.
@@ -320,43 +322,5 @@ class EmployeeFormFile(models.Model):
         q = schema.QUESTIONS_BY_KEY.get(self.question_key)
         return q['label'] if q else self.question_key
 
-    IMAGE_SUFFIXES = ('.jpg', '.jpeg', '.png', '.webp')
-
-    @property
-    def extension(self) -> str:
-        name = self.original_name or self.file.name or ''
-        return name.rsplit('.', 1)[-1].lower() if '.' in name else ''
-
-    @property
-    def kind(self) -> str:
-        """How the viewer should render this: 'image', 'pdf' or 'file'.
-
-        'file' covers doc/docx, which no browser displays — those are offered as
-        a download instead of being put in a dead iframe.
-        """
-        name = (self.original_name or self.file.name or '').lower()
-        if name.endswith(self.IMAGE_SUFFIXES):
-            return 'image'
-        if name.endswith('.pdf'):
-            return 'pdf'
-        return 'file'
-
-    @property
-    def view_url(self) -> str:
-        """URL that renders in the browser rather than downloading.
-
-        `serve_protected_media` only honours inline for formats it considers safe,
-        so this falls back to the plain (download) URL for anything else.
-        """
-        if self.kind == 'file':
-            return self.file.url
-        return f'{self.file.url}?inline=1'
-
-    @property
-    def size_display(self) -> str:
-        size = self.size_bytes or 0
-        if size >= 1024 * 1024:
-            return f'{size / (1024 * 1024):.1f} MB'
-        if size >= 1024:
-            return f'{size / 1024:.0f} KB'
-        return f'{size} B'
+    # extension / kind / is_image / view_url / size_display come from
+    # StoredDocumentMixin -- shared with the two HR forms' uploads.
