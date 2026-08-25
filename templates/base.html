@@ -162,12 +162,47 @@
             });
         });
 
+        // Real form controls only. ':invalid' on its own also matches <form> and
+        // any <fieldset> wrapping an invalid control -- neither is focusable and
+        // neither carries a validationMessage, so selecting one leaves the toast
+        // unlabelled and nothing on screen marked.
+        const DJ_INVALID_CONTROLS = 'input:invalid, select:invalid, textarea:invalid';
+
         // Friendly label for a form control (used in validation toasts).
         function djFieldLabel(field) {
             if (field.labels && field.labels.length) {
                 return field.labels[0].textContent.replace('*', '').trim();
             }
+            // Radio and checkbox groups label the group, not each input, so fall
+            // back to the question block's own label.
+            const block = field.closest('[data-question]');
+            const own = block && block.querySelector('label');
+            if (own) return own.textContent.replace('*', '').trim();
             return field.getAttribute('aria-label') || field.placeholder || '';
+        }
+
+        // Red outline on the field itself, cleared as soon as they start fixing it.
+        // Inline styles rather than utility classes: app.css is prebuilt, so a
+        // class that isn't already in it would silently do nothing.
+        function djMarkInvalid(field) {
+            if (field.dataset.djInvalid === '1') return;
+            field.dataset.djInvalid = '1';
+            field.dataset.djBorder = field.style.borderColor || '';
+            field.dataset.djShadow = field.style.boxShadow || '';
+            field.style.borderColor = '#e11d48';
+            field.style.boxShadow = '0 0 0 3px rgba(225, 29, 72, 0.15)';
+            field.setAttribute('aria-invalid', 'true');
+
+            const clear = function () {
+                field.style.borderColor = field.dataset.djBorder;
+                field.style.boxShadow = field.dataset.djShadow;
+                field.removeAttribute('aria-invalid');
+                delete field.dataset.djInvalid;
+                delete field.dataset.djBorder;
+                delete field.dataset.djShadow;
+            };
+            field.addEventListener('input', clear, { once: true });
+            field.addEventListener('change', clear, { once: true });
         }
 
         // Show a validation toast for an invalid field — with a graceful fallback
@@ -208,10 +243,19 @@
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 e.preventDefault();
                 e.stopPropagation(); // keep the form's own @submit (e.g. spinner) from firing
-                const field = form.querySelector(':invalid');
+                // Mark every offending field, not just the first: on a long step
+                // the candidate would otherwise fix one and be sent back again.
+                const invalid = form.querySelectorAll(DJ_INVALID_CONTROLS);
+                invalid.forEach(djMarkInvalid);
+                const field = invalid[0];
                 if (field) {
                     djFieldValidationToast(field);
-                    try { field.focus({ preventScroll: false }); } catch (_) {}
+                    // Centred rather than scrolled to the edge, so the field does
+                    // not land under the sticky action bar.
+                    if (field.offsetParent !== null) {
+                        try { field.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+                    }
+                    try { field.focus({ preventScroll: true }); } catch (_) {}
                 }
                 return;
             }
