@@ -183,8 +183,8 @@ def _route_department(answers):
 STEPS = [
     {
         'key': 'section_a',
-        'section': 'Section A — Candidate Identification & Police Verification Information',
-        'title': 'Candidate Identification & Police Verification',
+        'section': 'Section A — Candidate Identification Information',
+        'title': 'Candidate Identification',
         'description': 'Please provide information exactly as shown on your official documents.',
         'next': 'section_b',
         'questions': [
