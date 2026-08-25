@@ -10,6 +10,7 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -170,10 +171,21 @@ def step(request, uuid, step_key):
                 )
 
         if valid:
-            verification.answers = {**answers, **step_form.storable_answers()}
-            verification.mark_step_complete(step_key)
-            verification.last_saved_by = request.user
-            verification.save()
+            # Re-read under a row lock before merging. `answers` holds every
+            # section, so two HR users saving different sections at the same time
+            # would otherwise each write the copy they loaded and silently drop
+            # the other's work.
+            with transaction.atomic():
+                locked = (HRVerification.objects
+                          .select_for_update()
+                          .get(pk=verification.pk))
+                locked.answers = {
+                    **(locked.answers or {}), **step_form.storable_answers()
+                }
+                locked.mark_step_complete(step_key)
+                locked.last_saved_by = request.user
+                locked.save()
+            verification = locked
             logger.info(
                 'hr_verification.section_saved verification=%s section=%s by=%s',
                 verification.pk, step_key, request.user.pk,
@@ -207,7 +219,11 @@ def step(request, uuid, step_key):
         'is_final': schema.next_step_key(step_key) is None,
         'groups': step_form.field_groups(),
         'uploaded_keys': uploaded_keys,
-        'prefilled_keys': set(prefill),
+        # The shared field template's prefill badge is candidate-facing copy
+        # ("check it matches your documents"), and it cannot tell a value HR
+        # deliberately cleared from one they never filled. The section banner
+        # says where these values come from instead.
+        'prefilled_keys': set(),
         'sections': [
             {
                 'key': key,

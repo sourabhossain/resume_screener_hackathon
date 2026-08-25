@@ -124,7 +124,12 @@ class StepForm(AriaInvalidMixin, forms.Form):
                 continue
             for suffix in schema.EMPLOYER_REQUIRED_ONCE_NAMED:
                 key = f'employer_{index}_{suffix}'
-                if key in self.fields and not cleaned.get(key):
+                if key not in self.fields or self.errors.get(key):
+                    # `add_error` drops the key from cleaned_data, so a field that
+                    # already failed on its format would otherwise also be told
+                    # it is missing -- two contradictory errors on a filled field.
+                    continue
+                if not cleaned.get(key):
                     self.add_error(
                         key,
                         'Required once this employer is named. Clear the employer '

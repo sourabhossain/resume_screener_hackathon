@@ -12,13 +12,17 @@ Unlike the candidate form this one does not branch: HR sees every section, in
 order, and may jump between them freely (see `views.step`). It is filled by
 staff over days rather than in one sitting, so every section saves on its own.
 
-One deliberate departure from the PDF, for the same reason the Employee
-Information Form made the same one: the PDF marks Employer 1-4 as required,
-which would make the form unsubmittable for a candidate with fewer than four
-previous jobs -- or any at all. Here each employer block is optional until its
-name is given, at which point the rest of that block becomes required. Employer
-names are prefilled from what the candidate declared, so a block the candidate
-filled in *is* required of HR without HR having to be told.
+Two deliberate departures from the PDF, both mirroring the Employee Information
+Form:
+  * The PDF's Q1 Requisition ID is dropped, so this form has 200 questions and
+    our Q1 is the PDF's Q2. `QUESTION_NUMBERS` renumbers from position, so a
+    number shown to HR is this form's own -- not the PDF's.
+  * The PDF marks Employer 1-4 required, which would make the form
+    unsubmittable for a candidate with fewer than four previous jobs -- or any
+    at all. Here each employer block is optional until its name is given, at
+    which point the rest of that block becomes required. Employer names are
+    prefilled from what the candidate declared, so a block the candidate filled
+    in *is* required of HR without HR having to be told.
 """
 # The question vocabulary is shared with the Employee Information Form rather
 # than redeclared: `forms.build_field` there is what turns these dicts into
@@ -273,10 +277,16 @@ def _degree_block(prefix, title, *, passing_year=False):
 
 # Everything in an employer block that becomes required once the employer is
 # named. The PDF marks these *Required; naming is what switches them on.
+#
+# The employer's *confirmed* dates are deliberately not here, even though the PDF
+# requires them. They are the employer's answer, not HR's: this same section
+# offers "Unable to Verify" and "Employer Would Not Disclose", and requiring the
+# confirmed dates would make both of those unrecordable -- Section D could never
+# be saved, and because sign-off needs every section, the whole verification
+# would deadlock with no way out but erasing the employer's name.
 EMPLOYER_REQUIRED_ONCE_NAMED = (
     'hr_contact', 'hr_email', 'position',
     'claimed_start_date', 'claimed_end_date',
-    'confirmed_start_date', 'confirmed_end_date',
     'reference_check_verified', 'verification_status', 'verification_method',
     'tenure_discrepancy',
 )
@@ -360,7 +370,6 @@ STEPS = [
         'description': 'Who is being verified, by whom, and through which route.',
         'next': 'section_b',
         'questions': [
-            _q('requisition_id', 'Requisition ID', required=True),
             _q('candidate_full_name', 'Candidate Full Name', required=True),
             _q('position_applied_for', 'Position Applied For', required=True),
             _q('department', 'Department', SELECT, required=True,
@@ -573,7 +582,7 @@ STEPS = [
 # ── Rendering hints ──────────────────────────────────────────────────────
 # Fields short enough to share a row. Anything unlisted spans the form.
 HALF_WIDTH_KEYS = frozenset({
-    'requisition_id', 'position_applied_for', 'department',
+    'position_applied_for', 'department',
     'hr_reviewer_name', 'hr_reviewer_designation', 'verification_start_date',
     'agency_name', 'agency_contact', 'agency_report_reference', 'agency_report_date',
     'candidate_nid_number', 'candidate_birth_certificate_number',
@@ -637,8 +646,8 @@ def _reference_group(index):
 # Long sections render as a few short titled blocks instead of one wall.
 STEP_GROUPS = {
     'section_a': [
-        ('Candidate & requisition', ['requisition_id', 'candidate_full_name',
-                                     'position_applied_for', 'department']),
+        ('Candidate', ['candidate_full_name', 'position_applied_for',
+                       'department']),
         ('HR reviewer', ['hr_reviewer_name', 'hr_reviewer_designation',
                          'verification_start_date']),
         ('Verification route', ['verification_route', 'agency_required']),
@@ -745,7 +754,12 @@ def questions(step_key):
 
 
 def _numbers():
-    """PDF question number per key, so HR can cite "Q87" to the agency."""
+    """This form's own question number per key, generated from position.
+
+    Not the PDF's numbers: dropping its Q1 Requisition ID shifts everything up
+    one, so our Q1 is its Q2. Generated rather than written down so adding or
+    removing a question cannot leave the numbering stale.
+    """
     out, n = {}, 0
     for step in STEPS:
         for question in step['questions']:
@@ -799,10 +813,12 @@ def choice_label(question_key, value):
 
 
 def wizard_label(question) -> str:
-    """Label with the section's own prefix stripped.
+    """Label with a repeated education-level prefix stripped.
 
-    The full labels repeat "Employer 2 ..." and "HSC / A Level / Equivalent —"
-    on every line; inside a block titled that already, the prefix is noise.
+    The four degree blocks put "HSC / A Level / Equivalent — " in front of every
+    question, which the block title already says. Employer and reference labels
+    are left alone: they carry the number inside the sentence ("Claimed Start
+    Date at Employer 2"), where cutting it out reads worse than repeating it.
     """
     label = question['label']
     for separator in (' — ', ' - '):

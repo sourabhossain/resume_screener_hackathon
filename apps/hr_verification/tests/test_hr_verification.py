@@ -11,7 +11,7 @@ from django.urls import reverse
 from apps.core.models import Resume
 from apps.employee_form.models import EmployeeForm
 from apps.hr_verification import schema
-from apps.hr_verification.models import HRVerification
+from apps.hr_verification.models import HRVerification, HRVerificationFile
 
 PDF = b'%PDF-1.4 agency report'
 
@@ -57,7 +57,6 @@ def _start(hr_client, candidate):
 
 # A complete Section A, so tests about other things do not fail on this one.
 SECTION_A = {
-    'requisition_id': 'REQ-2026-001',
     'candidate_full_name': 'Ayesha Rahman',
     'position_applied_for': 'Senior Python Developer',
     'department': 'engineering',
@@ -181,7 +180,7 @@ def test_a_section_saves_on_its_own(hr_client, candidate):
     verification.refresh_from_db()
     assert verification.is_step_complete('section_a')
     assert verification.completed_count == 1
-    assert verification.answers['requisition_id'] == 'REQ-2026-001'
+    assert verification.answers['hr_reviewer_designation'] == 'HR Manager'
     assert verification.last_saved_by.username == 'hradmin'
 
 
@@ -189,7 +188,7 @@ def test_an_incomplete_section_is_not_marked_complete(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
     hr_client.post(_url('step', candidate, step_key='section_a'),
-                   {**SECTION_A, 'requisition_id': ''})
+                   {**SECTION_A, 'hr_reviewer_designation': ''})
 
     verification.refresh_from_db()
     assert not verification.is_step_complete('section_a')
@@ -310,10 +309,10 @@ def test_a_signed_off_record_ignores_a_posted_section(hr_client, candidate):
     hr_client.post(_url('submit', candidate))
 
     hr_client.post(_url('step', candidate, step_key='section_a'),
-                   {**SECTION_A, 'requisition_id': 'TAMPERED'})
+                   {**SECTION_A, 'hr_reviewer_designation': 'TAMPERED'})
 
     verification.refresh_from_db()
-    assert verification.answers.get('requisition_id') != 'TAMPERED'
+    assert verification.answers.get('hr_reviewer_designation') != 'TAMPERED'
 
 
 # ── Prefill from the candidate's own form ────────────────────────────────
@@ -411,9 +410,10 @@ def test_prefill_copes_with_no_candidate_form(hr_client, candidate):
 
 # ── Schema integrity ─────────────────────────────────────────────────────
 def test_the_form_matches_the_source_document():
-    """201 questions across Sections A-F, as the PDF has them."""
+    """Sections A-F, and the PDF's 201 questions less its dropped Requisition ID."""
     assert schema.TOTAL_STEPS == 6
-    assert len(schema.QUESTIONS_BY_KEY) == 201
+    assert len(schema.QUESTIONS_BY_KEY) == 200
+    assert 'requisition_id' not in schema.QUESTIONS_BY_KEY
     keys = [q['key'] for step in schema.STEPS for q in step['questions']]
     assert len(keys) == len(set(keys)), 'duplicate question key'
 
@@ -427,14 +427,15 @@ def test_every_question_renders_in_a_titled_block():
         assert all(b['title'] for b in blocks), f'{step_key} has an untitled block'
 
 
-def test_question_numbers_are_the_pdf_numbers():
-    assert schema.QUESTION_NUMBERS['requisition_id'] == 1
-    assert schema.QUESTION_NUMBERS['candidate_nid_number'] == 15
-    assert schema.QUESTION_NUMBERS['highest_degree'] == 32
-    assert schema.QUESTION_NUMBERS['employer_1_name'] == 70
-    assert schema.QUESTION_NUMBERS['reference_1_name'] == 147
-    assert schema.QUESTION_NUMBERS['final_verification_status'] == 181
-    assert schema.QUESTION_NUMBERS['hr_legal_review_completed'] == 201
+def test_question_numbers_run_from_one_with_no_gaps():
+    """Dropping the PDF's Q1 shifts every number up one; ours start at 1."""
+    assert schema.QUESTION_NUMBERS['candidate_full_name'] == 1
+    assert schema.QUESTION_NUMBERS['candidate_nid_number'] == 14
+    assert schema.QUESTION_NUMBERS['highest_degree'] == 31
+    assert schema.QUESTION_NUMBERS['employer_1_name'] == 69
+    assert schema.QUESTION_NUMBERS['reference_1_name'] == 146
+    assert schema.QUESTION_NUMBERS['hr_legal_review_completed'] == 200
+    assert sorted(schema.QUESTION_NUMBERS.values()) == list(range(1, 201))
 
 
 def test_every_section_renders_for_hr(hr_client, candidate):
@@ -442,3 +443,147 @@ def test_every_section_renders_for_hr(hr_client, candidate):
     for step_key in schema.STEP_KEYS:
         response = hr_client.get(_url('step', candidate, step_key=step_key))
         assert response.status_code == 200, step_key
+
+
+# ── Regressions found reviewing this app ─────────────────────────────────
+@pytest.fixture
+def stored_agency_report(db, candidate, settings, tmp_path):
+    """A real file on disk under the HR-only media directory.
+
+    `resumes/` is created too: without it a /media/resumes/../hr_verifications/
+    request 404s on the missing directory rather than on the gate, which would
+    make the traversal test below pass for the wrong reason.
+    """
+    settings.MEDIA_ROOT = str(tmp_path)
+    (tmp_path / 'resumes').mkdir()
+    (tmp_path / 'a' / 'b').mkdir(parents=True)
+    verification = HRVerification.objects.create(resume=candidate)
+    upload = HRVerificationFile.objects.create(
+        verification=verification, question_key='agency_report_file',
+        file=SimpleUploadedFile('report.pdf', PDF, content_type='application/pdf'),
+        original_name='report.pdf',
+    )
+    return upload
+
+
+@pytest.mark.parametrize('shape', [
+    '/media/{p}',
+    '/media/resumes/../{p}',
+    '/media/./{p}',
+    '/media/a/b/../../{p}',
+])
+def test_agency_evidence_resists_a_traversal_dodge(authenticated_client,
+                                                   stored_agency_report, shape):
+    """The gate has to test the resolved path.
+
+    /media/resumes/../hr_verifications/... names the same file, so a check
+    against the requested URL alone would hand every recruiter the police and
+    agency paperwork.
+    """
+    url = shape.format(p=stored_agency_report.file.name)
+
+    assert authenticated_client.get(url).status_code == 404, url
+
+
+@pytest.mark.parametrize('shape', ['/media/{p}', '/media/resumes/../{p}'])
+def test_hr_can_still_read_the_evidence(hr_client, stored_agency_report, shape):
+    response = hr_client.get(shape.format(p=stored_agency_report.file.name))
+    assert response.status_code == 200
+
+
+def test_candidate_documents_stay_readable_by_recruiters(authenticated_client,
+                                                         settings, tmp_path):
+    """Only the HR directory is gated; the rest of media is unchanged."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    (tmp_path / 'resumes').mkdir()
+    (tmp_path / 'resumes' / 'cv.pdf').write_bytes(PDF)
+
+    assert authenticated_client.get('/media/resumes/cv.pdf').status_code == 200
+
+
+def _named_employer(**overrides):
+    return {
+        'employer_1_name': 'Acme Ltd',
+        'employer_1_hr_contact': '+8801711000000',
+        'employer_1_hr_email': 'hr@acme.com',
+        'employer_1_position': 'Engineer',
+        'employer_1_claimed_start_date': '2020-01-01',
+        'employer_1_claimed_end_date': '2023-01-01',
+        'employer_1_reference_check_verified': 'no',
+        'employer_1_verification_status': 'unable',
+        'employer_1_verification_method': 'direct_call',
+        'employer_1_tenure_discrepancy': 'no',
+        **overrides,
+    }
+
+
+def test_an_employer_who_would_not_confirm_can_still_be_recorded(hr_client, candidate):
+    """"Unable to Verify" is an outcome the form offers, so it must be saveable.
+
+    Requiring the employer's confirmed dates made Section D unsaveable, and
+    because sign-off needs every section the whole verification deadlocked.
+    """
+    verification = _start(hr_client, candidate)
+
+    hr_client.post(_url('step', candidate, step_key='section_d'), _named_employer())
+
+    verification.refresh_from_db()
+    assert verification.is_step_complete('section_d'), (
+        'an employer who would not disclose dates blocked the whole verification'
+    )
+
+
+def test_confirmed_dates_are_still_checked_when_given(hr_client, candidate):
+    verification = _start(hr_client, candidate)
+
+    hr_client.post(_url('step', candidate, step_key='section_d'), _named_employer(
+        employer_1_confirmed_start_date='2023-01-01',
+        employer_1_confirmed_end_date='2020-01-01',
+    ))
+
+    verification.refresh_from_db()
+    assert not verification.is_step_complete('section_d')
+
+
+def test_a_badly_formatted_field_is_not_also_called_missing(candidate):
+    """One filled field must not collect two contradictory errors."""
+    from apps.hr_verification.forms import StepForm
+
+    form = StepForm(_named_employer(employer_1_hr_contact='call me maybe'), {},
+                    step_key='section_d')
+    assert not form.is_valid()
+
+    errors = form.errors['employer_1_hr_contact']
+    assert len(errors) == 1, errors
+    assert 'Required once' not in ' '.join(errors)
+
+
+def test_saving_a_section_keeps_another_section_saved_concurrently(hr_client,
+                                                                   candidate):
+    """Two HR users, two sections, one answers blob -- neither may lose the other."""
+    verification = _start(hr_client, candidate)
+
+    # Stand in for the other user's save landing after this request read the row.
+    stale = HRVerification.objects.get(pk=verification.pk)
+    HRVerification.objects.filter(pk=verification.pk).update(
+        answers={'finding_details': 'Recorded by the other reviewer'},
+        completed_steps=['section_e'],
+    )
+    assert stale.answers == {}
+
+    hr_client.post(_url('step', candidate, step_key='section_a'), SECTION_A)
+
+    verification.refresh_from_db()
+    assert verification.answers['finding_details'] == 'Recorded by the other reviewer'
+    assert verification.answers['hr_reviewer_designation'] == 'HR Manager'
+    assert set(verification.completed_steps) == {'section_a', 'section_e'}
+
+
+def test_hr_does_not_see_the_candidate_facing_prefill_badge(hr_client, candidate,
+                                                            submitted_employee_form):
+    _start(hr_client, candidate)
+
+    body = hr_client.get(
+        _url('step', candidate, step_key='section_b')).content.decode()
+
+    assert 'matches your documents' not in body

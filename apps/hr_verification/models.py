@@ -170,16 +170,6 @@ class HRVerification(models.Model):
     def joining_clearance_label(self) -> str:
         return self._label('final_joining_clearance')
 
-    @property
-    def risk_tone(self) -> str:
-        """Colour hint for the chip, derived from the stored risk rating."""
-        return {
-            'green': 'emerald',
-            'amber': 'amber',
-            'red': 'rose',
-            'critical': 'rose',
-        }.get((self.answers or {}).get('risk_rating'), 'zinc')
-
 
 def upload_to(instance, filename):
     """Storage path for one uploaded document.
@@ -223,15 +213,3 @@ class HRVerificationFile(models.Model):
     def label(self) -> str:
         question = schema.QUESTIONS_BY_KEY.get(self.question_key)
         return question['label'] if question else self.question_key
-
-    IMAGE_SUFFIXES = ('.jpg', '.jpeg', '.png', '.webp')
-
-    @property
-    def kind(self) -> str:
-        """How the viewer should render this: 'image', 'pdf' or 'file'."""
-        name = (self.original_name or self.file.name or '').lower()
-        if name.endswith(self.IMAGE_SUFFIXES):
-            return 'image'
-        if name.endswith('.pdf'):
-            return 'pdf'
-        return 'file'

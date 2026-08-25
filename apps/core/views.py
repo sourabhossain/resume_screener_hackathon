@@ -449,22 +449,32 @@ def resume_delete(request, uuid):
     return render(request, 'core/confirm_delete.html', {'object': resume, 'type': 'resume', 'job_slug': job_slug})
 
 
+# Media subdirectory only HR may read. Must match
+# hr_verification.models.upload_to, which is what puts files there.
+HR_ONLY_MEDIA_DIR = 'hr_verifications'
+
+
 @login_required
 @ratelimit(key='user', rate='60/m', block=True)
 def serve_protected_media(request, path):
-    # HR background-check evidence (agency reports, police verification papers)
-    # is HR-only, unlike candidate documents every recruiter works with. Gated on
-    # the path because that is where these uploads live -- see
-    # hr_verification.models.upload_to.
-    if path.startswith('hr_verifications/') and not (
-        request.user.is_staff or request.user.is_superuser
-    ):
-        raise Http404
     full_path = os.path.join(settings.MEDIA_ROOT, path)
     # os.sep prevents path traversal into sibling directories (e.g. /media/../secrets)
     media_root = os.path.abspath(settings.MEDIA_ROOT) + os.sep
-    if not os.path.abspath(full_path).startswith(media_root):
+    resolved = os.path.abspath(full_path)
+    if not resolved.startswith(media_root):
         raise Http404
+
+    # HR background-check evidence (agency reports, police verification papers)
+    # is HR-only, unlike the candidate documents every recruiter works with.
+    # Checked against the *resolved* path, never the requested one:
+    # /media/resumes/../hr_verifications/... names the same file and would walk
+    # straight past a check on the raw URL.
+    relative = os.path.relpath(resolved, media_root)
+    if relative.split(os.sep)[0] == HR_ONLY_MEDIA_DIR and not (
+        request.user.is_staff or request.user.is_superuser
+    ):
+        raise Http404
+
     if not os.path.exists(full_path):
         raise Http404
     # Inline rendering is opt-in per request and restricted to formats a browser
