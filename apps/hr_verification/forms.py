@@ -25,7 +25,7 @@ NOT_FUTURE_DATE_KEYS = frozenset({
     'police_verification_date',
     'masters_completion_date',
     'bachelors_completion_date',
-    'section_e_completion_date',
+    'verification_completion_date',
     'offer_letter_issue_date',
     'offer_acceptance_date',
     'actual_joining_date',

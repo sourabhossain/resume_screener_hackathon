@@ -211,7 +211,7 @@ def _route_department(answers):
 STEPS = [
     {
         'key': 'section_a',
-        'section': 'Section A — Candidate Identification Information',
+        'section': 'Candidate Identification Information',
         'title': 'Candidate Identification',
         'description': 'Please provide information exactly as shown on your official documents.',
         'next': 'section_b',
@@ -247,7 +247,7 @@ STEPS = [
     },
     {
         'key': 'section_b',
-        'section': 'Section B — Educational Qualifications & Certificate Uploads '
+        'section': 'Educational Qualifications & Certificate Uploads '
                    '(Highest to Secondary)',
         'title': 'Educational Qualifications & Certificates',
         'description': (
@@ -353,7 +353,7 @@ def _employer_step(index, *, required, next_key, extra=()):
     questions.extend(extra)
     return {
         'key': f'employer_{index}',
-        'section': f'Section C — Employer {index}',
+        'section': f'Employer {index}',
         'title': f'Employer {index}',
         'description': (
             'Complete employers in the same order as your CV, starting with your '
@@ -386,7 +386,7 @@ STEPS += [
 def _reference_step(index, next_key):
     return {
         'key': f'reference_{index}',
-        'section': f'Section C — Professional Reference {index}',
+        'section': f'Professional Reference {index}',
         'title': f'Professional Reference {index}',
         'description': '',
         'next': next_key,
@@ -414,7 +414,7 @@ STEPS += [
     _reference_step(2, 'department'),
     {
         'key': 'department',
-        'section': 'Section D — Department Selection / Role Question Routing',
+        'section': 'Department Selection / Role Question Routing',
         'title': 'Department',
         'description': (
             'Select the department relevant to the position. You will then be routed '
@@ -428,7 +428,7 @@ STEPS += [
     },
     {
         'key': 'd1_sales',
-        'section': 'Section D1 — Sales / Business / Partnership',
+        'section': 'Sales / Business / Partnership',
         'title': 'Sales / Business / Partnership',
         'description': '',
         'next': 'd7_declaration',
@@ -449,7 +449,7 @@ STEPS += [
     },
     {
         'key': 'd2_marketing',
-        'section': 'Section D2 — Marketing / Communications',
+        'section': 'Marketing / Communications',
         'title': 'Marketing / Communications',
         'description': '',
         'next': 'd7_declaration',
@@ -466,7 +466,7 @@ STEPS += [
     },
     {
         'key': 'd3_finance',
-        'section': 'Section D3 — Finance / Revenue Assurance',
+        'section': 'Finance / Revenue Assurance',
         'title': 'Finance / Revenue Assurance',
         'description': '',
         'next': 'd7_declaration',
@@ -486,7 +486,7 @@ STEPS += [
     },
     {
         'key': 'd4_technology',
-        'section': 'Section D4 — Technology / Engineering / Data',
+        'section': 'Technology / Engineering / Data',
         'title': 'Technology / Engineering / Data',
         'description': '',
         'next': 'd7_declaration',
@@ -505,7 +505,7 @@ STEPS += [
     },
     {
         'key': 'd5_operations',
-        'section': 'Section D5 — Operations / Service / Project',
+        'section': 'Operations / Service / Project',
         'title': 'Operations / Service / Project',
         'description': '',
         'next': 'd7_declaration',
@@ -524,7 +524,7 @@ STEPS += [
     },
     {
         'key': 'd6_corporate',
-        'section': 'Section D6 — Corporate / Governance / Support',
+        'section': 'Corporate / Governance / Support',
         'title': 'Corporate / Governance / Support',
         'description': '',
         'next': 'd7_declaration',
@@ -542,7 +542,7 @@ STEPS += [
     },
     {
         'key': 'd7_declaration',
-        'section': 'Section D7 — Candidate Declaration & Availability',
+        'section': 'Candidate Declaration & Availability',
         'title': 'Declaration & Availability',
         'description': '',
         'next': None,
@@ -557,10 +557,13 @@ STEPS += [
                TEXTAREA, required=True),
             _q('measurable_achievements', 'List up to 3 measurable achievements',
                TEXTAREA, required=True),
-            _q('availability_status', 'Current Notice / Availability Status', RADIO,
+            # A dropdown rather than four radios: it is a plain pick-one, and the
+            # consent questions on either side of it are the ones that earn the
+            # space of showing every option at once.
+            _q('availability_status', 'Current Notice / Availability Status', SELECT,
                required=True, choices=AVAILABILITY_CHOICES),
             _q('declaration_agreement',
-               'I declare that the information and documents provided in Sections A–D are '
+               'I declare that the information and documents provided in this form are '
                'true, accurate and complete to the best of my knowledge and I authorise SSL '
                'Wireless and/or its authorised Background Check Agency to verify them for '
                'recruitment purposes.',

@@ -25,10 +25,11 @@ from .prefill import pending_prefill
 
 logger = logging.getLogger(__name__)
 
-# The point in the pipeline from which a background check makes sense. Section F
-# is about offer acceptance and joining, which happen after interviewing, so the
-# gate has to stay open past it -- otherwise moving a candidate to "Offer
-# Extended" would lock HR out of the section that records the offer.
+# The point in the pipeline from which a background check makes sense. The
+# Offer & Joining Clearance section covers events that happen after
+# interviewing, so the gate has to stay open past it -- otherwise moving a
+# candidate to "Offer Extended" would lock HR out of the section that records
+# the offer.
 STATUSES_ALLOWING_START = frozenset({'interviewing', 'offer_extended', 'hired'})
 
 
@@ -191,13 +192,12 @@ def step(request, uuid, step_key):
                 verification.pk, step_key, request.user.pk,
             )
 
+            saved = schema.get_step(step_key)['title']
             next_key = schema.next_step_key(step_key)
             if next_key is None:
-                messages.success(request, 'Section F saved.')
+                messages.success(request, f'{saved} saved.')
                 return redirect('hr_verification:detail', uuid=uuid)
-            messages.success(
-                request, f"{schema.get_step(step_key)['title']} saved."
-            )
+            messages.success(request, f'{saved} saved.')
             return redirect('hr_verification:step', uuid=uuid, step_key=next_key)
 
         form_errors_to_messages(request, step_form)
@@ -219,6 +219,10 @@ def step(request, uuid, step_key):
         'is_final': schema.next_step_key(step_key) is None,
         'groups': step_form.field_groups(),
         'uploaded_keys': uploaded_keys,
+        # Employer blocks turn required the moment they are named. Handed to the
+        # page so the asterisks appear as HR types, instead of the rule only
+        # showing itself as an error after a round trip.
+        'conditional_blocks': schema.conditional_blocks(step_key),
         # The shared field template's prefill badge is candidate-facing copy
         # ("check it matches your documents"), and it cannot tell a value HR
         # deliberately cleared from one they never filled. The section banner

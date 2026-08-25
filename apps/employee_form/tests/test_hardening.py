@@ -709,3 +709,18 @@ def test_a_fresher_still_shows_experience_in_the_header(verified):
     labels = [f['label'] for f in facts]
     assert 'Experience (years)' in labels, '0 years vanished from the header strip'
     assert 'total_experience_years' in shown
+
+
+# ── PROBE 9: nothing shows the candidate a bare section letter ───────────
+def test_the_candidate_never_sees_a_section_letter():
+    """"Section D7" is our filing, not something a candidate can act on."""
+    import re
+    visible = []
+    for step in schema.STEPS:
+        visible += [step['section'], step['title'], step.get('description', '')]
+        for question in step['questions']:
+            visible += [question['label'], question.get('help', '')]
+            visible += [label for _, label in question.get('choices', [])]
+
+    offenders = [t for t in visible if re.search(r'\bSections? [A-D]\d?\b', t)]
+    assert not offenders, offenders

@@ -364,11 +364,11 @@ def _reference_block(index):
 # ── Sections A-F ─────────────────────────────────────────────────────────
 STEPS = [
     {
-        'key': 'section_a',
-        'section': 'Section A — Candidate Link & HR Review Details',
+        'key': 'hr_review',
+        'section': 'Candidate Link & HR Review Details',
         'title': 'Candidate Link & HR Review',
         'description': 'Who is being verified, by whom, and through which route.',
-        'next': 'section_b',
+        'next': 'identity',
         'questions': [
             _q('candidate_full_name', 'Candidate Full Name', required=True),
             _q('position_applied_for', 'Position Applied For', required=True),
@@ -391,12 +391,12 @@ STEPS = [
         ],
     },
     {
-        'key': 'section_b',
-        'section': 'Section B — Identity, Address & Police Verification',
+        'key': 'identity',
+        'section': 'Identity, Address & Police Verification',
         'title': 'Identity, Address & Police',
-        'description': 'These mirror Section A of the candidate\'s Employee '
-                       'Information Form, prefilled from what they submitted.',
-        'next': 'section_c',
+        'description': 'Prefilled from the candidate\'s own Employee '
+                       'Information Form. Check each against their documents.',
+        'next': 'education',
         'questions': [
             _q('candidate_nid_number', 'Candidate NID Number', required=True),
             _q('candidate_birth_certificate_number',
@@ -434,11 +434,11 @@ STEPS = [
         ],
     },
     {
-        'key': 'section_c',
-        'section': 'Section C — Educational Qualification & Training Verification',
+        'key': 'education',
+        'section': 'Educational Qualification & Training Verification',
         'title': 'Education & Training',
         'description': 'Highest to secondary, the same order the candidate filled in.',
-        'next': 'section_d',
+        'next': 'employment',
         'questions': [
             _q('highest_degree', 'Candidate Highest / Last Completed Degree', RADIO,
                required=True, choices=HIGHEST_DEGREE_CHOICES),
@@ -468,12 +468,12 @@ STEPS = [
         ],
     },
     {
-        'key': 'section_d',
-        'section': 'Section D — Employment Verification',
+        'key': 'employment',
+        'section': 'Employment Verification',
         'title': 'Employment Verification',
         'description': 'Employer numbers match the candidate\'s form. Compare the '
                        'dates they claimed with the ones the employer confirmed.',
-        'next': 'section_e',
+        'next': 'references',
         'questions': [
             *[q for i in range(1, EMPLOYER_COUNT + 1) for q in _employer_block(i)],
             _q('additional_employer_notes',
@@ -482,12 +482,12 @@ STEPS = [
         ],
     },
     {
-        'key': 'section_e',
-        'section': 'Section E — Professional Reference, Role Profile & Adverse '
+        'key': 'references',
+        'section': 'Professional Reference, Role Profile & Adverse '
                    'Finding Review',
         'title': 'References & Findings',
         'description': '',
-        'next': 'section_f',
+        'next': 'clearance',
         'questions': [
             *[q for i in range(1, REFERENCE_COUNT + 1) for q in _reference_block(i)],
             _q('role_profile_reviewed',
@@ -522,13 +522,13 @@ STEPS = [
                'dismissal / forced resignation)?', RADIO, choices=YES_NO),
             _q('hr_verification_summary', 'HR Verification Summary / Justification',
                TEXTAREA, required=True),
-            _q('section_e_completion_date', 'Section E Completion Date', DATE,
+            _q('verification_completion_date', 'Verification Completion Date', DATE,
                required=True),
         ],
     },
     {
-        'key': 'section_f',
-        'section': 'Section F — Offer Acceptance & Position Joining Clearance',
+        'key': 'clearance',
+        'section': 'Offer Acceptance & Position Joining Clearance',
         'title': 'Offer & Joining Clearance',
         'description': 'Completed during offer acceptance and joining, after the '
                        'verification outcome above.',
@@ -592,7 +592,7 @@ HALF_WIDTH_KEYS = frozenset({
     'bachelors_institution', 'bachelors_degree_major', 'bachelors_completion_date',
     'hsc_institution', 'hsc_passing_year',
     'ssc_institution', 'ssc_passing_year',
-    'section_e_completion_date',
+    'verification_completion_date',
     'offer_letter_issue_date', 'offer_acceptance_date',
     'confirmed_joining_date', 'actual_joining_date',
     'hr_approver_name', 'hr_approver_designation', 'final_signoff_date',
@@ -645,7 +645,7 @@ def _reference_group(index):
 
 # Long sections render as a few short titled blocks instead of one wall.
 STEP_GROUPS = {
-    'section_a': [
+    'hr_review': [
         ('Candidate', ['candidate_full_name', 'position_applied_for',
                        'department']),
         ('HR reviewer', ['hr_reviewer_name', 'hr_reviewer_designation',
@@ -655,7 +655,7 @@ STEP_GROUPS = {
                                      'agency_report_reference', 'agency_report_date',
                                      'agency_report_file']),
     ],
-    'section_b': [
+    'identity': [
         ('Candidate details on record', [
             'candidate_nid_number', 'candidate_birth_certificate_number',
             'candidate_date_of_birth', 'candidate_present_address',
@@ -670,7 +670,7 @@ STEP_GROUPS = {
             'police_verification_date']),
         ('Remarks', ['identity_police_remarks']),
     ],
-    'section_c': [
+    'education': [
         ('Highest qualification', ['highest_degree', 'highest_degree_consistent']),
         _degree_group('masters', "Master's / Postgraduate Degree"),
         _degree_group('bachelors', "Undergraduate / Bachelor's Degree"),
@@ -681,11 +681,11 @@ STEP_GROUPS = {
             'training_verified', 'training_verification_method',
             'training_discrepancy', 'training_remarks']),
     ],
-    'section_d': [
+    'employment': [
         *[_employer_group(i) for i in range(1, EMPLOYER_COUNT + 1)],
         ('Beyond Employer 4', ['additional_employer_notes']),
     ],
-    'section_e': [
+    'references': [
         *[_reference_group(i) for i in range(1, REFERENCE_COUNT + 1)],
         ('Role profile review', ['role_profile_reviewed', 'role_claims_consistent',
                                  'role_further_validation']),
@@ -696,9 +696,9 @@ STEP_GROUPS = {
         ('Outcome', ['discrepancy_summary', 'risk_rating',
                      'verification_recommendation',
                      'involuntary_separation_wording', 'hr_verification_summary',
-                     'section_e_completion_date']),
+                     'verification_completion_date']),
     ],
-    'section_f': [
+    'clearance': [
         ('Verification outcome at offer', ['final_verification_status']),
         ('Offer', ['offer_letter_issued', 'offer_letter_issue_date',
                    'offer_accepted', 'offer_acceptance_date']),
@@ -713,6 +713,22 @@ STEP_GROUPS = {
                       'final_signoff_date', 'hr_legal_review_completed']),
     ],
 }
+
+
+# ── Single-choice questions are dropdowns ────────────────────────────────
+# Declared above as RADIO for readability, then flipped here rather than written
+# out 90 times. The source Google Form used dropdowns, and on a 200-question
+# internal form they are the only workable shape: as radio lists these sections
+# ran to several screens of options nobody reads, and the answer HR had picked
+# was no longer visible once they scrolled past it.
+#
+# Multi-select (CHECKBOX) and single tick boxes (BOOLEAN) are left alone -- a
+# dropdown cannot express either.
+for _step in STEPS:
+    for _question in _step['questions']:
+        if _question['type'] == RADIO:
+            _question['type'] = SELECT
+del _step, _question
 
 
 # ── Lookups ──────────────────────────────────────────────────────────────
@@ -798,8 +814,41 @@ def question_groups(step_key):
     return blocks
 
 
+#  A dropdown is one line tall whatever its options, so short-labelled ones pair
+#  up two to a row instead of leaving half the form empty. Long questions ("Any
+#  performance, disciplinary, integrity, legal or other adverse concern
+#  raised?") keep the full width, where they read as a sentence rather than
+#  wrapping four times in a narrow column.
+_SHORT_LABEL_CHARS = 58
+
+
 def is_half_width(question) -> bool:
-    return question['key'] in HALF_WIDTH_KEYS
+    if question['key'] in HALF_WIDTH_KEYS:
+        return True
+    return (question['type'] == SELECT
+            and len(wizard_label(question)) <= _SHORT_LABEL_CHARS)
+
+
+def conditional_blocks(step_key):
+    """Groups whose fields become required once a trigger field is filled.
+
+    `[{'trigger': 'employer_1_name', 'keys': [...]}, ...]`, for the page to mirror
+    `forms.StepForm._validate_employer_blocks` in the browser. The rule is
+    enforced server-side either way; this is so HR can see it coming.
+    """
+    keys = {q['key'] for q in questions(step_key)}
+    out = []
+    for index in range(1, EMPLOYER_COUNT + 1):
+        trigger = f'employer_{index}_name'
+        if trigger not in keys:
+            continue
+        out.append({
+            'trigger': trigger,
+            'keys': [f'employer_{index}_{suffix}'
+                     for suffix in EMPLOYER_REQUIRED_ONCE_NAMED
+                     if f'employer_{index}_{suffix}' in keys],
+        })
+    return out
 
 
 def choice_label(question_key, value):

@@ -156,13 +156,13 @@ def test_an_existing_record_survives_a_later_status_change(hr_client, candidate)
 
     assert hr_client.get(_url('detail', candidate)).status_code == 200
     assert hr_client.get(
-        _url('step', candidate, step_key='section_a')).status_code == 200
+        _url('step', candidate, step_key='hr_review')).status_code == 200
 
 
 def test_an_unstarted_record_is_a_404_not_a_blank_form(hr_client, candidate):
     assert hr_client.get(_url('detail', candidate)).status_code == 404
     assert hr_client.get(
-        _url('step', candidate, step_key='section_a')).status_code == 404
+        _url('step', candidate, step_key='hr_review')).status_code == 404
 
 
 def test_an_unknown_section_is_a_404(hr_client, candidate):
@@ -175,10 +175,10 @@ def test_an_unknown_section_is_a_404(hr_client, candidate):
 def test_a_section_saves_on_its_own(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_a'), SECTION_A)
+    hr_client.post(_url('step', candidate, step_key='hr_review'), SECTION_A)
 
     verification.refresh_from_db()
-    assert verification.is_step_complete('section_a')
+    assert verification.is_step_complete('hr_review')
     assert verification.completed_count == 1
     assert verification.answers['hr_reviewer_designation'] == 'HR Manager'
     assert verification.last_saved_by.username == 'hradmin'
@@ -187,11 +187,11 @@ def test_a_section_saves_on_its_own(hr_client, candidate):
 def test_an_incomplete_section_is_not_marked_complete(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_a'),
+    hr_client.post(_url('step', candidate, step_key='hr_review'),
                    {**SECTION_A, 'hr_reviewer_designation': ''})
 
     verification.refresh_from_db()
-    assert not verification.is_step_complete('section_a')
+    assert not verification.is_step_complete('hr_review')
 
 
 def test_sections_can_be_filled_in_any_order(hr_client, candidate):
@@ -199,17 +199,17 @@ def test_sections_can_be_filled_in_any_order(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
     assert hr_client.get(
-        _url('step', candidate, step_key='section_f')).status_code == 200
-    hr_client.post(_url('step', candidate, step_key='section_a'), SECTION_A)
+        _url('step', candidate, step_key='clearance')).status_code == 200
+    hr_client.post(_url('step', candidate, step_key='hr_review'), SECTION_A)
 
     verification.refresh_from_db()
-    assert verification.completed_steps == ['section_a']
+    assert verification.completed_steps == ['hr_review']
 
 
 def test_an_uploaded_agency_report_is_stored(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_a'),
+    hr_client.post(_url('step', candidate, step_key='hr_review'),
                    {**SECTION_A, 'agency_report_file': _pdf()})
 
     verification.refresh_from_db()
@@ -221,11 +221,11 @@ def test_an_uploaded_agency_report_is_stored(hr_client, candidate):
 def test_a_future_verification_date_is_rejected(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_a'),
+    hr_client.post(_url('step', candidate, step_key='hr_review'),
                    {**SECTION_A, 'verification_start_date': '2099-01-01'})
 
     verification.refresh_from_db()
-    assert not verification.is_step_complete('section_a')
+    assert not verification.is_step_complete('hr_review')
 
 
 # ── Employer blocks ──────────────────────────────────────────────────────
@@ -233,26 +233,26 @@ def test_an_unnamed_employer_block_is_skippable(hr_client, candidate):
     """A candidate with no previous job must not make Section D unsubmittable."""
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_d'), {})
+    hr_client.post(_url('step', candidate, step_key='employment'), {})
 
     verification.refresh_from_db()
-    assert verification.is_step_complete('section_d')
+    assert verification.is_step_complete('employment')
 
 
 def test_naming_an_employer_makes_its_block_required(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_d'),
+    hr_client.post(_url('step', candidate, step_key='employment'),
                    {'employer_1_name': 'Acme Ltd'})
 
     verification.refresh_from_db()
-    assert not verification.is_step_complete('section_d')
+    assert not verification.is_step_complete('employment')
 
 
 def test_a_confirmed_end_before_the_start_is_rejected(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_d'), {
+    hr_client.post(_url('step', candidate, step_key='employment'), {
         'employer_1_name': 'Acme Ltd',
         'employer_1_hr_contact': '+8801711000000',
         'employer_1_hr_email': 'hr@acme.com',
@@ -268,7 +268,7 @@ def test_a_confirmed_end_before_the_start_is_rejected(hr_client, candidate):
     })
 
     verification.refresh_from_db()
-    assert not verification.is_step_complete('section_d'), (
+    assert not verification.is_step_complete('employment'), (
         'employment ending before it started went into background verification data'
     )
 
@@ -276,7 +276,7 @@ def test_a_confirmed_end_before_the_start_is_rejected(hr_client, candidate):
 # ── Sign-off ─────────────────────────────────────────────────────────────
 def test_sign_off_needs_every_section(hr_client, candidate):
     verification = _start(hr_client, candidate)
-    hr_client.post(_url('step', candidate, step_key='section_a'), SECTION_A)
+    hr_client.post(_url('step', candidate, step_key='hr_review'), SECTION_A)
 
     hr_client.post(_url('submit', candidate))
 
@@ -297,7 +297,7 @@ def test_sign_off_locks_the_record(hr_client, candidate):
     assert verification.submitted_by.username == 'hradmin'
 
     # Editing is over: the section page sends them to the read-only record.
-    response = hr_client.get(_url('step', candidate, step_key='section_a'))
+    response = hr_client.get(_url('step', candidate, step_key='hr_review'))
     assert response.status_code == 302
     assert _url('detail', candidate) in response.url
 
@@ -308,7 +308,7 @@ def test_a_signed_off_record_ignores_a_posted_section(hr_client, candidate):
     verification.save()
     hr_client.post(_url('submit', candidate))
 
-    hr_client.post(_url('step', candidate, step_key='section_a'),
+    hr_client.post(_url('step', candidate, step_key='hr_review'),
                    {**SECTION_A, 'hr_reviewer_designation': 'TAMPERED'})
 
     verification.refresh_from_db()
@@ -382,7 +382,7 @@ def test_prefill_reaches_the_rendered_form(hr_client, candidate,
     _start(hr_client, candidate)
 
     body = hr_client.get(
-        _url('step', candidate, step_key='section_b')).content.decode()
+        _url('step', candidate, step_key='identity')).content.decode()
 
     assert '1234567890' in body
     assert 'Dhanmondi' in body
@@ -525,10 +525,10 @@ def test_an_employer_who_would_not_confirm_can_still_be_recorded(hr_client, cand
     """
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_d'), _named_employer())
+    hr_client.post(_url('step', candidate, step_key='employment'), _named_employer())
 
     verification.refresh_from_db()
-    assert verification.is_step_complete('section_d'), (
+    assert verification.is_step_complete('employment'), (
         'an employer who would not disclose dates blocked the whole verification'
     )
 
@@ -536,13 +536,13 @@ def test_an_employer_who_would_not_confirm_can_still_be_recorded(hr_client, cand
 def test_confirmed_dates_are_still_checked_when_given(hr_client, candidate):
     verification = _start(hr_client, candidate)
 
-    hr_client.post(_url('step', candidate, step_key='section_d'), _named_employer(
+    hr_client.post(_url('step', candidate, step_key='employment'), _named_employer(
         employer_1_confirmed_start_date='2023-01-01',
         employer_1_confirmed_end_date='2020-01-01',
     ))
 
     verification.refresh_from_db()
-    assert not verification.is_step_complete('section_d')
+    assert not verification.is_step_complete('employment')
 
 
 def test_a_badly_formatted_field_is_not_also_called_missing(candidate):
@@ -550,7 +550,7 @@ def test_a_badly_formatted_field_is_not_also_called_missing(candidate):
     from apps.hr_verification.forms import StepForm
 
     form = StepForm(_named_employer(employer_1_hr_contact='call me maybe'), {},
-                    step_key='section_d')
+                    step_key='employment')
     assert not form.is_valid()
 
     errors = form.errors['employer_1_hr_contact']
@@ -567,16 +567,16 @@ def test_saving_a_section_keeps_another_section_saved_concurrently(hr_client,
     stale = HRVerification.objects.get(pk=verification.pk)
     HRVerification.objects.filter(pk=verification.pk).update(
         answers={'finding_details': 'Recorded by the other reviewer'},
-        completed_steps=['section_e'],
+        completed_steps=['references'],
     )
     assert stale.answers == {}
 
-    hr_client.post(_url('step', candidate, step_key='section_a'), SECTION_A)
+    hr_client.post(_url('step', candidate, step_key='hr_review'), SECTION_A)
 
     verification.refresh_from_db()
     assert verification.answers['finding_details'] == 'Recorded by the other reviewer'
     assert verification.answers['hr_reviewer_designation'] == 'HR Manager'
-    assert set(verification.completed_steps) == {'section_a', 'section_e'}
+    assert set(verification.completed_steps) == {'hr_review', 'references'}
 
 
 def test_hr_does_not_see_the_candidate_facing_prefill_badge(hr_client, candidate,
@@ -584,6 +584,71 @@ def test_hr_does_not_see_the_candidate_facing_prefill_badge(hr_client, candidate
     _start(hr_client, candidate)
 
     body = hr_client.get(
-        _url('step', candidate, step_key='section_b')).content.decode()
+        _url('step', candidate, step_key='identity')).content.decode()
 
     assert 'matches your documents' not in body
+
+
+# ── Presentation rules ───────────────────────────────────────────────────
+def _all_visible_text():
+    """Everything on this form a person actually reads."""
+    for step in schema.STEPS:
+        yield step['section']
+        yield step['title']
+        yield step.get('description', '')
+        for question in step['questions']:
+            yield question['label']
+            yield question.get('help', '')
+            for _, label in question.get('choices', []):
+                yield label
+
+
+def test_no_section_letters_are_shown_to_anyone():
+    """"Section A", "Save Section F" and friends mean nothing to a reader."""
+    import re
+    offenders = [t for t in _all_visible_text()
+                 if re.search(r'\bSection [A-F]\b', t)]
+    assert not offenders, offenders
+
+
+def test_step_keys_are_named_not_lettered():
+    """The keys show up in the URL, so they read as names too."""
+    assert schema.STEP_KEYS == [
+        'hr_review', 'identity', 'education', 'employment',
+        'references', 'clearance',
+    ]
+
+
+def test_every_single_choice_question_is_a_dropdown():
+    """Radio lists for 90 pick-one questions ran to screens of unread options."""
+    radios = [q['key'] for step in schema.STEPS for q in step['questions']
+              if q['type'] == schema.RADIO]
+    assert not radios, radios
+
+    dropdowns = [q for step in schema.STEPS for q in step['questions']
+                 if q['type'] == schema.SELECT]
+    assert len(dropdowns) > 80, len(dropdowns)
+    assert all(q.get('choices') for q in dropdowns)
+
+
+def test_dropdowns_render_as_select_elements(hr_client, candidate):
+    _start(hr_client, candidate)
+
+    body = hr_client.get(_url('step', candidate, step_key='identity')).content.decode()
+
+    assert '<select' in body
+    assert 'name="nid_verified"' in body
+    # The old radio markup for the same question must be gone.
+    assert 'type="radio" name="nid_verified"' not in body
+
+
+def test_no_page_shows_a_section_letter(hr_client, candidate):
+    _start(hr_client, candidate)
+    import re
+
+    for step_key in schema.STEP_KEYS:
+        body = hr_client.get(_url('step', candidate, step_key=step_key)).content.decode()
+        assert not re.search(r'\bSection [A-F]\b', body), step_key
+
+    body = hr_client.get(_url('detail', candidate)).content.decode()
+    assert not re.search(r'\bSection [A-F]\b', body)

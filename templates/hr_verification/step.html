@@ -96,7 +96,7 @@
 
                 <button type="submit" :disabled="submitting"
                         class="btn-primary inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none">
-                    <span x-show="!submitting">{% if is_final %}Save Section F{% else %}Save and continue{% endif %}</span>
+                    <span x-show="!submitting">{% if is_final %}Save and review{% else %}Save and continue{% endif %}</span>
                     <span x-show="submitting" x-cloak>Saving…</span>
                     <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </button>
@@ -104,4 +104,51 @@
         </div>
     </form>
 </div>
+
+{{ conditional_blocks|json_script:"hrv-conditional-blocks" }}
+<script>
+    // An employer block is optional until it is named, then the rest of it is
+    // required -- the same rule StepForm enforces on POST. Mirrored here so the
+    // asterisks appear as HR types a name, rather than the rule only revealing
+    // itself as six errors after a save.
+    (function () {
+        const source = document.getElementById('hrv-conditional-blocks');
+        if (!source) return;
+        let blocks = [];
+        try { blocks = JSON.parse(source.textContent); } catch (_) { return; }
+
+        blocks.forEach(function (block) {
+            const trigger = document.querySelector('[name="' + block.trigger + '"]');
+            if (!trigger) return;
+            const controls = block.keys
+                .map(function (key) { return document.querySelector('[name="' + key + '"]'); })
+                .filter(Boolean);
+            if (!controls.length) return;
+
+            function apply() {
+                const on = trigger.value.trim().length > 0;
+                controls.forEach(function (el) {
+                    el.required = on;
+                    const question = el.closest('[data-question]');
+                    const label = question && question.querySelector('label');
+                    if (!label) return;
+                    let star = label.querySelector('[data-conditional-star]');
+                    if (on && !star) {
+                        star = document.createElement('span');
+                        star.setAttribute('data-conditional-star', '');
+                        star.className = 'ml-0.5 text-rose-500';
+                        star.textContent = '*';
+                        label.appendChild(star);
+                    } else if (!on && star) {
+                        star.remove();
+                    }
+                });
+            }
+
+            trigger.addEventListener('input', apply);
+            trigger.addEventListener('change', apply);
+            apply();
+        });
+    })();
+</script>
 {% endblock %}

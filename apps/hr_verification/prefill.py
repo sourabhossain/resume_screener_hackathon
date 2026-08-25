@@ -1,7 +1,8 @@
 """Starting values taken from what the candidate already told us.
 
-The PDF says Section B "mirrors Section A of the Employee Information Form" and
-that "Employer 1-4 must match the same employer number". Retyping ~40 fields off
+The source document says the identity questions mirror the Employee Information
+Form and that "Employer 1-4 must match the same employer number". Retyping ~40
+fields off
 another screen is where transcription errors come from -- a mistyped NID or a
 shifted employer number sends the background check after the wrong facts -- so
 the overlap is carried across and left editable.
