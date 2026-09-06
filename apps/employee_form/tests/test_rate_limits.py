@@ -29,6 +29,15 @@ def people(db, sample_job):
     ]
 
 
+# A wrong code re-renders the page (200); a right one redirects (302).
+# django-ratelimit's block=True raises PermissionDenied, which this project
+# serves as 403 -- not 429. Testing for 429 specifically was the bug in this
+# test: it looked for a status the endpoint has never returned, so it passed
+# no matter how early a candidate was blocked. Anything outside the normal
+# pair counts as blocked, which also survives a later move to a real 429.
+NOT_BLOCKED = {200, 302}
+
+
 def test_shared_ip_does_not_block_later_candidates(client, people):
     """Six candidates behind one NAT IP each use their 5 OTP attempts."""
     blocked_at = None
@@ -37,15 +46,15 @@ def test_shared_ip_does_not_block_later_candidates(client, people):
         url = reverse('employee_form:verify', kwargs={'token': form.token})
         for _ in range(EmployeeForm.OTP_MAX_ATTEMPTS):
             resp = client.post(url, {'code': '000000'})
-            if resp.status_code == 429:
-                blocked_at = index
+            if resp.status_code not in NOT_BLOCKED:
+                blocked_at = (index, resp.status_code)
                 break
         if blocked_at is not None:
             break
 
     assert blocked_at is None, (
-        f'candidate #{blocked_at + 1} on a shared IP got HTTP 429 before '
-        'using their own attempts'
+        f'candidate #{blocked_at[0] + 1} on a shared IP was blocked with HTTP '
+        f'{blocked_at[1]} before using their own attempts'
     )
 
 
