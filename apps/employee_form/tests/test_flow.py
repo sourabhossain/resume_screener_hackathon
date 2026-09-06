@@ -273,7 +273,7 @@ def test_cannot_submit_by_posting_the_final_step_early(client, candidate):
 
 def test_back_to_an_earlier_step_is_allowed(client, candidate, django_user_model):
     client, form = _verified_client(client, candidate)
-    form.current_step = 'employment_gate'
+    form.current_step = 'employer_1'
     form.answers = {'candidate_full_name': 'Ayesha Rahman'}
     form.save(update_fields=['current_step', 'answers'])
 

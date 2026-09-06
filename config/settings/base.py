@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'apps.employee_form',
     'apps.hr_verification',
     'apps.candidate_mapping',
+    'apps.reference_checks',
 ]
 
 MIDDLEWARE = [
@@ -127,6 +128,15 @@ STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
 }
+
+# The container healthcheck and any other internal prober reach /health/ over
+# plain HTTP inside the docker network, without the proxy's X-Forwarded-Proto.
+# With SECURE_SSL_REDIRECT on (prod) Django would 301 them to https, which
+# gunicorn does not speak -- the probe then hangs on a TLS handshake and the
+# container reports unhealthy while serving traffic perfectly well. The endpoint
+# returns only liveness, so exempting it discloses nothing.
+# Declared here, not in prod.py, so dev and prod cannot drift.
+SECURE_REDIRECT_EXEMPT = [r'^health/?$']
 
 # Media files (User uploads)
 MEDIA_URL = '/media/'

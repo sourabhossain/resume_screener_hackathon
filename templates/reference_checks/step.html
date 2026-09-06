@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ step.title }} · {{ form_title }} · SSL Wireless{% endblock %}
+
+{% block recruiter_nav %}{% endblock %}
+{% block recruiter_logout %}{% endblock %}
+{% block mobile_recruiter_nav %}{% endblock %}
+{% block nav_action %}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl pb-28">
+
+    <div class="mb-6">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
+            {{ form_title }}
+        </p>
+        <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+            {{ step.title }}
+        </h1>
+        <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            About {{ check.resume.candidate_name|title }}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            Part {{ step_number }} of {{ total_steps }}
+        </p>
+    </div>
+
+    <div class="mb-6 flex items-center gap-3">
+        <div class="flex flex-1 gap-1" aria-hidden="true">
+            {% for key in check.steps %}
+            <span class="h-1.5 flex-1 rounded-full {% if forloop.counter <= step_number %}bg-primary-600 dark:bg-primary-500{% else %}bg-zinc-200 dark:bg-zinc-800{% endif %}"></span>
+            {% endfor %}
+        </div>
+        <span class="shrink-0 text-xs font-semibold tabular-nums text-zinc-500 dark:text-zinc-400">
+            {{ step_number }} / {{ total_steps }}
+        </span>
+    </div>
+
+    <div class="mb-5 overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
+                Who you are answering about
+            </p>
+        </div>
+        <dl class="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2">
+            {% for label, value in candidate_panel.items %}
+            <div>
+                <dt class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ label }}</dt>
+                <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ value }}</dd>
+            </div>
+            {% endfor %}
+        </dl>
+    </div>
+
+    {% if step.description %}
+    <div class="mb-5 flex gap-3 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ step.description }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" hx-boost="false" x-data="{ submitting: false }" @submit="submitting = true">
+        {% csrf_token %}
+
+        <fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+            <legend class="sr-only">{{ step.title }}</legend>
+            <div class="grid gap-x-5 gap-y-5 p-5 sm:grid-cols-2">
+                {% for item in rows %}
+                {% include 'employee_form/partials/field.html' with question=item.question field=item.field item=item %}
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <div class="sticky bottom-0 z-20 mt-6 -mx-4 border-t border-zinc-200/80 bg-white/90 px-4 py-3.5 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/85 sm:mx-0 sm:rounded-2xl sm:border sm:px-5">
+            <div class="flex items-center gap-3">
+                {% if previous_step %}
+                <a href="{% url 'reference_checks:step' token=check.token step_key=previous_step %}"
+                   class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    Back
+                </a>
+                {% endif %}
+
+                <p class="hidden min-w-0 flex-1 text-xs leading-snug text-zinc-500 dark:text-zinc-500 sm:block">
+                    {% if is_final %}Once sent, your answers cannot be changed here.
+                    {% else %}Saved as you go — you can return using the same link.{% endif %}
+                </p>
+
+                <button type="submit" :disabled="submitting"
+                        class="btn-primary inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none">
+                    <span x-show="!submitting">{% if is_final %}Send my response{% else %}Save and continue{% endif %}</span>
+                    <span x-show="submitting" x-cloak>Saving…</span>
+                    <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <p class="mt-6 text-center text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
+        Confidential — used only for this recruitment decision. Please answer only
+        what your records or direct knowledge allow.
+    </p>
+</div>
+
+{{ conditional_rules|json_script:"rc-conditional-rules" }}
+<script>
+    // "If Yes, please provide details" only asks for the detail when that is the
+    // answer -- the same rule StepForm enforces on POST. Mirrored here so the
+    // asterisk appears as the answer is picked, rather than the rule showing
+    // itself as an error after a save.
+    (function () {
+        const source = document.getElementById('rc-conditional-rules');
+        if (!source) return;
+        let rules = [];
+        try { rules = JSON.parse(source.textContent); } catch (_) { return; }
+
+        rules.forEach(function (rule) {
+            const trigger = document.querySelector('[name="' + rule.trigger + '"]');
+            if (!trigger) return;
+            const targets = rule.keys
+                .map(function (key) { return document.querySelector('[name="' + key + '"]'); })
+                .filter(Boolean);
+            if (!targets.length) return;
+
+            function apply() {
+                const on = rule.when.includes(trigger.value);
+                targets.forEach(function (el) {
+                    el.required = on;
+                    const block = el.closest('[data-question]');
+                    const label = block && block.querySelector('label');
+                    if (!label) return;
+                    let star = label.querySelector('[data-conditional-star]');
+                    if (on && !star) {
+                        star = document.createElement('span');
+                        star.setAttribute('data-conditional-star', '');
+                        star.className = 'ml-0.5 text-rose-500';
+                        star.textContent = '*';
+                        label.appendChild(star);
+                    } else if (!on && star) {
+                        star.remove();
+                    }
+                });
+            }
+
+            trigger.addEventListener('change', apply);
+            trigger.addEventListener('input', apply);
+            apply();
+        });
+    })();
+</script>
+{% endblock %}

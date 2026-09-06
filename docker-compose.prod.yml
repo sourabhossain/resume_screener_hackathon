@@ -37,7 +37,11 @@ services:
       - media_data:/app/media
       - logs_data:/app/logs
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=5)"]
+      # Sends X-Forwarded-Proto so the request is treated as secure even if the
+      # redirect exemption is ever removed, and checks the payload rather than
+      # just "no exception" -- a 301 to https used to satisfy the old probe's
+      # urlopen and then hang on the TLS handshake.
+      test: ["CMD", "python", "-c", "import json,sys,urllib.request as u; r=u.urlopen(u.Request('http://localhost:8000/health/', headers={'X-Forwarded-Proto':'https'}), timeout=5); sys.exit(0 if r.status==200 and json.load(r).get('status')=='healthy' else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -24,6 +24,7 @@ app.conf.task_routes = {
     # Candidate invitation emails: short, I/O-bound, must not queue
     # behind a batch of LLM screening calls.
     'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'screening'},
+    'apps.reference_checks.tasks.send_reference_check_request': {'queue': 'screening'},
 }
 app.conf.task_default_queue = 'screening'
 

@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Reference checks · {{ resume.candidate_name|title }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl pb-20">
+
+    <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}"
+           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to {{ resume.candidate_name|title|truncatechars:24 }}
+        </a>
+    </nav>
+
+    <div class="mb-6">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
+            External verification
+        </p>
+        <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+            Reference &amp; employment checks
+        </h1>
+        <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            {{ resume.candidate_name|title }}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            {{ resume.job.title }}
+            {% if is_fresher %}
+            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
+            <span class="font-medium text-zinc-600 dark:text-zinc-300">No previous employer declared — referees get the academic form</span>
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="mb-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-sm leading-relaxed text-amber-900 dark:text-amber-300">
+            Each request emails a private link and a one-time code to the person named.
+            Only the people the candidate agreed we may contact can be asked — the rest
+            are shown greyed out with the reason.
+        </p>
+    </div>
+
+    {% if not can_send %}
+    <div class="mb-5 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
+        Sending opens once the candidate reaches Interviewing.
+    </div>
+    {% endif %}
+
+    {% if not contacts %}
+    <div class="rounded-2xl border border-zinc-200/90 bg-white p-10 text-center shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+            The candidate has not named any employer or referee on their Employee
+            Information Form yet, so there is nobody to contact.
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="space-y-4">
+        {% for row in contacts %}
+        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+                <div class="flex flex-wrap items-center gap-3">
+                    <h2 class="font-bold text-zinc-900 dark:text-white">{{ row.title }}</h2>
+                    {% if row.check %}
+                    <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {{ row.check.status_label }}
+                    </span>
+                    {% endif %}
+                    {% if row.check.is_submitted and row.check.flagged %}
+                    <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        Needs reading
+                    </span>
+                    {% endif %}
+                    {% if not row.permitted %}
+                    <span class="inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        Candidate did not permit contact
+                    </span>
+                    {% endif %}
+                </div>
+
+                {% if row.check.is_submitted %}
+                <a href="{% url 'reference_checks:response' uuid=resume.uuid pk=row.check.pk %}"
+                   class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Read response
+                </a>
+                {% endif %}
+            </div>
+
+            {% if row.check.is_submitted %}
+            <dl class="grid gap-4 px-6 py-4 sm:grid-cols-3">
+                <div>
+                    <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Replied</dt>
+                    <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ row.check.submitted_at|naturaltime }}</dd>
+                </div>
+                <div>
+                    <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">{{ row.check.headline_label }}</dt>
+                    <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ row.check.headline|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Form</dt>
+                    <dd class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ row.check.get_kind_display }}</dd>
+                </div>
+            </dl>
+
+            {% else %}
+            <form method="post" action="{% url 'reference_checks:send' uuid=resume.uuid source_key=row.source_key %}"
+                  hx-boost="false" class="px-6 py-5"
+                  {% if row.check %}
+                  data-confirm
+                  data-confirm-title="Send a new link and code?"
+                  data-confirm-text="The previous code stops working. Use this only if the first email never arrived."
+                  data-confirm-button="Resend request"
+                  data-confirm-safe data-confirm-icon="question"
+                  {% endif %}>
+                {% csrf_token %}
+                <div class="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                    <div>
+                        <label for="name_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Send to</label>
+                        <div class="mt-2">
+                            <input type="text" name="recipient_name" id="name_{{ row.source_key }}"
+                                   value="{{ row.check.recipient_name|default:row.recipient_name }}"
+                                   {% if not row.permitted or not can_send %}disabled{% endif %}
+                                   class="form-input">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="email_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Email address</label>
+                        <div class="mt-2">
+                            <input type="email" name="recipient_email" id="email_{{ row.source_key }}"
+                                   value="{{ row.check.recipient_email|default:row.recipient_email }}"
+                                   {% if not row.permitted or not can_send %}disabled{% endif %}
+                                   class="form-input">
+                        </div>
+                        <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">From the candidate's form — correct it if it is out of date.</p>
+                    </div>
+                    <div>
+                        <label for="org_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Organisation</label>
+                        <div class="mt-2">
+                            <input type="text" name="recipient_organisation" id="org_{{ row.source_key }}"
+                                   value="{{ row.check.recipient_organisation|default:row.recipient_organisation }}"
+                                   {% if not row.permitted or not can_send %}disabled{% endif %}
+                                   class="form-input">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="kind_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Which form to send</label>
+                        <div class="mt-2">
+                            <select name="kind" id="kind_{{ row.source_key }}"
+                                    {% if not row.permitted or not can_send %}disabled{% endif %}
+                                    class="form-input">
+                                {% for value, label in kind_choices %}
+                                <option value="{{ value }}" {% if row.check and row.check.kind == value %}selected{% elif not row.check and row.default_kind == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {% if row.check.last_error %}
+                <p class="mt-4 inline-flex items-start gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
+                    <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Last send failed — {{ row.check.last_error }}
+                </p>
+                {% endif %}
+
+                <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-xs text-zinc-500 dark:text-zinc-500">
+                        {% if row.check.invited_at %}
+                        Sent {{ row.check.invited_at|naturaltime }}{% if row.check.invite_count > 1 %} ({{ row.check.invite_count }}×){% endif %}.
+                        Link valid until {{ row.check.token_expires_at|date:"j M Y" }}.
+                        {% else %}
+                        Not sent yet.
+                        {% endif %}
+                    </p>
+                    <button type="submit" {% if not row.permitted or not can_send %}disabled{% endif %}
+                            class="btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                        {% if row.check %}Resend request{% else %}Send request{% endif %}
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

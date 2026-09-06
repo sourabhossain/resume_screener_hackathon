@@ -1,0 +1,42 @@
+<div class="mb-8 rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+        <div class="flex flex-wrap items-center gap-3">
+            <h2 class="font-bold text-zinc-900 dark:text-white">Reference &amp; Employment Checks</h2>
+            {% if reference_checks.total %}
+            <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                {{ reference_checks.completed }} of {{ reference_checks.total }} replied
+            </span>
+            {% endif %}
+            {% if reference_checks.flagged %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                {{ reference_checks.flagged }} needs reading
+            </span>
+            {% endif %}
+            <span class="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-500">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                HR only
+            </span>
+        </div>
+
+        <a href="{% url 'reference_checks:manage' uuid=resume.uuid %}"
+           class="{% if hr_verification_can_start %}btn-primary text-white{% else %}border border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800{% endif %} inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition">
+            {% if reference_checks.total %}Manage requests{% else %}Set up checks{% endif %}
+        </a>
+    </div>
+
+    <div class="grid gap-4 px-6 py-4 sm:grid-cols-3">
+        <div>
+            <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">People to contact</p>
+            <p class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ reference_checks.contactable }}</p>
+        </div>
+        <div>
+            <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Requests sent</p>
+            <p class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ reference_checks.sent }}</p>
+        </div>
+        <div>
+            <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Responses in</p>
+            <p class="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ reference_checks.completed }}</p>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Thank you · SSL Wireless{% endblock %}
+{% block recruiter_nav %}{% endblock %}
+{% block recruiter_logout %}{% endblock %}
+{% block mobile_recruiter_nav %}{% endblock %}
+{% block nav_action %}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-xl text-center">
+    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
+        <div class="p-8 sm:p-12">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                <svg class="h-8 w-8 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h1 class="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Thank you</h1>
+            <p class="mt-2 leading-relaxed text-zinc-500 dark:text-zinc-400">
+                Your {{ form_title|lower }} for
+                <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ check.resume.candidate_name|title }}</span>
+                has been received. We appreciate the time it took.
+            </p>
+            <p class="mt-6 text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
+                Your answers are treated as confidential and used only for this
+                recruitment decision. You can close this page.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

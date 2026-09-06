@@ -92,15 +92,23 @@ class DocumentExtractor:
 
     @staticmethod
     def _extract_pdf_pymupdf(file_path: str) -> str:
-        """Primary PDF extractor (PyMuPDF/fitz). Returns '' on any failure so the
-        caller can fall back to pypdf."""
+        """Primary PDF extractor (PyMuPDF). Returns '' on any failure so the
+        caller can fall back to pypdf.
+
+        Imported as `pymupdf`, its current name. The old `fitz` alias still works
+        but warns on every call and is slated for removal, so it is only a
+        fallback for an older wheel.
+        """
         try:
-            import fitz  # PyMuPDF
+            import pymupdf
         except ImportError:
-            logger.warning("PyMuPDF not installed; falling back to pypdf")
-            return ''
+            try:
+                import fitz as pymupdf  # PyMuPDF < 1.24.3
+            except ImportError:
+                logger.warning("PyMuPDF not installed; falling back to pypdf")
+                return ''
         try:
-            doc = fitz.open(file_path)
+            doc = pymupdf.open(file_path)
             try:
                 return "\n".join(page.get_text() for page in doc)
             finally:

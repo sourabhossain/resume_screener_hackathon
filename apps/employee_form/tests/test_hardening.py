@@ -187,32 +187,76 @@ def test_step_total_is_stable_once_branching_is_known(verified):
     })
     form.refresh_from_db(); totals.append(form.total_steps)
 
-    _post(client, form, 'employment_gate', {'has_employment': 'yes'})
+    _post(client, form, 'employer_1', {})
     form.refresh_from_db(); totals.append(form.total_steps)
 
     assert totals == sorted(totals), f'displayed step total went backwards: {totals}'
 
 
 # ── PROBE 8: a stale current_step off the new branch must not dead-end ───
-def test_changing_a_branch_answer_keeps_navigation_sane(verified):
-    client, form = verified
+def _reference(index):
+    return {
+        f'reference_{index}_name': 'Karim Uddin',
+        f'reference_{index}_designation': 'CTO, Acme',
+        f'reference_{index}_relationship': 'direct_manager',
+        f'reference_{index}_contact': '+8801711000000',
+        f'reference_{index}_email': 'karim@acme.com',
+        f'reference_{index}_contact_permission': 'yes',
+    }
+
+
+def _walk_to_department(client, form):
+    """Section C is linear: four employers then two references, then Department."""
     _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
     _post(client, form, 'section_b', {
         **SECTION_B, 'bachelors_certificate': _pdf('b.pdf'),
         'hsc_certificate': _pdf('h.pdf'), 'ssc_certificate': _pdf('s.pdf'),
     })
-    _post(client, form, 'employment_gate', {'has_employment': 'yes'})
+    for i in range(1, 5):
+        _post(client, form, f'employer_{i}', {})       # no employer: all optional
+    for i in range(1, 3):
+        _post(client, form, f'reference_{i}', _reference(i))
     form.refresh_from_db()
-    assert form.current_step == 'employer_1'
+    assert form.current_step == 'department', form.current_step
 
-    # Candidate goes back and says they are a fresher after all.
-    _post(client, form, 'employment_gate', {'has_employment': 'no'})
+
+def test_changing_a_branch_answer_keeps_navigation_sane(verified):
+    """Department is the only branch this form has: it decides which role
+    section (D1-D6) the candidate is asked. Changing it must not strand them,
+    and must not leave the previous role section attached."""
+    client, form = verified
+    _walk_to_department(client, form)
+
+    # Sales role questions render inline on the Department step, so they post
+    # together with it.
+    _post(client, form, 'department', {
+        'department': 'banking_financial_services',
+        'sales_target_achievement': '112',
+        'sales_key_accounts': 'Two banks',
+    })
+    form.refresh_from_db()
+    assert 'd1_sales' in form.review_path, form.review_path
+    assert form.answers['sales_target_achievement'] == 112.0
+
+    # Candidate goes back and picks a different department.
+    _post(client, form, 'department', {
+        'department': 'engineering',
+        'tech_stack': 'Django, Postgres',
+    })
     form.refresh_from_db()
 
+    assert 'd4_technology' in form.review_path, form.review_path
+    assert 'd1_sales' not in form.review_path, 'the old role section is still attached'
+    # The abandoned branch's answers must go too, or a Finance candidate's form
+    # would still carry what they typed while it said Sales.
+    assert 'sales_target_achievement' not in form.answers, form.answers
+    assert 'sales_key_accounts' not in form.answers, form.answers
+    assert form.answers['tech_stack'] == 'Django, Postgres'
     assert form.current_step in form.path, 'current_step left off the active branch'
     response = client.get(reverse('employee_form:step', kwargs={
         'token': form.token, 'step_key': form.current_step}))
     assert response.status_code == 200, 'candidate cannot reach their own current step'
+
 
 
 # ── PROBE 9: webp magic check should not accept any RIFF container ───────

@@ -1,0 +1,23 @@
+Dear {{ recipient_name }},
+
+{{ candidate_name|title }} has applied for the position of {{ job_title }} at
+SSL Wireless and has given us your name as a contact for this
+{{ form_title|lower }}.
+
+We would be grateful for a few minutes of your time. The form is short and you
+may leave blank anything your records or policy do not allow you to answer.
+
+Open the form:
+{{ check_url }}
+
+Your verification code is: {{ otp }}
+The code is valid for {{ otp_minutes }} minutes. If it expires you can request a
+new one from the same page. The link itself works for {{ link_days }} days.
+
+Your answers are confidential and are used only for this recruitment decision.
+
+If you were not expecting this, or you are not the right person to ask, please
+reply to this email and we will correct our records.
+
+Thank you,
+SSL Wireless HR

@@ -386,9 +386,11 @@ def _candidate_forms_context(request, resume) -> dict:
     build it identically or the refreshed version would disagree with the page.
     """
     from apps.hr_verification.views import STATUSES_ALLOWING_START
+    from apps.reference_checks import services as reference_services
 
     return {
         'resume': resume,
+        'reference_checks': reference_services.summarise(resume),
         # None until the candidate is shortlisted; the section renders a
         # "not sent yet" state rather than being hidden, so the recruiter can
         # always see where the information form stands.

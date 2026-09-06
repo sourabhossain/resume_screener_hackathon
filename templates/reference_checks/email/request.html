@@ -1,0 +1,37 @@
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#27272a;max-width:560px;">
+    <p>Dear {{ recipient_name }},</p>
+
+    <p>
+        <strong>{{ candidate_name|title }}</strong> has applied for the position of
+        <strong>{{ job_title }}</strong> at SSL Wireless and has given us your name
+        as a contact for this {{ form_title|lower }}.
+    </p>
+
+    <p>
+        We would be grateful for a few minutes of your time. The form is short, and
+        you may leave blank anything your records or policy do not allow you to
+        answer.
+    </p>
+
+    <p style="margin:28px 0;">
+        <a href="{{ check_url }}"
+           style="background:#4f46e5;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;display:inline-block;">
+            Open the form
+        </a>
+    </p>
+
+    <p style="margin:0 0 6px;">Your verification code:</p>
+    <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:0 0 8px;">{{ otp }}</p>
+    <p style="font-size:13px;color:#71717a;margin:0 0 24px;">
+        Valid for {{ otp_minutes }} minutes — you can request a new one from the same
+        page. The link itself works for {{ link_days }} days.
+    </p>
+
+    <p style="font-size:13px;color:#71717a;">
+        Your answers are confidential and are used only for this recruitment
+        decision. If you were not expecting this, or you are not the right person to
+        ask, please reply to this email and we will correct our records.
+    </p>
+
+    <p style="font-size:13px;color:#71717a;">Thank you,<br>SSL Wireless HR</p>
+</div>
