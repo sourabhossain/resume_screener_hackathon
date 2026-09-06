@@ -451,6 +451,121 @@ def test_a_respondents_save_cannot_undo_a_code_hr_issued_meanwhile(
     assert after.current_step == 'employment'
 
 
+# ── Not asking twice for what we already hold ────────────────────────────
+def test_a_referee_finds_their_own_details_already_filled_in(client, candidate,
+                                                             hr_client):
+    """The first section asks the respondent who they are, and the candidate
+    already told us. Retyping it is friction on a favour we are asking of a
+    stranger."""
+    _send(hr_client, candidate, 'reference_1')
+    check = ReferenceCheck.objects.get(source_key='reference_1')
+    _verified(client, check)
+
+    page = client.get(_step(check, 'referee')).content.decode()
+
+    assert 'value="Karim Uddin"' in page
+    assert 'value="karim@acme.com"' in page
+    assert 'value="CTO, Acme"' in page, 'the designation the candidate gave'
+    assert 'value="+8801811000000"' in page
+    assert 'filled in your details' in page, 'and it says so, so they check it'
+
+
+def test_prefilled_details_are_editable_not_fixed(client, candidate, hr_client):
+    """The candidate may have an old designation. The respondent is the
+    authority on their own details, so nothing here may be read-only."""
+    _send(hr_client, candidate, 'reference_1')
+    check = ReferenceCheck.objects.get(source_key='reference_1')
+    _verified(client, check)
+
+    page = client.get(_step(check, 'referee')).content.decode()
+    for field in ('referee_name', 'referee_designation', 'referee_email'):
+        markup = re.search(rf'<input[^>]*name="{field}"[^>]*>', page)
+        assert markup, f'{field} is missing'
+        assert 'readonly' not in markup.group(0), f'{field} cannot be corrected'
+        assert 'disabled' not in markup.group(0), f'{field} cannot be corrected'
+
+
+def test_a_correction_survives_the_prefill(client, candidate, hr_client):
+    """The trap: prefill is merged into `initial` on every render. Merged the
+    wrong way round it would quietly overwrite the respondent's own correction
+    with the candidate's version each time they went back a page."""
+    _send(hr_client, candidate, 'reference_1')
+    check = ReferenceCheck.objects.get(source_key='reference_1')
+    _verified(client, check)
+
+    client.post(_step(check, 'referee'), {
+        'referee_name': 'Karim Uddin',
+        'referee_organisation': 'Acme Ltd',
+        'referee_designation': 'Chief Technology Officer',   # corrected
+        'referee_email': 'k.uddin@acme.com',                 # corrected
+        'referee_relationship': 'direct_manager',
+    })
+
+    check.refresh_from_db()
+    assert check.answers['referee_designation'] == 'Chief Technology Officer'
+
+    page = client.get(_step(check, 'referee')).content.decode()
+    assert 'value="Chief Technology Officer"' in page
+    assert 'value="CTO, Acme"' not in page, 'the correction was reverted'
+    assert 'value="k.uddin@acme.com"' in page
+
+
+def test_an_employers_hr_desk_is_not_given_a_persons_name(hr_client, candidate):
+    """`Acme Ltd — HR` is the stand-in for "we do not know who to write to". It
+    is a department, so it must not appear as the respondent's own name."""
+    _send(hr_client, candidate, 'employer_1')
+    check = ReferenceCheck.objects.get(source_key='employer_1')
+
+    prefill = services.prefill_answers(check)
+
+    assert 'verifier_name' not in prefill
+    assert prefill['verifier_organisation'] == 'Acme Ltd'
+
+
+def test_a_relationship_with_no_equivalent_is_left_for_the_referee(hr_client,
+                                                                   candidate):
+    """The two forms offer different option lists. Guessing a value the referee
+    never chose would put words in their mouth on a question HR relies on."""
+    form = candidate.employee_form
+    form.answers = {**form.answers, 'reference_1_relationship': 'direct_report'}
+    form.save()
+    _send(hr_client, candidate, 'reference_1')
+
+    def fresh():
+        # Re-read: the check caches its resume, and the resume its form.
+        return ReferenceCheck.objects.get(source_key='reference_1')
+
+    assert 'referee_relationship' not in services.prefill_answers(fresh())
+
+    form.answers = {**form.answers, 'reference_1_relationship': 'peer'}
+    form.save()
+    assert services.prefill_answers(fresh())['referee_relationship'] == 'peer'
+
+
+def test_every_prefilled_key_is_a_real_question_on_that_form():
+    """The prefill writes straight into the form's initial data. A key that no
+    longer exists would simply stop filling, with nothing to notice."""
+    for kind, mapping in services.SELF_DETAILS.items():
+        real = schema.questions_by_key(kind)
+        for question_key in mapping.values():
+            assert question_key in real, f'{kind} has no question {question_key!r}'
+
+
+def test_prefilled_relationship_values_are_offered_by_both_forms():
+    from apps.employee_form import schema as employee_schema
+
+    candidate_side = {q['key']: q for step in employee_schema.STEPS
+                      for q in step['questions']}['reference_1_relationship']
+    offered_to_candidate = {v for v, _ in candidate_side['choices']}
+    offered_to_referee = {
+        v for v, _ in schema.questions_by_key(
+            schema.PROFESSIONAL)['referee_relationship']['choices']}
+
+    for theirs, ours in services.RELATIONSHIP_EQUIVALENTS.items():
+        assert theirs in offered_to_candidate, f'{theirs} is not on the candidate form'
+        assert ours in offered_to_referee, f'{ours} is not on the referee form'
+
+
 def test_sections_save_and_advance(client, sent_check):
     _verified(client, sent_check)
 

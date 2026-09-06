@@ -58,6 +58,16 @@
     </div>
     {% endif %}
 
+    {% if shows_prefill %}
+    <div class="mb-5 flex gap-3 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+        <p class="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            We have filled in your details from what {{ check.resume.candidate_name|title }}
+            gave us. Please correct anything that is out of date.
+        </p>
+    </div>
+    {% endif %}
+
     <form method="post" hx-boost="false" x-data="{ submitting: false }" @submit="submitting = true">
         {% csrf_token %}
 

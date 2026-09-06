@@ -261,7 +261,14 @@ def step(request, token, step_key):
         return redirect('reference_checks:step', token=token,
                         step_key=keys[reached])
 
-    answers = check.answers or {}
+    # Anything already saved wins: the prefill is a starting point, and the
+    # moment the respondent corrects a field their version is the answer.
+    prefilled = services.prefill_answers(check)
+    answers = {**prefilled, **(check.answers or {})}
+    shows_prefill = bool(prefilled) and any(
+        question['key'] in prefilled
+        for question in schema.questions(check.kind, step_key)
+    )
 
     if request.method == 'POST':
         form = StepForm(request.POST, kind=check.kind, step_key=step_key,
@@ -307,6 +314,7 @@ def step(request, token, step_key):
         'is_final': schema.next_step_key(check.kind, step_key) is None,
         'form_title': schema.KIND_LABELS[check.kind],
         'candidate_panel': _candidate_panel(check),
+        'shows_prefill': shows_prefill,
         'conditional_rules': schema.conditional_rules(check.kind, step_key),
     })
 

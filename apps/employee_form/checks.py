@@ -7,7 +7,7 @@ it. Each one here has already gone wrong once during development.
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
-LOCAL_HOSTS = ('localhost', '127.0.0.1', '0.0.0.0', '::1')
+from apps.core.links import LOCAL_HOSTS, has_scheme, is_local, site_base_url
 
 
 @register()
@@ -29,12 +29,34 @@ def check_site_base_url(app_configs, **kwargs):
         ))
         return errors
 
+    if settings.DEBUG and is_local(base) and 'smtp' in getattr(
+            settings, 'EMAIL_BACKEND', ''):
+        errors.append(Warning(
+            f'SITE_BASE_URL is {base!r} but email is being delivered for real. '
+            'Recipients get a link to their own machine, so the button in the '
+            'email cannot work for anybody but you.',
+            hint='For a link an outside recipient can open, point SITE_BASE_URL '
+                 'at a publicly reachable address, or switch EMAIL_BACKEND to '
+                 'the console backend while developing.',
+            id='employee_form.W004',
+        ))
+
     if not settings.DEBUG and any(host in base for host in LOCAL_HOSTS):
         errors.append(Error(
             f'SITE_BASE_URL is {base!r} with DEBUG off. Every emailed form '
             'link would point at the server itself.',
             hint='Set SITE_BASE_URL to the public careers address.',
             id='employee_form.E002',
+        ))
+
+    if not has_scheme(base):
+        errors.append(Warning(
+            f'SITE_BASE_URL is {base!r}, with no http:// or https://. A mail '
+            'client reads a link like that as relative, so the button in every '
+            'invitation and verification request does nothing when clicked.',
+            hint=f'Write it in full, e.g. {site_base_url()} — which is what is '
+                 'being assumed for links in the meantime.',
+            id='employee_form.W003',
         ))
 
     if not settings.DEBUG and base.startswith('http://'):

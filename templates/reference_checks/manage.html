@@ -140,7 +140,7 @@
                         </p>
                     </div>
                     <div>
-                        <label for="org_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Organisation</label>
+                        <label for="org_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">{{ row.organisation_label }}</label>
                         <div class="mt-2">
                             <input type="text" name="recipient_organisation" id="org_{{ row.source_key }}"
                                    value="{{ row.check.recipient_organisation|default:row.recipient_organisation }}"

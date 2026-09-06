@@ -7,6 +7,8 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.links import absolute_url
+
 from .models import EmployeeForm
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ def form_url(form) -> str:
     and from views alike -- neither can rely on a request being available.
     """
     path = reverse('employee_form:entry', kwargs={'token': form.token})
-    return f"{settings.SITE_BASE_URL.rstrip('/')}{path}"
+    return absolute_url(path)
 
 
 def send_invite(form, *, otp: str) -> None:

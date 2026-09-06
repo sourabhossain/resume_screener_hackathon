@@ -7,6 +7,8 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.links import absolute_url
+
 from . import schema
 from .models import ReferenceCheck
 
@@ -75,6 +77,7 @@ def candidate_contacts(resume) -> list:
             'recipient_email': (answers.get(f'{source_key}_hr_email') or '').strip(),
             'recipient_phone': (answers.get(f'{source_key}_hr_contact') or '').strip(),
             'recipient_organisation': name,
+            'organisation_label': 'Organisation',
             'permitted': _permission_given(answers, source_key),
             'check': existing.get(source_key),
         })
@@ -93,13 +96,91 @@ def candidate_contacts(resume) -> list:
             'recipient_name': name,
             'recipient_email': (answers.get(f'{source_key}_email') or '').strip(),
             'recipient_phone': (answers.get(f'{source_key}_contact') or '').strip(),
+            # The candidate gives the referee's job title, never their
+            # employer, so this column holds a designation for referee rows.
             'recipient_organisation': (
                 answers.get(f'{source_key}_designation') or '').strip(),
+            'organisation_label': 'Designation',
             'permitted': _permission_given(answers, source_key),
             'check': existing.get(source_key),
         })
 
     return rows
+
+
+# The first section of every form asks the respondent for their own details --
+# name, email, designation -- and we already hold all of it: the candidate gave
+# it, and HR confirmed it before sending. Retyping it is pure friction on a
+# favour we are asking of a stranger, and friction is how a reply is lost.
+#
+# Prefilled, not fixed: the candidate may have an old designation, or HR may
+# have written to the wrong person. The respondent stays the authority on their
+# own details, so every one of these remains editable.
+SELF_DETAILS = {
+    schema.EMPLOYER: {
+        'contact_name': 'verifier_name',
+        'organisation': 'verifier_organisation',
+    },
+    schema.PROFESSIONAL: {
+        'contact_name': 'referee_name',
+        'email': 'referee_email',
+        'designation': 'referee_designation',
+        'phone': 'referee_contact',
+        'relationship': 'referee_relationship',
+    },
+    schema.ACADEMIC: {
+        'contact_name': 'referee_name',
+        'email': 'referee_email',
+        'designation': 'referee_designation',
+        'phone': 'referee_contact',
+        # No institution: the candidate names their own university, not the
+        # referee's, and the two are only usually the same.
+    },
+}
+
+# Both forms ask about the relationship, from different option lists. Only these
+# three carry the same meaning in both; the candidate's 'direct_report' and
+# 'hr_other' have no honest equivalent, so those are left for the referee to
+# answer. The academic list shares nothing at all with the candidate's.
+RELATIONSHIP_EQUIVALENTS = {
+    'direct_manager': 'direct_manager',
+    'skip_level_manager': 'skip_level_manager',
+    'peer': 'peer',
+}
+
+
+def prefill_answers(check) -> dict:
+    """What the respondent should find already filled in, by question key."""
+    row = contact_for(check.resume, check.source_key) or {}
+    answers = _candidate_answers(check.resume)
+
+    # The check row wins over the candidate's form: HR may have corrected it on
+    # the way out, and that correction is the more recent knowledge.
+    contact_name = (check.recipient_name or row.get('recipient_name') or '').strip()
+    if contact_name == f"{check.recipient_organisation} — HR".strip():
+        # The stand-in used when nobody at the employer is named. It is a
+        # department, not a person, so it is not this respondent's name.
+        contact_name = ''
+
+    known = {
+        'contact_name': contact_name,
+        'email': (check.recipient_email or '').strip(),
+        'phone': row.get('recipient_phone', ''),
+    }
+
+    if check.source_key.startswith('employer_'):
+        known['organisation'] = (check.recipient_organisation or '').strip()
+    else:
+        # For a referee the candidate gives a designation, never an employer.
+        known['designation'] = (check.recipient_organisation or '').strip()
+        declared = answers.get(f'{check.source_key}_relationship')
+        known['relationship'] = RELATIONSHIP_EQUIVALENTS.get(declared, '')
+
+    return {
+        question_key: known[source]
+        for source, question_key in SELF_DETAILS[check.kind].items()
+        if known.get(source)
+    }
 
 
 def contact_for(resume, source_key):
@@ -116,7 +197,7 @@ def check_url(check) -> str:
     has no request to build one from.
     """
     path = reverse('reference_checks:entry', kwargs={'token': check.token})
-    return f"{settings.SITE_BASE_URL.rstrip('/')}{path}"
+    return absolute_url(path)
 
 
 def send_request(check, *, otp: str) -> None:
