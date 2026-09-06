@@ -48,13 +48,30 @@
                 </div>
 
 
-                <div>
-                    <label for="id_description" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                        Job Description <span class="text-red-500">*</span>
-                    </label>
+                <div x-data="jdDraft()">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <label for="id_description" class="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            Job Description <span class="text-red-500">*</span>
+                        </label>
+                        <button type="button" @click="draft()" :disabled="busy"
+                                class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                            <span x-show="!busy" x-text="hasText ? 'Rewrite with AI' : 'Write with AI'"></span>
+                            <span x-show="busy" x-cloak>Writing…</span>
+                        </button>
+                    </div>
                     {{ form.description }}
+                    <p x-show="error" x-cloak class="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400" x-text="error"></p>
+                    <p x-show="drafted" x-cloak class="mt-2 text-xs text-amber-700 dark:text-amber-500">
+                        AI draft — read it through before posting. It can be wrong about
+                        the role, and anything it says about SSL Wireless is your
+                        responsibility once published.
+                    </p>
                     {% if not form.description.errors %}
-                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">Include requirements, responsibilities, and qualifications.</p>
+                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+                        Include requirements, responsibilities, and qualifications.
+                        Rough notes in the box are used as the brief.
+                    </p>
                     {% endif %}
                 </div>
                 
@@ -139,4 +156,97 @@
         </form>
     </div>
 </div>
+
+<script>
+    // The draft is written by a Celery worker, not in the request: gunicorn is
+    // started with --timeout 30 and a reasoning-model call is allowed 60s, so
+    // asking for it inline would kill the web worker mid-generation. Start it,
+    // then poll until the worker leaves the text in the cache.
+    function jdDraft() {
+        return {
+            busy: false,
+            error: '',
+            drafted: false,
+            hasText: false,
+            box: null,
+            timer: null,
+
+            init() {
+                this.box = document.getElementById('id_description');
+                this.hasText = !!(this.box && this.box.value.trim());
+                if (this.box) {
+                    this.box.addEventListener('input', () => {
+                        this.hasText = !!this.box.value.trim();
+                    });
+                }
+            },
+
+            async draft() {
+                const title = (document.getElementById('id_title') || {}).value || '';
+                if (!title.trim()) {
+                    this.error = 'Add the job title first, then generate.';
+                    return;
+                }
+                this.busy = true;
+                this.error = '';
+                this.drafted = false;
+
+                const body = new FormData();
+                body.append('title', title);
+                // Whatever is already in the box is the recruiter's brief.
+                body.append('brief', this.box ? this.box.value : '');
+
+                try {
+                    const started = await fetch('{% url "core:job_description_draft" %}', {
+                        method: 'POST',
+                        headers: {'X-CSRFToken': window.CSRF_TOKEN},
+                        body: body,
+                    });
+                    const payload = await started.json();
+                    if (!started.ok) {
+                        throw new Error(payload.error || 'That did not work. Try again.');
+                    }
+                    this.poll(payload.token, Date.now() + 120000);
+                } catch (err) {
+                    this.busy = false;
+                    this.error = err.message || 'That did not work. Try again.';
+                }
+            },
+
+            poll(token, deadline) {
+                const url = '{% url "core:job_description_draft_status" token="TOKEN" %}'
+                    .replace('TOKEN', token);
+                const tick = async () => {
+                    if (Date.now() > deadline) {
+                        this.busy = false;
+                        this.error = 'This is taking longer than expected. Try again.';
+                        return;
+                    }
+                    try {
+                        const state = await (await fetch(url)).json();
+                        if (state.status === 'pending') {
+                            this.timer = setTimeout(tick, 2000);
+                            return;
+                        }
+                        this.busy = false;
+                        if (state.status === 'done') {
+                            if (this.box) {
+                                this.box.value = state.text;
+                                this.box.dispatchEvent(new Event('input'));
+                            }
+                            this.drafted = true;
+                            this.hasText = true;
+                        } else {
+                            this.error = state.error || 'That did not work. Try again.';
+                        }
+                    } catch (err) {
+                        this.busy = false;
+                        this.error = 'Lost contact with the server. Try again.';
+                    }
+                };
+                this.timer = setTimeout(tick, 1500);
+            },
+        };
+    }
+</script>
 {% endblock %}

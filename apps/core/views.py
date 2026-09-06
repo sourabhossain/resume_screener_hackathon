@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from datetime import timedelta
 
 from django import forms
@@ -1288,3 +1289,56 @@ class ToastLoginView(auth_views.LoginView):
     def form_invalid(self, form):
         form_errors_to_messages(self.request, form)
         return super().form_invalid(form)
+
+
+# ── AI-drafted job descriptions ──────────────────────────────────────────
+@login_required
+@require_POST
+@ratelimit(key='user', rate='20/h', method='POST', block=False)
+def job_description_draft(request):
+    """Start one draft and hand back a token to poll.
+
+    Rate-limited per user because every press is a paid model call, and the
+    button is one click away from being held down. Handled here rather than
+    with block=True: that raises PermissionDenied, which this project renders
+    as a 403 HTML page -- and an HTML page is unreadable to the fetch() waiting
+    on JSON, which would report it to the recruiter as a lost connection.
+    """
+    from apps.core.services import job_description
+    from apps.core.tasks import draft_job_description_task
+
+    if getattr(request, 'limited', False):
+        logger.warning('job_description.rate_limited user=%s', request.user.pk)
+        return JsonResponse(
+            {'error': 'That is a lot of drafts in one hour. Try again later.'},
+            status=429)
+
+    title = (request.POST.get('title') or '').strip()
+    if not title:
+        return JsonResponse(
+            {'error': 'Add the job title first, then generate.'}, status=400)
+
+    token = uuid.uuid4().hex
+    job_description.store_pending(token)
+    draft_job_description_task.delay(
+        token, title[:job_description.MAX_TITLE],
+        (request.POST.get('brief') or '').strip()[:job_description.MAX_BRIEF])
+    logger.info('job_description.requested user=%s title=%r',
+                request.user.pk, title[:80])
+    return JsonResponse({'token': token}, status=202)
+
+
+@login_required
+def job_description_draft_status(request, token):
+    """What the browser polls while the draft is being written."""
+    from apps.core.services import job_description
+
+    if not re.fullmatch(r'[0-9a-f]{32}', token or ''):
+        raise Http404
+    state = job_description.read_result(token)
+    if state is None:
+        # Either never issued, or it expired while the tab sat open.
+        return JsonResponse(
+            {'status': 'failed',
+             'error': 'That draft expired. Press the button again.'})
+    return JsonResponse(state)

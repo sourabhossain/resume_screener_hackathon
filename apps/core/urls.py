@@ -19,6 +19,13 @@ urlpatterns = [
     # Job URLs — public-facing identifier is the slug, not the numeric id
     path('jobs/', views.job_list, name='job_list'),
     path('jobs/create/', views.job_create, name='job_create'),
+    # AI drafting: start, then poll. Kept above the <slug:slug> job routes so
+    # 'description' is never read as a job slug.
+    path('jobs/description/draft/', views.job_description_draft,
+         name='job_description_draft'),
+    path('jobs/description/draft/<str:token>/',
+         views.job_description_draft_status,
+         name='job_description_draft_status'),
     path('jobs/<slug:slug>/', views.job_detail, name='job_detail'),
     path('jobs/<slug:slug>/edit/', views.job_edit, name='job_edit'),
     path('jobs/<slug:slug>/delete/', views.job_delete, name='job_delete'),

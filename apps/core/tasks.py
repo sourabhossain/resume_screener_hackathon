@@ -164,3 +164,29 @@ def close_expired_jobs():
     if count:
         logger.info("Auto-closed %d expired job(s) past their closing date", count)
     return {'closed': count}
+
+
+@shared_task(soft_time_limit=120, time_limit=150)
+def draft_job_description_task(token: str, title: str, brief: str = '') -> str:
+    """Write one job description draft and leave it in the cache to be polled.
+
+    Not done in the request: gunicorn is started with --timeout 30 while a
+    reasoning-model call is allowed 60s, so a synchronous draft would have the
+    web worker killed mid-generation and the recruiter shown nothing.
+    """
+    from apps.core.services import job_description
+
+    try:
+        text = job_description.generate(title, brief)
+    except job_description.DraftError as exc:
+        job_description.store_result(token, error=str(exc))
+        return 'failed'
+    except Exception:
+        logger.exception('job_description.task_crashed token=%s', token)
+        job_description.store_result(
+            token, error='The draft could not be written just now. '
+                         'Try again in a moment.')
+        return 'failed'
+
+    job_description.store_result(token, text=text)
+    return 'done'
