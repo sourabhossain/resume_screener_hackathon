@@ -223,6 +223,9 @@ def step(request, uuid, step_key):
         # page so the asterisks appear as HR types, instead of the rule only
         # showing itself as an error after a round trip.
         'conditional_blocks': schema.conditional_blocks(step_key),
+        # And the value-based rules: an adverse answer makes its explanation
+        # required. Same reason as above -- shown as HR picks the answer.
+        'conditional_rules': schema.conditional_rules(step_key),
         # The shared field template's prefill badge is candidate-facing copy
         # ("check it matches your documents"), and it cannot tell a value HR
         # deliberately cleared from one they never filled. The section banner

@@ -186,6 +186,107 @@ def test_a_section_saves_on_its_own(hr_client, candidate):
     assert verification.last_saved_by.username == 'hradmin'
 
 
+# ── An adverse finding has to arrive with its explanation ────────────────
+# The other required answers on each section, so these tests fail on the rule
+# under test and not on an unrelated blank.
+SECTION_EDUCATION = {
+    'highest_degree': 'masters',
+    'highest_degree_consistent': 'yes',
+}
+def test_a_recorded_discrepancy_cannot_be_left_unexplained(hr_client, candidate):
+    """"There is a discrepancy in the Master's degree" and nothing else is a
+    decision nobody can defend later."""
+    verification = _start(hr_client, candidate)
+
+    response = hr_client.post(
+        _url('step', candidate, step_key='education'),
+        {**SECTION_EDUCATION, 'masters_discrepancy': 'yes',
+         'masters_remarks': ''})
+
+    verification.refresh_from_db()
+    assert not verification.is_step_complete('education')
+    assert 'masters_remarks' in response.context['form'].errors
+    assert verification.answers.get('masters_discrepancy') != 'yes'
+
+
+def test_the_same_answer_saves_once_it_is_explained(hr_client, candidate):
+    verification = _start(hr_client, candidate)
+
+    hr_client.post(_url('step', candidate, step_key='education'),
+                   {**SECTION_EDUCATION, 'masters_discrepancy': 'yes',
+                    'masters_remarks': 'Board record shows 2019, CV says 2018.'})
+
+    verification.refresh_from_db()
+    assert verification.answers['masters_discrepancy'] == 'yes'
+    assert 'Board record' in verification.answers['masters_remarks']
+
+
+def test_a_clean_answer_needs_no_remarks(hr_client, candidate):
+    """The rule must only bite on the adverse answer, or it becomes noise."""
+    verification = _start(hr_client, candidate)
+
+    hr_client.post(_url('step', candidate, step_key='education'),
+                   {**SECTION_EDUCATION, 'masters_discrepancy': 'no'})
+
+    verification.refresh_from_db()
+    assert verification.answers['masters_discrepancy'] == 'no'
+
+
+ADVERSE_CASES = [
+    ('education', {'bachelors_discrepancy': 'yes'}, 'bachelors_remarks'),
+    ('education', {'hsc_discrepancy': 'yes'}, 'hsc_remarks'),
+    ('education', {'ssc_discrepancy': 'yes'}, 'ssc_remarks'),
+    ('employment', {'employer_1_name': 'Acme Ltd',
+                    'employer_1_tenure_discrepancy': 'yes'},
+     'employer_1_remarks'),
+    ('employment', {'employer_2_name': 'Globex',
+                    'employer_2_rehire_eligible': 'no'}, 'employer_2_remarks'),
+    ('clearance', {'exception_required': 'yes'}, 'exception_details'),
+    ('clearance', {'pending_document_at_joining': 'yes'}, 'pending_items'),
+    ('clearance', {'offer_letter_issued': 'yes'}, 'offer_letter_issue_date'),
+    ('clearance', {'offer_accepted': 'yes'}, 'offer_acceptance_date'),
+    ('clearance', {'final_joining_clearance': 'do_not_proceed'},
+     'final_hr_remarks'),
+    ('clearance', {'final_verification_status': 'not_cleared'},
+     'final_hr_remarks'),
+]
+
+
+@pytest.mark.parametrize('step_key,answers,must_explain', ADVERSE_CASES)
+def test_every_adverse_answer_demands_its_explanation(
+        hr_client, candidate, step_key, answers, must_explain):
+    _start(hr_client, candidate)
+
+    response = hr_client.post(_url('step', candidate, step_key=step_key), answers)
+
+    errors = response.context['form'].errors
+    assert must_explain in errors, (
+        f'{answers} saved with {must_explain} blank; errors were {dict(errors)}'
+    )
+
+
+def test_no_rule_can_make_a_section_impossible_to_save(hr_client, candidate):
+    """The guard on the guard.
+
+    Requiring a field that has no neutral answer once deadlocked Section D --
+    unsaveable, and sign-off needs every section, so the whole verification
+    stalled with no way out. Every trigger must therefore offer an answer that
+    demands nothing.
+    """
+    from apps.hr_verification import schema
+
+    by_key = {q['key']: q for s in schema.STEPS for q in s['questions']}
+    for rule in schema.CONDITIONAL_RULES:
+        trigger = by_key[rule['trigger']]
+        offered = {v for v, _ in (trigger.get('choices') or [])}
+        assert offered, f'{rule["trigger"]} is not a choice question'
+        neutral = offered - set(rule['when'])
+        assert neutral, (
+            f'every answer to {rule["trigger"]} triggers the rule, so the '
+            f'section can never be saved without filling {rule["keys"]}'
+        )
+
+
 def test_an_incomplete_section_is_not_marked_complete(hr_client, candidate):
     verification = _start(hr_client, candidate)
 

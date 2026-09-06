@@ -54,10 +54,12 @@ def _get_resume(uuid):
 def manage(request, uuid):
     """Who can be asked, who has been asked, and what came back."""
     resume = _get_resume(uuid)
+    refused = services.verification_refused(resume)
     return render(request, 'reference_checks/manage.html', {
         'resume': resume,
         'contacts': services.candidate_contacts(resume),
-        'can_send': resume.recruiter_status in STATUSES_ALLOWING_SEND,
+        'verification_refused': refused,
+        'can_send': resume.recruiter_status in STATUSES_ALLOWING_SEND and not refused,
         'is_fresher': services.is_fresher(resume),
         'kind_labels': schema.KIND_LABELS,
         'kind_choices': ReferenceCheck.KIND_CHOICES,

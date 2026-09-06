@@ -186,6 +186,81 @@ def test_a_refused_contact_cannot_be_sent(hr_client, candidate):
     assert len(mail.outbox) == 0
 
 
+def test_a_candidate_who_refused_verification_is_not_contacted(hr_client,
+                                                                candidate):
+    """The Employee Information Form asks once, in one question, whether we may
+    run identity, police, education, employment and reference checks at all.
+    That answer was being stored and shown and then ignored: a candidate could
+    write No and still have their former employer written to."""
+    form = candidate.employee_form
+    form.answers = {**form.answers, 'verification_consent': 'no'}
+    form.save()
+
+    _send(hr_client, candidate, 'employer_1')
+
+    assert not ReferenceCheck.objects.filter(source_key='employer_1').exists()
+    assert len(mail.outbox) == 0
+
+
+def test_a_blanket_refusal_beats_a_yes_further_down_the_form(hr_client,
+                                                             candidate):
+    """The narrower answer cannot widen the broader refusal. Employer 1 is
+    marked contactable in the fixture, so without this the per-contact yes
+    would be enough on its own."""
+    assert services.contact_for(candidate, 'employer_1')['permitted'] is True
+    form = candidate.employee_form
+    form.answers = {**form.answers, 'verification_consent': 'no'}
+    form.save()
+
+    _send(hr_client, candidate, 'employer_1')
+
+    assert not ReferenceCheck.objects.filter(source_key='employer_1').exists()
+
+
+def test_hr_is_told_why_before_they_click(hr_client, candidate):
+    form = candidate.employee_form
+    form.answers = {**form.answers, 'verification_consent': 'no'}
+    form.save()
+
+    body = hr_client.get(_manage_url(candidate)).content.decode()
+
+    assert 'did not consent to background verification' in body
+    assert body.count('disabled') >= 4, 'the send buttons must be unusable'
+
+
+def test_a_missing_consent_answer_is_not_read_as_a_refusal(candidate):
+    """Blank is an absence, not a No -- the per-contact gate already declines
+    on that, and calling it a refusal would put words in the candidate's mouth
+    on the one question where that matters most."""
+    form = candidate.employee_form
+    form.answers = {k: v for k, v in form.answers.items()
+                    if k != 'verification_consent'}
+    form.save()
+
+    assert services.verification_refused(candidate) is False
+
+
+def test_consenting_leaves_sending_open(hr_client, candidate):
+    form = candidate.employee_form
+    form.answers = {**form.answers, 'verification_consent': 'yes'}
+    form.save()
+
+    _send(hr_client, candidate, 'employer_1')
+
+    assert ReferenceCheck.objects.filter(source_key='employer_1').exists()
+
+
+def test_the_consent_question_still_exists_and_still_offers_no():
+    """If this question is ever renamed or loses its No, the gate above stops
+    firing and nothing else would show it."""
+    from apps.employee_form import schema as employee_schema
+
+    q = {x['key']: x for s in employee_schema.STEPS
+         for x in s['questions']}.get('verification_consent')
+    assert q is not None, 'the blanket consent question is gone'
+    assert 'no' in {v for v, _ in q['choices']}
+
+
 def test_a_blank_permission_is_not_consent(hr_client, candidate):
     form = candidate.employee_form
     form.answers = {**form.answers, 'employer_1_contact_permission': ''}

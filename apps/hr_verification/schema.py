@@ -772,6 +772,62 @@ def questions(step_key):
     return list(step['questions']) if step else []
 
 
+# An adverse finding recorded with no explanation is the one outcome this form
+# must not allow. "There is a discrepancy in the Master's degree", "do not
+# proceed", "an exception was granted" -- each is a decision someone will have
+# to defend later, and the sentence saying why is the whole value of recording
+# it. Every trigger below has a neutral answer ("No", "Not required", "Clear"),
+# so none of these can make a section unsaveable.
+_DEGREE_BLOCKS = ('masters', 'bachelors', 'hsc', 'ssc', 'training')
+
+CONDITIONAL_RULES = [
+    # Identity
+    {'trigger': 'police_verification_status', 'when': ['concern'],
+     'keys': ['identity_police_remarks']},
+    {'trigger': 'agency_required', 'when': ['yes'], 'keys': ['agency_name']},
+
+    # Education -- a discrepancy against submitted documents
+    *[{'trigger': f'{block}_discrepancy', 'when': ['yes'],
+       'keys': [f'{block}_remarks']} for block in _DEGREE_BLOCKS],
+
+    # Employment -- a tenure discrepancy, or an employer who would not rehire
+    *[{'trigger': f'employer_{i}_tenure_discrepancy', 'when': ['yes'],
+       'keys': [f'employer_{i}_remarks']} for i in range(1, EMPLOYER_COUNT + 1)],
+    *[{'trigger': f'employer_{i}_rehire_eligible', 'when': ['no'],
+       'keys': [f'employer_{i}_remarks']} for i in range(1, EMPLOYER_COUNT + 1)],
+
+    # Findings resting on thin sourcing
+    {'trigger': 'source_reliability', 'when': ['single_source', 'unverified'],
+     'keys': ['finding_details']},
+
+    # Clearance -- dates that must exist once the event is recorded, and any
+    # outcome short of a clean pass
+    {'trigger': 'offer_letter_issued', 'when': ['yes'],
+     'keys': ['offer_letter_issue_date']},
+    {'trigger': 'offer_accepted', 'when': ['yes'],
+     'keys': ['offer_acceptance_date']},
+    {'trigger': 'pending_document_at_joining', 'when': ['yes'],
+     'keys': ['pending_items']},
+    {'trigger': 'exception_required', 'when': ['yes'],
+     'keys': ['exception_details']},
+    {'trigger': 'final_verification_status',
+     'when': ['conditionally_cleared', 'pending_exception', 'not_cleared'],
+     'keys': ['final_hr_remarks']},
+    {'trigger': 'final_joining_clearance',
+     'when': ['cleared_followup', 'hold', 'do_not_proceed'],
+     'keys': ['final_hr_remarks']},
+]
+
+
+def conditional_rules(step_key):
+    """The rules whose trigger and targets both live on this step."""
+    keys = {q['key'] for q in questions(step_key)}
+    return [
+        rule for rule in CONDITIONAL_RULES
+        if rule['trigger'] in keys and any(k in keys for k in rule['keys'])
+    ]
+
+
 
 
 def question_groups(step_key):

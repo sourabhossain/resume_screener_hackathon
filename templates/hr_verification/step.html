@@ -152,5 +152,57 @@
     })();
 </script>
 
+{{ conditional_rules|json_script:"hrv-conditional-rules" }}
+<script>
+    // An adverse answer makes its explanation required -- the same rules
+    // StepForm enforces on POST. Mirrored so the asterisk appears the moment
+    // HR picks "Yes" or "Do not proceed", not as an error after saving.
+    (function () {
+        const source = document.getElementById('hrv-conditional-rules');
+        if (!source) return;
+        let rules = [];
+        try { rules = JSON.parse(source.textContent); } catch (_) { return; }
+
+        rules.forEach(function (rule) {
+            const trigger = document.querySelector('[name="' + rule.trigger + '"]');
+            if (!trigger) return;
+            const targets = rule.keys
+                .map(function (key) { return document.querySelector('[name="' + key + '"]'); })
+                .filter(Boolean);
+            if (!targets.length) return;
+
+            function apply() {
+                const on = rule.when.indexOf(trigger.value) !== -1;
+                targets.forEach(function (el) {
+                    // Another rule may already require this field; never clear
+                    // a requirement this rule did not set.
+                    if (!on && el.dataset.requiredBy && el.dataset.requiredBy !== rule.trigger) return;
+                    el.required = on;
+                    if (on) { el.dataset.requiredBy = rule.trigger; }
+                    else { delete el.dataset.requiredBy; }
+
+                    const question = el.closest('[data-question]');
+                    const label = question && question.querySelector('label');
+                    if (!label) return;
+                    let star = label.querySelector('[data-conditional-star]');
+                    if (on && !star) {
+                        star = document.createElement('span');
+                        star.setAttribute('data-conditional-star', '');
+                        star.className = 'ml-0.5 text-rose-500';
+                        star.textContent = '*';
+                        label.appendChild(star);
+                    } else if (!on && star) {
+                        star.remove();
+                    }
+                });
+            }
+
+            trigger.addEventListener('input', apply);
+            trigger.addEventListener('change', apply);
+            apply();
+        });
+    })();
+</script>
+
 {% include 'shared/signature_pad.html' %}
 {% endblock %}

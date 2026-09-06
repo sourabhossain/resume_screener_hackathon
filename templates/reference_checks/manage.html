@@ -41,7 +41,20 @@
         </p>
     </div>
 
-    {% if not can_send %}
+    {% if verification_refused %}
+    <div class="mb-5 flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        <div class="text-sm leading-relaxed text-rose-900 dark:text-rose-300">
+            <p class="font-semibold">{{ resume.candidate_name|title }} did not consent to background verification.</p>
+            <p class="mt-1">
+                They answered No to identity, police, education, employment and
+                reference checks on their own form, so nobody here can be
+                contacted. If that answer was a mistake, ask them to correct it
+                on the Employee Information Form first.
+            </p>
+        </div>
+    </div>
+    {% elif not can_send %}
     <div class="mb-5 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
         Sending opens once the candidate reaches Interviewing.
     </div>

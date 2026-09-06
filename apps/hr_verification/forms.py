@@ -106,7 +106,31 @@ class StepForm(AriaInvalidMixin, forms.Form):
                 self.add_error(end_key, 'This date cannot be before the start date.')
 
         self._validate_employer_blocks(cleaned)
+        self._apply_conditional_rules(cleaned)
         return cleaned
+
+    def _apply_conditional_rules(self, cleaned):
+        """An adverse answer has to arrive with the sentence explaining it.
+
+        Recording "there is a discrepancy" or "do not proceed" and leaving the
+        remarks empty produces a decision nobody can defend afterwards, and the
+        gap only shows up when someone asks why -- long after the reviewer who
+        knew has moved on.
+        """
+        by_key = {q['key']: q for q in self.questions}
+        for rule in schema.conditional_rules(self.step_key):
+            if cleaned.get(rule['trigger']) not in rule['when']:
+                continue
+            for key in rule['keys']:
+                if key not in self.fields or self.errors.get(key):
+                    # `add_error` drops the key from cleaned_data, so a field
+                    # that already failed must not also be told it is missing.
+                    continue
+                if cleaned.get(key) in (None, '', []):
+                    label = by_key.get(rule['trigger'], {}).get(
+                        'label', 'that answer')
+                    self.add_error(
+                        key, f'Required by your answer to "{label}".')
 
     def _validate_employer_blocks(self, cleaned):
         """Naming an employer makes the rest of that employer required.

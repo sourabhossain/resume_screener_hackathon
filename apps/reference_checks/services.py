@@ -41,6 +41,21 @@ def _candidate_answers(resume) -> dict:
     return dict(form.answers or {}) if form else {}
 
 
+def verification_refused(resume) -> bool:
+    """Whether the candidate answered No to the blanket consent question.
+
+    The Employee Information Form asks, in one question, whether we may carry
+    out "identity, police, education, employment, reference and other lawful
+    background verification". A No there covers everything this app does, and
+    is not overridden by a Yes further down the same form against an individual
+    employer -- the narrower answer cannot widen the broader refusal.
+
+    A blank answer is not a refusal, only an absence; the per-contact gate
+    already declines to send on that.
+    """
+    return _candidate_answers(resume).get('verification_consent') == 'no'
+
+
 def _permission_given(answers, source_key) -> bool:
     """Did the candidate agree to this employer or referee being contacted?
 
@@ -256,6 +271,12 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
     contact = contact_for(resume, source_key)
     if contact is None:
         raise SendError('That employer or referee is not on the candidate\'s form.')
+
+    if verification_refused(resume):
+        raise SendError(
+            f'{resume.candidate_name} did not consent to background '
+            'verification, so no request can be sent to anyone.'
+        )
 
     if not contact['permitted']:
         raise SendError(
