@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
@@ -273,11 +274,15 @@ def step(request, token, step_key):
                 if next_key is None:
                     locked.current_step = step_key
                     locked.is_submitted = True
-                    from django.utils import timezone
                     locked.submitted_at = timezone.now()
                 else:
                     locked.current_step = next_key
-                locked.save()
+                # Only this view's own columns: HR may be resending a code on
+                # the same row, and a full write would undo the new one.
+                locked.save(update_fields=[
+                    'answers', 'current_step', 'is_submitted', 'submitted_at',
+                    'updated_at',
+                ])
             check = locked
 
             if check.is_submitted:
@@ -311,6 +316,10 @@ def done(request, token):
     check = _get_check(token)
     if not check.is_submitted:
         return redirect('reference_checks:entry', token=token)
+    if not _is_verified(request, check):
+        # This page names the candidate. The link alone must not be enough to
+        # learn who applied -- that is the whole point of the emailed code.
+        return redirect('reference_checks:verify', token=token)
     return render(request, 'reference_checks/done.html', {
         'check': check,
         'form_title': schema.KIND_LABELS[check.kind],

@@ -111,7 +111,9 @@ POLICE_STATUS = [
     ('not_required', 'Not Required'),
 ]
 
-HIGHEST_DEGREE_CHOICES = list(DEGREE_CHOICES) + [('other', 'Other')]
+# DEGREE_CHOICES already ends in Other -- appending another produced a dropdown
+# that offered "Other" twice.
+HIGHEST_DEGREE_CHOICES = list(DEGREE_CHOICES)
 CONSISTENCY_CHOICES = [
     ('yes', 'Yes'),
     ('no', 'No'),

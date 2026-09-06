@@ -134,7 +134,10 @@
                                    {% if not row.permitted or not can_send %}disabled{% endif %}
                                    class="form-input">
                         </div>
-                        <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">From the candidate's form — correct it if it is out of date.</p>
+                        <p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
+                            From the candidate's form — correct it if it is out of date.{% if row.recipient_phone %}
+                            Phone on file: {{ row.recipient_phone }}.{% endif %}
+                        </p>
                     </div>
                     <div>
                         <label for="org_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Organisation</label>

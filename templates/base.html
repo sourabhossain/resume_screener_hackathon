@@ -18,9 +18,15 @@
     <link rel="stylesheet" href="{% static 'css/app.css' %}?v=11">
     <script src="{% static 'js/status-picker.js' %}?v=3"></script>
     <script>try { localStorage.removeItem('htmx-history-cache'); } catch (e) {}</script>
-    <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.3"
+            integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq"
+            crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.17.1/dist/cdn.min.js"
+            integrity="sha384-x6MR287ZDHWauvRTQIBc3b1F++s/03J/rBHbpRGwBoYbrqIN+3wRx4EXbU1u9NGO"
+            crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25"
+            integrity="sha384-nLoOnA/BDh8A/jxqtckg4DumuCGOBYUnNJLZdQz/zfYNp3wcjGSoWTAzgko06G/2"
+            crossorigin="anonymous"></script>
     <script>window.CSRF_TOKEN = '{{ csrf_token }}';</script>
     <script>
         document.addEventListener('htmx:afterSettle', function (evt) {

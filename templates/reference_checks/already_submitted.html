@@ -12,9 +12,8 @@
         </div>
         <h1 class="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">We already have your response</h1>
         <p class="mt-2 leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Thank you — your answers about
-            <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ check.resume.candidate_name|title }}</span>
-            reached us on {{ check.submitted_at|date:"j M Y" }} and cannot be changed here.
+            Thank you — your answers reached us on
+            {{ check.submitted_at|date:"j M Y" }} and cannot be changed here.
         </p>
         <p class="mt-6 text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
             If something needs correcting, please reply to our email.

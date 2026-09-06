@@ -43,7 +43,13 @@ def send_reference_check_request(check_id: int) -> str:
     check.invite_count = (check.invite_count or 0) + 1
     check.last_error = ''
     check.last_error_at = None
-    check.save()
+    # Not a bare save(): the respondent may be part-way through the form, and a
+    # full row write here would put back the answers as they were when this task
+    # loaded the row.
+    check.save(update_fields=[
+        *ReferenceCheck.OTP_FIELDS,
+        'invited_at', 'invite_count', 'last_error', 'last_error_at', 'updated_at',
+    ])
 
     try:
         send_request(check, otp=otp)

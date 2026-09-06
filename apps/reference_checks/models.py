@@ -111,6 +111,11 @@ class ReferenceCheck(models.Model):
             days=self.TOKEN_VALIDITY_DAYS)
 
     # ── OTP ──────────────────────────────────────────────────────────────
+    # Exactly what issue_otp() touches. Named here because HR's resend and the
+    # respondent's section save write this row concurrently, and each must
+    # narrow its save() to its own columns or it silently reverts the other's.
+    OTP_FIELDS = ('otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at')
+
     def issue_otp(self) -> str:
         """Generate a fresh code, store only its hash, return the plaintext once.
 
@@ -185,19 +190,26 @@ class ReferenceCheck(models.Model):
         return raw
 
     def answered_sections(self):
-        """Every section with its answers, for the HR-facing review page."""
+        """Every section with its answers, for the HR-facing review page.
+
+        Sections the respondent left entirely blank are still listed, marked as
+        such. Dropping them would be the tidier page and the worse one: on a
+        conduct or integrity section, "they chose not to answer" is itself
+        something HR needs to see, and an absent heading reads as "nothing to
+        ask" rather than "nothing was said".
+        """
         out = []
         for step_key in schema.step_keys(self.kind):
             step = schema.get_step(self.kind, step_key)
-            rows = [
-                {
-                    'key': question['key'],
-                    'label': question['label'],
-                    'value': self.display_value(question),
-                    'answered': self.display_value(question) != '',
-                }
-                for question in schema.questions(self.kind, step_key)
-            ]
+            rows = []
+            for question in schema.questions(self.kind, step_key):
+                value = self.display_value(question)
+                if value != '':
+                    rows.append({
+                        'key': question['key'],
+                        'label': question['label'],
+                        'value': value,
+                    })
             out.append({'key': step_key, 'title': step['title'], 'rows': rows})
         return out
 

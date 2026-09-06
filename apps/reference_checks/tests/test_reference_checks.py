@@ -5,10 +5,12 @@ an emailed link. The rules that matter are who may be contacted at all, that the
 link alone is not enough, and that a respondent only ever sees their own form.
 """
 import re
+from datetime import timedelta
 
 import pytest
 from django.core import mail
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.models import Resume
 from apps.employee_form.models import EmployeeForm
@@ -20,6 +22,7 @@ from apps.reference_checks.models import ReferenceCheck
 CANDIDATE_ANSWERS = {
     'employer_1_name': 'Acme Ltd',
     'employer_1_hr_email': 'hr@acme.com',
+    'employer_1_hr_contact': '+8801711000000',
     'employer_1_contact_permission': 'yes',
 
     'employer_2_name': 'Globex',
@@ -29,12 +32,54 @@ CANDIDATE_ANSWERS = {
     'reference_1_name': 'Karim Uddin',
     'reference_1_email': 'karim@acme.com',
     'reference_1_designation': 'CTO, Acme',
+    'reference_1_contact': '+8801811000000',
     'reference_1_contact_permission': 'yes',
 
     'reference_2_name': 'Nadia Haque',
     'reference_2_email': 'nadia@example.com',
     'reference_2_contact_permission': 'yes',
 }
+
+
+def test_the_candidate_answers_this_suite_invents_are_real_form_keys():
+    """Guards every other test here.
+
+    Both this fixture and services.py name employee-form keys as bare strings.
+    If they are wrong in the same way -- as `employer_1_hr_contact_name` once
+    was, a key no form has ever written -- the rest of the suite passes while
+    reading nothing. Pinning the fixture to the real schema is what makes the
+    other assertions mean anything.
+    """
+    from apps.employee_form import schema as employee_schema
+
+    real = {q['key'] for step in employee_schema.STEPS for q in step['questions']}
+    invented = sorted(k for k in CANDIDATE_ANSWERS if k not in real)
+    assert not invented, f'the employee form has no such question(s): {invented}'
+
+
+def test_every_contact_detail_hr_sees_comes_from_a_real_form_key(candidate):
+    """The other half: what services reads must be what the form writes."""
+    from apps.employee_form import schema as employee_schema
+
+    real = {q['key'] for step in employee_schema.STEPS for q in step['questions']}
+    for suffix in ('name', 'hr_email', 'hr_contact', 'contact_permission'):
+        assert f'employer_1_{suffix}' in real, f'employer_1_{suffix} is gone'
+    for suffix in ('name', 'email', 'contact', 'designation', 'contact_permission'):
+        assert f'reference_1_{suffix}' in real, f'reference_1_{suffix} is gone'
+
+    row = services.contact_for(candidate, 'employer_1')
+    assert row['recipient_email'] == 'hr@acme.com'
+    assert row['recipient_organisation'] == 'Acme Ltd'
+    assert row['permitted'] is True
+    # The form asks for the employer's HR email and phone, never a person's
+    # name, so the request is addressed to the department. Pinned because the
+    # code once looked up a name key that no form has ever written.
+    assert row['recipient_name'] == 'Acme Ltd — HR'
+    assert row['recipient_phone'] == '+8801711000000'
+
+    referee = services.contact_for(candidate, 'reference_1')
+    assert referee['recipient_name'] == 'Karim Uddin'
+    assert referee['recipient_phone'] == '+8801811000000'
 
 
 @pytest.fixture
@@ -270,6 +315,49 @@ def _step(check, step_key):
                    kwargs={'token': check.token, 'step_key': step_key})
 
 
+def test_no_section_is_named_after_a_reserved_url_segment():
+    """Sections are served from /verification/<token>/<step_key>/, the last
+    pattern in the list. A section called `verify` or `done` would be swallowed
+    by the pattern above it and become permanently unreachable -- with the
+    respondent bounced back to the code page forever, and nothing in the logs
+    to say why."""
+    reserved = {'verify', 'done', 'resend-code', 'resend_code'}
+    for kind in (schema.EMPLOYER, schema.PROFESSIONAL, schema.ACADEMIC):
+        clash = reserved.intersection(schema.step_keys(kind))
+        assert not clash, f'{kind} has section(s) named {sorted(clash)}'
+
+
+def test_the_link_alone_never_reveals_who_applied(client, sent_check):
+    """The code is emailed to the same inbox as the link, so it cannot defend
+    against someone reading that inbox. What it does defend against is the link
+    escaping it -- forwarded, pasted, left in a shared browser. For that to be
+    worth anything, no page reachable with the token alone may name the
+    candidate.
+    """
+    name = sent_check.resume.candidate_name
+    surname = name.split()[-1]
+
+    pages = [client.get(_verify(sent_check), follow=True)]
+
+    sent_check.is_submitted = True
+    sent_check.submitted_at = timezone.now()
+    sent_check.save(update_fields=['is_submitted', 'submitted_at'])
+    pages.append(client.get(_entry(sent_check), follow=True))
+    pages.append(client.get(
+        reverse('reference_checks:done', kwargs={'token': sent_check.token}),
+        follow=True))
+
+    sent_check.is_submitted = False
+    sent_check.token_expires_at = timezone.now() - timedelta(days=1)
+    sent_check.save(update_fields=['is_submitted', 'token_expires_at'])
+    pages.append(client.get(_entry(sent_check), follow=True))
+
+    for page in pages:
+        body = page.content.decode()
+        assert name not in body, f'{page.request["PATH_INFO"]} names the candidate'
+        assert surname not in body, f'{page.request["PATH_INFO"]} leaks the surname'
+
+
 def test_the_link_alone_does_not_open_the_form(client, sent_check):
     response = client.get(_entry(sent_check))
     assert response.status_code == 302
@@ -327,6 +415,40 @@ VERIFIER = {
     'verifier_designation': 'Head of HR',
     'verifier_relationship': 'hr',
 }
+
+
+def test_a_respondents_save_cannot_undo_a_code_hr_issued_meanwhile(
+        client, sent_check, monkeypatch):
+    """The mirror of the resend race, and the half that select_for_update does
+    not cover: the row lock only holds off other lockers, and HR's resend takes
+    no lock. If this view writes the whole row, it puts back the OTP columns as
+    they were when it loaded them -- so the code HR just emailed stops working
+    and the respondent is locked out of a form they were mid-way through.
+    """
+    from apps.reference_checks.forms import StepForm
+
+    _verified(client, sent_check)
+    original_storable = StepForm.storable_answers
+
+    def storable_while_hr_resends(self):
+        # HR presses Resend between this view taking the row lock and writing.
+        hr_copy = ReferenceCheck.objects.get(pk=sent_check.pk)
+        hr_copy.issue_otp()
+        hr_copy.save(update_fields=[*ReferenceCheck.OTP_FIELDS, 'updated_at'])
+        return original_storable(self)
+
+    monkeypatch.setattr(StepForm, 'storable_answers', storable_while_hr_resends)
+    before = ReferenceCheck.objects.get(pk=sent_check.pk).otp_hash
+
+    client.post(_step(sent_check, 'verifier'), VERIFIER)
+
+    after = ReferenceCheck.objects.get(pk=sent_check.pk)
+    assert after.otp_hash != before, (
+        "HR's new code is gone -- either this view wrote the whole row and put "
+        'the old one back, or the interleave above never ran'
+    )
+    assert after.answers['verifier_name'] == 'Rehana Karim', 'the section was lost'
+    assert after.current_step == 'employment'
 
 
 def test_sections_save_and_advance(client, sent_check):
@@ -413,10 +535,36 @@ def test_a_completed_request_cannot_be_reopened(client, sent_check):
         assert b'already have your response' in client.get(url).content
 
 
-def test_an_expired_link_says_so(client, sent_check):
-    from datetime import timedelta
-    from django.utils import timezone
+def test_a_resend_cannot_revert_answers_saved_while_it_was_running(
+        sent_check, monkeypatch):
+    """HR and the respondent write the same row from different processes.
 
+    The send task loads the row, generates a code, then writes back. If it
+    writes the whole row, everything the respondent saved inside that window is
+    replaced by what the task read on the way in -- their work simply vanishes,
+    with nothing logged. The interleave is forced here because in production it
+    is a window of microseconds that no ordinary test would ever hit.
+    """
+    from apps.reference_checks.tasks import send_reference_check_request
+
+    original_issue_otp = ReferenceCheck.issue_otp
+
+    def issue_otp_while_the_respondent_saves(self):
+        ReferenceCheck.objects.filter(pk=self.pk).update(
+            answers={'was_employed': 'yes'}, current_step='conduct')
+        return original_issue_otp(self)
+
+    monkeypatch.setattr(ReferenceCheck, 'issue_otp',
+                        issue_otp_while_the_respondent_saves)
+    send_reference_check_request(sent_check.pk)
+
+    fresh = ReferenceCheck.objects.get(pk=sent_check.pk)
+    assert fresh.answers == {'was_employed': 'yes'}
+    assert fresh.current_step == 'conduct'
+    assert fresh.invited_at is not None, 'the resend itself must still happen'
+
+
+def test_an_expired_link_says_so(client, sent_check):
     sent_check.token_expires_at = timezone.now() - timedelta(days=1)
     sent_check.save()
 
@@ -490,6 +638,35 @@ def test_every_verdict_answer_flags_or_does_not_as_intended(
         is_submitted=True, answers={question: value},
     )
     assert check.flagged is expected
+
+
+def test_a_section_left_blank_is_shown_as_blank_not_as_an_empty_box(
+        hr_client, candidate):
+    """Silence on a conduct question is information. The section must still
+    appear, and must say plainly that nothing was answered -- a bare heading
+    with nothing under it reads as a rendering fault."""
+    answered, blank = 'employment', 'conduct'
+    assert 'was_employed' in schema.questions_by_key(schema.EMPLOYER), \
+        'the key this test answers no longer exists'
+
+    check = ReferenceCheck.objects.create(
+        resume=candidate, kind=schema.EMPLOYER, source_key='employer_1',
+        recipient_name='Acme HR', recipient_email='hr@acme.com',
+        is_submitted=True, answers={'was_employed': 'yes'},
+    )
+    sections = {s['key']: s for s in check.answered_sections()}
+    assert len(sections[answered]['rows']) == 1, 'the answered section lost its row'
+    assert sections[blank]['rows'] == [], 'the untouched section should hold nothing'
+
+    body = hr_client.get(reverse('reference_checks:response',
+                                 kwargs={'uuid': candidate.uuid,
+                                         'pk': check.pk})).content.decode()
+
+    # Titles are escaped in the page, so compare the way Django wrote them.
+    from django.utils.html import escape
+    assert escape(sections[blank]['title']) in body, 'the blank section vanished'
+    assert escape(sections[answered]['title']) in body
+    assert 'left this section blank' in body
 
 
 def test_hr_can_read_a_completed_response(hr_client, candidate):

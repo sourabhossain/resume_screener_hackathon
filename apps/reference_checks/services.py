@@ -68,9 +68,12 @@ def candidate_contacts(resume) -> list:
             'source_key': source_key,
             'default_kind': schema.EMPLOYER,
             'title': f'Employer {i}',
-            'recipient_name': (answers.get(f'{source_key}_hr_contact_name') or
-                               f'{name} — HR'),
+            # The candidate gives us the employer's HR email and phone, never a
+            # person's name, so address it to the department and let HR correct
+            # it before sending if they know who to write to.
+            'recipient_name': f'{name} — HR',
             'recipient_email': (answers.get(f'{source_key}_hr_email') or '').strip(),
+            'recipient_phone': (answers.get(f'{source_key}_hr_contact') or '').strip(),
             'recipient_organisation': name,
             'permitted': _permission_given(answers, source_key),
             'check': existing.get(source_key),
@@ -89,6 +92,7 @@ def candidate_contacts(resume) -> list:
             'title': f'Reference {i}',
             'recipient_name': name,
             'recipient_email': (answers.get(f'{source_key}_email') or '').strip(),
+            'recipient_phone': (answers.get(f'{source_key}_contact') or '').strip(),
             'recipient_organisation': (
                 answers.get(f'{source_key}_designation') or '').strip(),
             'permitted': _permission_given(answers, source_key),
@@ -199,7 +203,15 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
             'be sent. Add one and try again.'
         )
     check.invited_by = user
-    check.save()
+    if check.pk:
+        # Same reason as the task: never write back a stale `answers` over a
+        # respondent who is part-way through.
+        check.save(update_fields=[
+            'kind', 'recipient_name', 'recipient_email', 'recipient_organisation',
+            'token_expires_at', 'invited_by', 'updated_at',
+        ])
+    else:
+        check.save()
 
     send_reference_check_request.delay(check.pk)
     logger.info('reference_checks.queued check=%s resume=%s source=%s',
@@ -210,9 +222,7 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
 def resend_code(check) -> None:
     """Re-send just the code, for the respondent's own "Resend" action."""
     otp = check.issue_otp()
-    check.save(update_fields=[
-        'otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at', 'updated_at',
-    ])
+    check.save(update_fields=[*ReferenceCheck.OTP_FIELDS, 'updated_at'])
     send_request(check, otp=otp)
 
 
