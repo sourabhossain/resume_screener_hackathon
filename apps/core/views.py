@@ -124,10 +124,19 @@ def dashboard(request):
         token_expires_at__gte=tz.now(),
     ).count()
 
+    # Both cards say "Latest", so both have to be ordered by recency here.
+    #
+    # order_by is not decoration in either case. Annotating with an aggregate
+    # makes Django drop the model's Meta.ordering -- the SQL came out as
+    # "GROUP BY job_description.id LIMIT 5" with no ORDER BY at all, so the
+    # card showed whichever five rows MySQL happened to return. And Resume's
+    # Meta.ordering sorts by final_score, so without this the "Latest
+    # submissions" card was really the highest-scoring ones, oldest included.
     recent_jobs = Job.objects.annotate(
         resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
-    )[:5]
-    recent_resumes = Resume.objects.filter(job__is_deleted=False).select_related('job')[:5]
+    ).order_by('-created_at')[:5]
+    recent_resumes = Resume.objects.filter(
+        job__is_deleted=False).select_related('job').order_by('-created_at')[:5]
 
     context = {
         'total_jobs': job_stats['total'],

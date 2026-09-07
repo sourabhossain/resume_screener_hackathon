@@ -1,8 +1,11 @@
 """
 Unit tests for views.
 """
+from datetime import timedelta
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 from apps.core.models import Job, Resume
 
 
@@ -88,6 +91,73 @@ class TestDashboardView:
         response = authenticated_client.get(reverse('core:dashboard'))
         assert response.status_code == 200
     
+    def test_latest_postings_really_are_the_latest(self, authenticated_client, user):
+        """The card says "Latest postings", so the newest job must be first.
+
+        Annotating with an aggregate makes Django drop the model's
+        Meta.ordering: the SQL came out as "GROUP BY job_description.id
+        LIMIT 5" with no ORDER BY, so the card showed whichever five rows the
+        database happened to hand back -- in practice old closed and draft
+        postings while three newer active ones were missing entirely.
+        """
+        from apps.core.models import Job
+
+        made = []
+        for index in range(7):
+            job = Job.objects.create(
+                title=f'Posting {index}', description='x' * 60,
+                status='active', owner=user)
+            Job.objects.filter(pk=job.pk).update(
+                created_at=timezone.now() - timedelta(days=20 - index))
+            made.append(job.pk)
+
+        response = authenticated_client.get(reverse('core:dashboard'))
+        shown = list(response.context['recent_jobs'])
+
+        assert len(shown) == 5, 'the card should hold five'
+        stamps = [job.created_at for job in shown]
+        assert stamps == sorted(stamps, reverse=True), (
+            f'not newest-first: {[j.title for j in shown]}'
+        )
+        # The newest three exist, so none of them may be missing from the card.
+        newest = list(Job.objects.order_by('-created_at')[:3])
+        for job in newest:
+            assert job.pk in [j.pk for j in shown], f'{job.title} is missing'
+
+    def test_latest_postings_still_count_their_candidates(
+            self, authenticated_client, sample_job, sample_resume):
+        """The ordering fix must not cost the count the card displays."""
+        response = authenticated_client.get(reverse('core:dashboard'))
+        card = {job.pk: job for job in response.context['recent_jobs']}
+
+        assert card[sample_job.pk].resume_count == 1
+
+    def test_latest_submissions_are_ordered_by_arrival_not_by_score(
+            self, authenticated_client, sample_job):
+        """Resume.Meta.ordering sorts by final_score, so this card was really
+        the highest-scoring candidates -- a submission from months ago sat at
+        the top of a list labelled "Latest submissions"."""
+        from apps.core.models import Resume
+
+        old_strong = Resume.objects.create(
+            job=sample_job, candidate_name='Old But Strong',
+            email='old@example.com', final_score=95)
+        new_weak = Resume.objects.create(
+            job=sample_job, candidate_name='New But Weak',
+            email='new@example.com', final_score=12)
+        Resume.objects.filter(pk=old_strong.pk).update(
+            created_at=timezone.now() - timedelta(days=90))
+
+        response = authenticated_client.get(reverse('core:dashboard'))
+        shown = list(response.context['recent_resumes'])
+
+        assert shown[0].pk == new_weak.pk, (
+            f'"Latest" led with {shown[0].candidate_name} '
+            f'(score {shown[0].final_score})'
+        )
+        stamps = [r.created_at for r in shown]
+        assert stamps == sorted(stamps, reverse=True)
+
     def test_dashboard_context(self, authenticated_client, sample_job):
         """Test dashboard contains expected context."""
         response = authenticated_client.get(reverse('core:dashboard'))
