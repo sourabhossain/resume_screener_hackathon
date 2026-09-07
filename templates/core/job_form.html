@@ -62,11 +62,25 @@
                     </div>
                     {{ form.description }}
                     <p x-show="error" x-cloak class="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400" x-text="error"></p>
-                    <p x-show="drafted" x-cloak class="mt-2 text-xs text-amber-700 dark:text-amber-500">
-                        AI draft — read it through before posting. It can be wrong about
-                        the role, and anything it says about SSL Wireless is your
-                        responsibility once published.
-                    </p>
+                    <div x-show="drafted" x-cloak class="mt-2">
+                        <p class="text-xs text-amber-700 dark:text-amber-500">
+                            AI draft<span x-show="usedLabel" x-cloak>, written in the
+                            <span class="font-semibold" x-text="usedLabel"></span> shape</span> —
+                            read it through before posting. It can be wrong about the role, and
+                            anything it says about SSL Wireless is your responsibility once
+                            published.
+                        </p>
+                        <p x-show="alternatives().length" x-cloak
+                           class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
+                            Wrong shape for this role? Rewrite as
+                            <template x-for="(shape, i) in alternatives()" :key="shape.value">
+                                <span><template x-if="i"><span> · </span></template><button
+                                    type="button" @click="draft(shape.value)" :disabled="busy"
+                                    class="font-semibold text-primary-600 disabled:opacity-60 dark:text-primary-400" style="text-decoration: underline;"
+                                    x-text="shape.short"></button></span>
+                            </template>
+                        </p>
+                    </div>
                     {% if not form.description.errors %}
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
                         Include requirements, responsibilities, and qualifications.
@@ -157,6 +171,7 @@
     </div>
 </div>
 
+{{ jd_formats|json_script:"jd-shapes" }}
 <script>
     // The draft is written by a Celery worker, not in the request: gunicorn is
     // started with --timeout 30 and a reasoning-model call is allowed 60s, so
@@ -168,10 +183,17 @@
             error: '',
             drafted: false,
             hasText: false,
+            usedLabel: '',
+            usedValue: '',
+            shapes: [],
             box: null,
             timer: null,
 
             init() {
+                const source = document.getElementById('jd-shapes');
+                if (source) {
+                    try { this.shapes = JSON.parse(source.textContent); } catch (e) {}
+                }
                 this.box = document.getElementById('id_description');
                 this.hasText = !!(this.box && this.box.value.trim());
                 if (this.box) {
@@ -181,7 +203,12 @@
                 }
             },
 
-            async draft() {
+            alternatives() {
+                // Everything except the shape this draft already used.
+                return this.shapes.filter(s => s.value !== this.usedValue);
+            },
+
+            async draft(format) {
                 const title = (document.getElementById('id_title') || {}).value || '';
                 if (!title.trim()) {
                     this.error = 'Add the job title first, then generate.';
@@ -195,6 +222,9 @@
                 body.append('title', title);
                 // Whatever is already in the box is the recruiter's brief.
                 body.append('brief', this.box ? this.box.value : '');
+                // Blank asks the server to pick the shape from the title; a
+                // value comes from the "rewrite as" links under a draft.
+                body.append('archetype', format || '');
 
                 try {
                     const started = await fetch('{% url "core:job_description_draft" %}', {
@@ -236,6 +266,8 @@
                             }
                             this.drafted = true;
                             this.hasText = true;
+                            this.usedLabel = state.archetype_label || '';
+                            this.usedValue = state.archetype || '';
                         } else {
                             this.error = state.error || 'That did not work. Try again.';
                         }

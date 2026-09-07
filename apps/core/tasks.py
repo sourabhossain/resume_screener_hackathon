@@ -167,7 +167,8 @@ def close_expired_jobs():
 
 
 @shared_task(soft_time_limit=120, time_limit=150)
-def draft_job_description_task(token: str, title: str, brief: str = '') -> str:
+def draft_job_description_task(token: str, title: str, brief: str = '',
+                               archetype: str = '') -> str:
     """Write one job description draft and leave it in the cache to be polled.
 
     Not done in the request: gunicorn is started with --timeout 30 while a
@@ -177,7 +178,7 @@ def draft_job_description_task(token: str, title: str, brief: str = '') -> str:
     from apps.core.services import job_description
 
     try:
-        text = job_description.generate(title, brief)
+        text, used = job_description.generate(title, brief, archetype)
     except job_description.DraftError as exc:
         job_description.store_result(token, error=str(exc))
         return 'failed'
@@ -188,5 +189,5 @@ def draft_job_description_task(token: str, title: str, brief: str = '') -> str:
                          'Try again in a moment.')
         return 'failed'
 
-    job_description.store_result(token, text=text)
+    job_description.store_result(token, text=text, archetype=used)
     return 'done'

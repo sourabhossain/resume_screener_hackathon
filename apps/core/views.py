@@ -20,6 +20,7 @@ from django.db import connection
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from .models import Job, Resume
+from .services import jd_archetypes
 from .forms import JobForm, ResumeForm, ResumeEditForm
 from .form_utils import form_errors_to_messages, clean_person_text
 from .utils import candidate_initial, compute_file_hash
@@ -207,7 +208,10 @@ def job_create(request):
             form_errors_to_messages(request, form)
     else:
         form = JobForm()
-    return render(request, 'core/job_form.html', {'form': form, 'title': 'Post New Job'})
+    return render(request, 'core/job_form.html', {
+        'form': form, 'title': 'Post New Job',
+        'jd_formats': jd_archetypes.choices(),
+    })
 
 
 @login_required
@@ -278,7 +282,10 @@ def job_edit(request, slug):
             form_errors_to_messages(request, form)
     else:
         form = JobForm(instance=job)
-    return render(request, 'core/job_form.html', {'form': form, 'title': 'Edit Job', 'job': job})
+    return render(request, 'core/job_form.html', {
+        'form': form, 'title': 'Edit Job', 'job': job,
+        'jd_formats': jd_archetypes.choices(),
+    })
 
 
 @login_required
@@ -1318,13 +1325,17 @@ def job_description_draft(request):
         return JsonResponse(
             {'error': 'Add the job title first, then generate.'}, status=400)
 
+    # Blank means "match the title"; the service decides and reports back.
+    archetype = (request.POST.get('archetype') or '').strip()
+
     token = uuid.uuid4().hex
     job_description.store_pending(token)
     draft_job_description_task.delay(
         token, title[:job_description.MAX_TITLE],
-        (request.POST.get('brief') or '').strip()[:job_description.MAX_BRIEF])
-    logger.info('job_description.requested user=%s title=%r',
-                request.user.pk, title[:80])
+        (request.POST.get('brief') or '').strip()[:job_description.MAX_BRIEF],
+        archetype)
+    logger.info('job_description.requested user=%s title=%r archetype=%r',
+                request.user.pk, title[:80], archetype or 'auto')
     return JsonResponse({'token': token}, status=202)
 
 
