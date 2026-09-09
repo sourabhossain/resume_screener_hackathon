@@ -37,7 +37,11 @@ def other_candidate(db, sample_job):
 
 
 def _otp():
-    return re.search(r'code is:\s*(\d{6})', mail.outbox[-1].body).group(1)
+    # Shortlisting also sends the timed SEI assessment, so pick out the
+    # information-form email rather than assuming it is the only one.
+    sent = [m for m in mail.outbox if 'complete your information form' in m.subject]
+    assert sent, 'no information-form email was sent'
+    return re.search(r'code is:\s*(\d{6})', sent[-1].body).group(1)
 
 
 def _verify(client, form):
@@ -120,9 +124,13 @@ def test_status_change_survives_a_failing_mail_server(
 # ── PROBE 16: a failed send must not leave a form that blocks later retries ──
 def test_failed_send_can_be_retried(authenticated_client, candidate, monkeypatch):
     calls = {'n': 0}
-    real = None
 
     def flaky(self, *a, **kw):
+        # Shortlisting also sends the timed SEI assessment through the same
+        # method. Only the information-form sends are counted, or that second
+        # message would be mistaken for the retry this test is looking for.
+        if 'complete your information form' not in self.subject:
+            return 1
         calls['n'] += 1
         if calls['n'] == 1:
             raise OSError('smtp unreachable')

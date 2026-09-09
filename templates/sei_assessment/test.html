@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block title %}Assessment · SSL Wireless{% endblock %}
+{% block recruiter_nav %}{% endblock %}
+{% block recruiter_logout %}{% endblock %}
+{% block mobile_recruiter_nav %}{% endblock %}
+{% block nav_action %}{% endblock %}
+
+{% block content %}
+<style>
+    .sei-choice { display: block; cursor: pointer; }
+    .sei-choice > span {
+        display: block;
+        border: 1px solid #e4e4e7;
+        border-radius: .5rem;
+        padding: .5rem;
+        text-align: center;
+        font-size: .75rem;
+        font-weight: 600;
+        color: #52525b;
+        transition: background-color .12s, border-color .12s, color .12s;
+    }
+    .sei-choice:hover > span { background: #fafafa; }
+    .sei-choice > input:focus-visible + span { outline: 2px solid #6366f1; outline-offset: 2px; }
+    .sei-choice > input:checked + span {
+        border-color: #6366f1;
+        background: #eef2ff;
+        color: #4338ca;
+    }
+    html.dark .sei-choice > span { border-color: #3f3f46; color: #d4d4d8; }
+    html.dark .sei-choice:hover > span { background: #27272a; }
+    html.dark .sei-choice > input:checked + span {
+        border-color: #6366f1; background: #1e1b4b; color: #c7d2fe;
+    }
+</style>
+<div class="mx-auto max-w-3xl pb-28" x-data="seiTest({{ seconds_left }}, {{ answered }}, {{ total_items }})">
+
+    <div class="mb-5">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
+            Social &amp; Emotional Intelligence
+        </p>
+        <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
+            About you
+        </h1>
+        <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            {{ total_items }} statements &middot; recommended completion time {{ minutes }} minutes
+        </p>
+    </div>
+
+    <div class="mb-5 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <p class="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            Please respond based on your first and most natural reaction. Do not
+            overthink the statements. There are no right or wrong answers.
+        </p>
+        <p class="mt-2 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            Your answers save as you go. Try to answer every statement — a paper
+            with fewer than {{ minimum_answers }} of {{ total_items }} answered
+            cannot be scored and would have to be taken again.
+        </p>
+    </div>
+
+    <form id="sei-form" @submit.prevent="finish()">
+        <div class="space-y-3">
+            {% for item in items %}
+            <fieldset class="rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark"
+                      data-item="{{ item.no }}">
+                <legend class="sr-only">Statement {{ item.no }}</legend>
+                <div class="flex gap-3">
+                    <span class="shrink-0 text-xs font-bold tabular-nums text-zinc-400 dark:text-zinc-500" style="padding-top: .2rem;">{{ item.no }}</span>
+                    <p class="text-sm font-medium leading-relaxed text-zinc-900 dark:text-zinc-100">{{ item.text }}</p>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {% for value, label in ratings %}
+                    <label class="sei-choice">
+                        <input type="radio" name="q{{ item.no }}" value="{{ value }}"
+                               class="sr-only"
+                               {% if item.value == value %}checked{% endif %}
+                               @change="record({{ item.no }}, {{ value }})">
+                        <span>{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% endfor %}
+        </div>
+    </form>
+
+    <div class="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200/80 bg-white/90 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/85">
+        <div class="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-4 py-3">
+            <div class="flex items-center gap-2">
+                <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="text-lg font-bold tabular-nums"
+                      :class="secondsLeft <= 60 ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-900 dark:text-white'"
+                      x-text="clock()">--:--</span>
+            </div>
+            <p class="min-w-0 flex-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <span x-text="answered"></span> of {{ total_items }} answered
+                <span x-show="saving" x-cloak> &middot; saving…</span>
+                <span x-show="saveFailed" x-cloak class="font-semibold text-rose-600 dark:text-rose-400"> &middot; could not save — check your connection</span>
+            </p>
+            <button type="submit" form="sei-form" :disabled="busy"
+                    class="btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                <span x-show="!busy">Submit</span>
+                <span x-show="busy" x-cloak>Submitting…</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // The countdown is a courtesy, not the rule: the server holds deadline_at
+    // and closes the sitting whatever the browser does. This keeps the page
+    // honest about the time and makes sure the answers already picked are on
+    // the server before the clock runs out.
+    function seiTest(secondsLeft, answered, totalItems) {
+        return {
+            secondsLeft: secondsLeft,
+            answered: answered,
+            totalItems: totalItems,
+            pending: {},
+            saving: false,
+            saveFailed: false,
+            busy: false,
+            done: false,
+
+            init() {
+                this.tick = setInterval(() => {
+                    this.secondsLeft = Math.max(0, this.secondsLeft - 1);
+                    if (this.secondsLeft === 0 && !this.done) { this.finish(true); }
+                }, 1000);
+                // Flush anything picked but not yet stored, every few seconds.
+                this.flusher = setInterval(() => this.flush(), 5000);
+                // A closed laptop still leaves a scoreable paper.
+                window.addEventListener('beforeunload', () => this.flush(true));
+            },
+
+            clock() {
+                const m = Math.floor(this.secondsLeft / 60);
+                const s = this.secondsLeft % 60;
+                return m + ':' + String(s).padStart(2, '0');
+            },
+
+            record(item, value) {
+                const isNew = !document.querySelector(
+                    'fieldset[data-item="' + item + '"]').dataset.answered;
+                document.querySelector(
+                    'fieldset[data-item="' + item + '"]').dataset.answered = '1';
+                if (isNew) { this.answered = Math.min(this.totalItems, this.answered + 1); }
+                this.pending[item] = value;
+            },
+
+            async post(body, keepalive) {
+                return fetch('{% url "sei_assessment:save" token=assessment.token %}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json',
+                              'X-CSRFToken': window.CSRF_TOKEN},
+                    body: JSON.stringify(body),
+                    keepalive: !!keepalive,
+                });
+            },
+
+            async flush(keepalive) {
+                const batch = this.pending;
+                if (!Object.keys(batch).length) { return; }
+                this.pending = {};
+                this.saving = true;
+                try {
+                    const r = await this.post({answers: batch}, keepalive);
+                    if (!r.ok) { throw new Error('save failed'); }
+                    const state = await r.json();
+                    if (state.status === 'closed') { this.close(); return; }
+                    if (typeof state.answered === 'number') { this.answered = state.answered; }
+                    if (typeof state.seconds_left === 'number') { this.secondsLeft = state.seconds_left; }
+                    this.saveFailed = false;
+                } catch (err) {
+                    // Put them back so the next flush retries rather than losing them.
+                    this.pending = Object.assign({}, batch, this.pending);
+                    this.saveFailed = true;
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            async finish(automatic) {
+                if (this.done) { return; }
+                this.done = true;
+                this.busy = true;
+                const batch = this.pending;
+                this.pending = {};
+                try {
+                    await this.post({answers: batch, finish: true});
+                } catch (err) {
+                    // The server closes the sitting on its own deadline anyway.
+                }
+                this.close();
+            },
+
+            close() {
+                clearInterval(this.tick);
+                clearInterval(this.flusher);
+                window.location = '{% url "sei_assessment:done" token=assessment.token %}';
+            },
+        };
+    }
+</script>
+{% endblock %}

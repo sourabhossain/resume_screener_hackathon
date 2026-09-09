@@ -26,6 +26,8 @@ app.conf.task_routes = {
     # behind a batch of LLM screening calls.
     'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'screening'},
     'apps.reference_checks.tasks.send_reference_check_request': {'queue': 'screening'},
+    'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'screening'},
+    'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'screening'},
 }
 app.conf.task_default_queue = 'screening'
 
@@ -44,6 +46,13 @@ app.conf.beat_schedule = {
     'close-expired-jobs-daily': {
         'task': 'apps.core.tasks.close_expired_jobs',
         'schedule': crontab(hour=0, minute=5),
+    },
+    # The SEI sitting is fifteen minutes long, so a candidate who closes the tab
+    # leaves an open paper. Swept every five minutes rather than daily: HR
+    # should not see "In progress" for someone who left before lunch.
+    'close-expired-sei-sittings': {
+        'task': 'apps.sei_assessment.tasks.close_expired_sittings',
+        'schedule': crontab(minute='*/5'),
     },
 }
 

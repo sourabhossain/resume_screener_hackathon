@@ -23,9 +23,21 @@ def candidate(db, sample_job):
     )
 
 
+# Shortlisting now sends two separate emails -- the information form and the
+# timed SEI assessment. These tests are about the information form, so they
+# pick it out by subject rather than assuming it is the only message.
+INFORMATION_FORM_SUBJECT = 'complete your information form'
+
+
+def _form_emails():
+    return [m for m in mail.outbox if INFORMATION_FORM_SUBJECT in m.subject]
+
+
 def _otp_from_outbox():
-    """Pull the plaintext code out of the most recent invitation email."""
-    body = mail.outbox[-1].body
+    """Pull the plaintext code out of the most recent information-form email."""
+    sent = _form_emails()
+    assert sent, 'no information-form email was sent'
+    body = sent[-1].body
     match = re.search(r'code is:\s*(\d{6})', body)
     assert match, f'No OTP found in email body:\n{body}'
     return match.group(1)
@@ -39,9 +51,9 @@ def test_shortlisting_sends_invite_with_link_and_otp(authenticated_client, candi
     assert response.status_code == 302
     form = EmployeeForm.objects.get(resume=candidate)
     assert form.invite_count == 1
-    assert len(mail.outbox) == 1
+    assert len(_form_emails()) == 1
 
-    email = mail.outbox[0]
+    email = _form_emails()[0]
     assert email.to == ['ayesha@example.com']
     assert str(form.token) in email.body
     assert re.search(r'code is:\s*\d{6}', email.body)
@@ -66,7 +78,7 @@ def test_shortlisting_again_does_not_resend(authenticated_client, candidate):
     authenticated_client.post(url, {'recruiter_status': 'phone_screen'})
     authenticated_client.post(url, {'recruiter_status': 'shortlisted'})
 
-    assert len(mail.outbox) == 1
+    assert len(_form_emails()) == 1
     assert EmployeeForm.objects.get(resume=candidate).invite_count == 1
 
 
@@ -79,7 +91,7 @@ def test_recruiter_can_explicitly_resend(authenticated_client, candidate):
         reverse('employee_form:send', kwargs={'uuid': candidate.uuid})
     )
 
-    assert len(mail.outbox) == 2
+    assert len(_form_emails()) == 2
     assert EmployeeForm.objects.get(resume=candidate).invite_count == 2
 
 

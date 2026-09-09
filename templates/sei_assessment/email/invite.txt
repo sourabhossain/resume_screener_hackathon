@@ -1,0 +1,27 @@
+Dear {{ candidate_name|title }},
+
+Thank you for your application for the position of {{ job_title }} at SSL
+Wireless. As the next step we would like you to complete a short assessment.
+
+Open the assessment:
+{{ assessment_url }}
+
+Your verification code is: {{ otp }}
+The code is valid for {{ otp_minutes }} minutes. If it expires you can request a
+new one from the same page. The link itself works for {{ link_days }} days.
+
+Before you begin, please note:
+
+- The assessment has {{ question_count }} statements and takes about
+  {{ minutes }} minutes.
+- The timer starts when you open the questions, not now. Choose a moment when
+  you will not be interrupted.
+- You have {{ minutes }} minutes once you begin. When the time is up the
+  assessment closes and whatever you have answered is submitted.
+- There are no right or wrong answers. Answer as you actually are, not as you
+  think you should be.
+
+Your answers are confidential and are used only for this recruitment decision.
+
+Thank you,
+SSL Wireless HR

@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'apps.hr_verification',
     'apps.candidate_mapping',
     'apps.reference_checks',
+    'apps.sei_assessment',
 ]
 
 MIDDLEWARE = [

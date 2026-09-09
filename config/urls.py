@@ -58,6 +58,7 @@ urlpatterns = [
     path('', include('apps.hr_verification.urls')),
     path('', include('apps.candidate_mapping.urls')),
     path('', include('apps.reference_checks.urls')),
+    path('', include('apps.sei_assessment.urls')),
 
     # API URLs
     path('api/', include('apps.core.api_urls')),

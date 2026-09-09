@@ -438,6 +438,13 @@ def _candidate_forms_context(request, resume) -> dict:
     """
     from apps.hr_verification.views import STATUSES_ALLOWING_START
     from apps.reference_checks import services as reference_services
+    from apps.sei_assessment.models import SEIAssessment
+
+    # Once shortlisted the assessment has been sent, and it stays resendable
+    # through the rest of the pipeline rather than vanishing at the next stage.
+    SEI_STATUSES_ALLOWING_SEND = {
+        'shortlisted', 'phone_screen', 'interviewing', 'offer_extended',
+    }
 
     return {
         'resume': resume,
@@ -457,6 +464,11 @@ def _candidate_forms_context(request, resume) -> dict:
         'hr_verification_can_start': (
             resume.recruiter_status in STATUSES_ALLOWING_START
         ),
+        # The assessment goes out on shortlisting, but the card stays visible
+        # from then on so HR can resend or read the result.
+        'sei_assessment': getattr(resume, 'sei_assessment', None),
+        'sei_can_send': resume.recruiter_status in SEI_STATUSES_ALLOWING_SEND,
+        'sei_time_limit': SEIAssessment.TIME_LIMIT_MINUTES,
     }
 
 
@@ -1009,6 +1021,20 @@ def resume_status_update(request, uuid):
                 'success',
                 f'Information form sent to {resume.email}.',
             )
+
+        # The SEI assessment goes out on the same trigger, as a separate email:
+        # the information form is paperwork the candidate can do at leisure,
+        # this one is a timed sitting, and putting both in one message invites
+        # someone to open the test while filling in their passport number.
+        # Sent independently so a failure on one does not swallow the other.
+        from apps.sei_assessment.services import (
+            InviteError as SEIInviteError, issue_invite as issue_sei)
+        try:
+            issue_sei(resume, user=request.user)
+        except SEIInviteError as exc:
+            logger.warning('sei.invite_skipped resume=%s reason=%s', resume.pk, exc)
+            if invite_note and invite_note[0] == 'success':
+                invite_note = ('error', f'Assessment not sent: {exc}')
 
     if is_htmx:
         # 'card' (candidate detail page) swaps the control in place; 'cell'
