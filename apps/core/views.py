@@ -67,6 +67,21 @@ def _recruiter_status_filter(request):
     return 'new'
 
 
+SEEN_FILTERS = ('all', 'unseen', 'seen')
+
+
+def _seen_filter(request):
+    """Validated seen/unseen filter. Defaults to showing everything."""
+    value = request.GET.get('seen', 'all').strip()
+    return value if value in SEEN_FILTERS else 'all'
+
+
+def _apply_seen_filter(resume_qs, value):
+    if value in ('seen', 'unseen'):
+        return resume_qs.filter(seen_status=value)
+    return resume_qs
+
+
 def _pipeline_stats(resume_qs):
     # order_by() clears any inherited ordering so it doesn't leak into the
     # implicit GROUP BY; conditional Counts give exact per-decision totals.
@@ -239,9 +254,17 @@ def job_detail(request, slug):
     # Snapshot cards keep whole-pipeline numbers; the status filter narrows
     # only the table rows below them.
     pipeline_stats = _pipeline_stats(resumes)
+    # Counted before either filter narrows the rows, so the chips keep saying
+    # how much of the whole pipeline is still untouched.
+    seen_counts = resumes.order_by().aggregate(
+        unseen=Count('id', filter=Q(seen_status='unseen')),
+        seen=Count('id', filter=Q(seen_status='seen')),
+    )
     status_filter = _recruiter_status_filter(request)
     if status_filter != 'all':
         resumes = resumes.filter(recruiter_status=status_filter)
+    seen_filter = _seen_filter(request)
+    resumes = _apply_seen_filter(resumes, seen_filter)
 
     # Counts for the "Download CVs" menu — only resumes that actually have a file.
     with_files = (
@@ -265,6 +288,9 @@ def job_detail(request, slug):
             'pipeline_stats': pipeline_stats,
             'search_q': search_q,
             'recruiter_status_filter': status_filter,
+            'seen_filter': seen_filter,
+            'unseen_count': seen_counts['unseen'],
+            'seen_count': seen_counts['seen'],
             'recruiter_status_options': [
                 {'value': value, 'label': label, 'tone': Resume.RECRUITER_STATUS_TONES.get(value, 'zinc')}
                 for value, label in Resume.RECRUITER_STATUS_CHOICES
@@ -321,10 +347,13 @@ def pipeline_search(request, job_slug):
     status_filter = _recruiter_status_filter(request)
     if status_filter != 'all':
         resumes = resumes.filter(recruiter_status=status_filter)
+    seen_filter = _seen_filter(request)
+    resumes = _apply_seen_filter(resumes, seen_filter)
     return render(request, 'core/partials/pipeline_search_results.html', {
         'resumes': resumes,
         'search_q': search_q,
         'recruiter_status_filter': status_filter,
+        'seen_filter': seen_filter,
         'job': job,
     })
 
@@ -1362,3 +1391,34 @@ def job_description_draft_status(request, token):
             {'status': 'failed',
              'error': 'That draft expired. Press the button again.'})
     return JsonResponse(state)
+
+
+@login_required
+@require_POST
+def resume_seen_update(request, uuid):
+    """Mark a CV reviewed, or back to not reviewed. Set by hand by HR.
+
+    Deliberately not driven by opening the page: clicking through a list is not
+    reading a CV, and a queue that marked itself would tell HR nothing.
+    """
+    resume = get_object_or_404(Resume, uuid=uuid)
+    new_status = request.POST.get('seen_status', '').strip()
+    valid = {c[0] for c in Resume.SEEN_STATUS_CHOICES}
+
+    if new_status not in valid:
+        # Outside the declared choices can only come from a tampered request.
+        # Persisting nothing leaves the cell on its previous value.
+        if request.headers.get('HX-Request') == 'true':
+            return HttpResponseBadRequest('Invalid status.')
+        messages.error(request, 'Invalid status.')
+        return redirect('core:resume_detail', uuid=uuid)
+
+    resume.seen_status = new_status
+    # Only this column: a colleague may be changing the recruiter status on the
+    # same row, and a full write would put their change back.
+    resume.save(update_fields=['seen_status', 'updated_at'])
+
+    if request.headers.get('HX-Request') == 'true':
+        return render(request, 'core/partials/seen_status_cell.html',
+                      {'resume': resume})
+    return redirect('core:resume_detail', uuid=uuid)

@@ -48,6 +48,7 @@ urlpatterns = [
 
     # Recruiter status update
     path('resumes/<uuid:uuid>/status-update/', views.resume_status_update, name='resume_status_update'),
+    path('resumes/<uuid:uuid>/seen-update/', views.resume_seen_update, name='resume_seen_update'),
     # Re-rendered after a status change; see views.resume_forms.
     path('resumes/<uuid:uuid>/forms/', views.resume_forms, name='resume_forms'),
 

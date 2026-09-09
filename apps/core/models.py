@@ -189,6 +189,26 @@ class Resume(SoftDeleteModel):
     certification_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     achievement_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     reasoning = models.TextField(blank=True, help_text="AI reasoning for recommendation")
+
+    # Whether HR has reviewed this CV. Set by hand, exactly like recruiter
+    # status: opening the page is not the same as having read it, and a queue
+    # that marked itself would be worthless the first time somebody clicked
+    # through a list.
+    SEEN_STATUS_CHOICES = [
+        ('unseen', 'Not Seen'),
+        ('seen', 'Seen'),
+    ]
+    SEEN_STATUS_TONES = {
+        'unseen': 'amber',
+        'seen': 'emerald',
+    }
+    seen_status = models.CharField(
+        max_length=10,
+        choices=SEEN_STATUS_CHOICES,
+        default='unseen',
+        blank=True,
+        db_index=True,
+    )
     
     SCREENING_STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -257,6 +277,8 @@ class Resume(SoftDeleteModel):
             models.Index(fields=['tier'], name='resume_tier_idx'),
             models.Index(fields=['-final_score'], name='resume_score_idx'),
             models.Index(fields=['screening_status'], name='resume_status_idx'),
+            models.Index(fields=['job', 'seen_status'],
+                         name='resume_job_seen_idx'),
         ]
         constraints = [
             # Intended as a backstop against duplicate submissions: the same file
@@ -306,6 +328,24 @@ class Resume(SoftDeleteModel):
         'withdrawn': 'Candidate withdrew',
     }
     RECRUITER_STATUS_OUTCOMES = {'hired', 'rejected', 'withdrawn'}
+
+    @property
+    def is_seen(self) -> bool:
+        return self.seen_status == 'seen'
+
+    @property
+    def seen_status_tone(self) -> str:
+        return self.SEEN_STATUS_TONES.get(self.seen_status or 'unseen', 'amber')
+
+    def seen_status_options(self):
+        """Choices annotated with tone + current flag, for the picker."""
+        current = self.seen_status or 'unseen'
+        return [
+            {'value': value, 'label': label,
+             'tone': self.SEEN_STATUS_TONES.get(value, 'zinc'),
+             'current': value == current}
+            for value, label in self.SEEN_STATUS_CHOICES
+        ]
 
     @property
     def recruiter_status_tone(self) -> str:
