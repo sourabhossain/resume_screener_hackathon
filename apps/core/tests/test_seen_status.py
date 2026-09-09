@@ -242,3 +242,58 @@ def test_every_status_has_a_tone_the_stylesheet_knows(sample_resume):
         tone = Resume.SEEN_STATUS_TONES[value]
         assert f'status-picker__dot--{tone}' in css, f'{value} -> {tone} has no dot class'
         assert f'status-picker__option--{tone}' in css
+
+
+# ── The pipeline's own counts ────────────────────────────────────────────
+@pytest.mark.django_db
+def test_a_search_that_matches_nobody_still_knows_the_job_has_applicants(
+        authenticated_client, mixed_pipeline):
+    """The template hides the whole table behind pipeline_stats.total.
+
+    Counting after the search filter made that zero for a term nobody matched,
+    so a job with applicants announced "No applicants yet" and the
+    "No candidates match X" message the template already carries could never
+    be reached.
+    """
+    job, seen, unseen = mixed_pipeline
+    url = reverse('core:job_detail', kwargs={'slug': job.slug})
+
+    response = authenticated_client.get(
+        url, {'recruiter_status': 'all', 'q': 'zzznobodymatcheszzz'})
+    body = response.content.decode()
+
+    assert response.context['pipeline_stats']['total'] == 2, (
+        'the snapshot must describe the whole pipeline, not the search'
+    )
+    assert 'No applicants yet' not in body
+    assert 'No candidates match' in body
+
+
+@pytest.mark.django_db
+def test_the_seen_chips_ignore_the_search_too(authenticated_client, mixed_pipeline):
+    job, seen, unseen = mixed_pipeline
+    url = reverse('core:job_detail', kwargs={'slug': job.slug})
+
+    context = authenticated_client.get(
+        url, {'recruiter_status': 'all', 'q': 'Already'}).context
+
+    assert context['unseen_count'] == 1
+    assert context['seen_count'] == 1
+
+
+@pytest.mark.django_db
+def test_the_empty_row_spans_every_column(authenticated_client, mixed_pipeline):
+    """Adding the Reviewed column widened the table; a stale colspan leaves the
+    empty-state message boxed into part of the row."""
+    import re
+
+    job, seen, unseen = mixed_pipeline
+    body = authenticated_client.get(
+        reverse('core:job_detail', kwargs={'slug': job.slug}),
+        {'recruiter_status': 'all', 'q': 'zzznobodymatcheszzz'}).content.decode()
+
+    headers = len(re.findall(r'<th ', body))
+    spans = {int(n) for n in re.findall(r'colspan="(\d+)"', body)}
+
+    assert headers > 0
+    assert spans == {headers}, f'colspan {spans} against {headers} columns'

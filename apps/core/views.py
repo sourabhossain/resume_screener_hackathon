@@ -243,6 +243,20 @@ def job_detail(request, slug):
     job = get_object_or_404(Job, slug=slug)
     resumes = _ordered_active_resumes_queryset(job.resumes).prefetch_related('interviews__evaluations')
 
+    # Every count on this page describes the whole pipeline, so all of them are
+    # taken before any filter narrows the rows below.
+    #
+    # Computing them after the search was a quiet bug: a term matching nobody
+    # made pipeline_stats.total zero, and the template hides the entire table
+    # behind that number -- so a job with eight applicants announced "No
+    # applicants yet", and the "No candidates match X" message the template
+    # already carries could never be reached.
+    pipeline_stats = _pipeline_stats(resumes)
+    seen_counts = resumes.order_by().aggregate(
+        unseen=Count('id', filter=Q(seen_status='unseen')),
+        seen=Count('id', filter=Q(seen_status='seen')),
+    )
+
     search_q = request.GET.get('q', '').strip()
     if search_q:
         resumes = resumes.filter(
@@ -251,15 +265,6 @@ def job_detail(request, slug):
             Q(phone__icontains=search_q)
         )
 
-    # Snapshot cards keep whole-pipeline numbers; the status filter narrows
-    # only the table rows below them.
-    pipeline_stats = _pipeline_stats(resumes)
-    # Counted before either filter narrows the rows, so the chips keep saying
-    # how much of the whole pipeline is still untouched.
-    seen_counts = resumes.order_by().aggregate(
-        unseen=Count('id', filter=Q(seen_status='unseen')),
-        seen=Count('id', filter=Q(seen_status='seen')),
-    )
     status_filter = _recruiter_status_filter(request)
     if status_filter != 'all':
         resumes = resumes.filter(recruiter_status=status_filter)
