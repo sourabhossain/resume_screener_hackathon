@@ -432,3 +432,110 @@ def test_the_page_carries_the_instruction_wording(client, sitting):
     assert 'first and most natural reaction' in body
     assert 'Do not overthink the statements' in body
     assert 'recommended completion time 20 minutes' in body.lower()
+
+
+# ── gaps found in review ─────────────────────────────────────────────────
+@pytest.mark.django_db
+def test_two_tabs_answering_at_once_do_not_lose_answers(client, sitting):
+    """Both tabs merge onto the copy they loaded, so without a lock the later
+    write drops the earlier answers -- and in a timed sitting there is no
+    chance to enter them again."""
+    _open(client, sitting).get(_test(sitting))
+
+    _post(client, sitting, {'answers': {'1': 3}})
+    _post(client, sitting, {'answers': {'2': 2}})
+
+    sitting.refresh_from_db()
+    assert sitting.answers == {'1': 3, '2': 2}
+
+
+@pytest.mark.django_db
+def test_a_save_merges_onto_whatever_is_in_the_database_not_what_was_loaded(
+        client, sitting, monkeypatch):
+    """The exact interleave, forced.
+
+    Two sequential requests prove nothing here: the second fetches the row
+    after the first has written, so it sees the answer either way. The race is
+    another tab writing *between* this request loading the row and saving it,
+    which is why the view re-reads under a lock instead of trusting the copy it
+    fetched.
+    """
+    from apps.sei_assessment import services as sei_services
+
+    _open(client, sitting).get(_test(sitting))
+    fired = []
+    real_finalise = sei_services.finalise_if_time_is_up
+
+    def other_tab_writes_first(assessment):
+        # Runs after the view has loaded the row and before it saves.
+        if not fired:
+            fired.append(True)
+            SEIAssessment.objects.filter(pk=assessment.pk).update(answers={'5': 1})
+        return real_finalise(assessment)
+
+    monkeypatch.setattr(
+        'apps.sei_assessment.views.services.finalise_if_time_is_up',
+        other_tab_writes_first)
+
+    _post(client, sitting, {'answers': {'6': 2}})
+
+    assert fired, 'the interleave never ran'
+    sitting.refresh_from_db()
+    assert sitting.answers == {'5': 1, '6': 2}, 'the other tab answer was dropped'
+
+
+@pytest.mark.django_db
+def test_answering_steadily_for_the_whole_sitting_is_not_rate_limited(client, sitting):
+    """The page flushes every five seconds, so a full twenty minutes is about
+    240 calls. A limit at that boundary would start refusing saves in the last
+    minutes of the test."""
+    _open(client, sitting).get(_test(sitting))
+
+    codes = [_post(client, sitting, {'answers': {'1': 3}}).status_code
+             for _ in range(260)]
+
+    assert all(c == 200 for c in codes), f'blocked after {codes.index(429) if 429 in codes else "?"} saves'
+
+
+@pytest.mark.django_db
+def test_the_model_counts_answers_the_same_way_the_scorer_does(sitting):
+    """is_valid_result gates whether HR sees a score at all, so a looser count
+    here would report a paper the scorer refuses to score."""
+    sitting.answers = {str(i): 2 for i in range(1, 45)}
+    sitting.answers['45'] = 99          # out of range
+    sitting.answers['46'] = 'x'         # not a number
+    sitting.save(update_fields=['answers'])
+
+    assert sitting.answered_count == 44
+    assert sitting.answered_count == scoring.answered_items(sitting.answers)
+
+
+@pytest.mark.django_db
+def test_junk_in_the_stored_answers_cannot_fake_a_valid_paper(sitting):
+    sitting.answers = {str(i): 2 for i in range(1, 44)}   # 43 real
+    sitting.answers['44'] = 'x'                            # junk, not a 44th
+    sitting.is_submitted = True
+    sitting.save()
+
+    assert sitting.answered_count == 43
+    assert sitting.is_valid_result is False
+    assert sitting.needs_retaking is True
+
+
+@pytest.mark.django_db
+def test_the_invitation_tells_the_candidate_what_makes_a_paper_count(
+        authenticated_client, candidate):
+    """Whether their answers are scored at all turns on finishing enough of
+    it, so that cannot be a rule they only discover afterwards."""
+    authenticated_client.post(
+        reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
+        {'recruiter_status': 'shortlisted'})
+
+    raw = [m for m in mail.outbox
+           if 'Assessment for your application' in m.subject][0].body
+    body = ' '.join(raw.split())   # the template wraps across lines
+
+    assert 'first and most natural reaction' in body
+    assert 'Do not overthink the statements' in body
+    assert f'fewer than {scoring.MINIMUM_VALID_ANSWERS} of 48' in body
+    assert f'{SEIAssessment.TIME_LIMIT_MINUTES} minutes' in body

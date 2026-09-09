@@ -167,3 +167,33 @@ def test_every_link_in_a_candidate_invitation_is_absolute(settings, sample_job):
     for href in _button_hrefs(message):
         assert has_scheme(href), f'dead button: href={href!r}'
     assert 'https://careers.sslwireless.com/information-form/' in message.body
+
+
+# ── the preflight command must keep up with the tasks ────────────────────
+def test_preflight_checks_every_task_the_web_process_dispatches():
+    """The command exists to catch a worker that booted before a task did.
+
+    It can only do that for tasks it knows about, so adding one to the routing
+    table without adding it here would quietly reopen the hole -- which is
+    exactly what happened when the assessment tasks were added.
+    """
+    from apps.core.management.commands.preflight import REQUIRED_TASKS
+    from config.celery import app as celery_app
+
+    routed = set(celery_app.conf.task_routes or {})
+    unchecked = sorted(routed - set(REQUIRED_TASKS))
+
+    assert not unchecked, f'preflight does not check: {unchecked}'
+
+
+def test_preflight_checks_every_scheduled_task():
+    """A task nothing dispatches by hand only ever runs because beat fires it."""
+    from apps.core.management.commands.preflight import SCHEDULED_TASKS
+    from config.celery import app as celery_app
+
+    planned = {entry['task'] for entry in
+               (celery_app.conf.beat_schedule or {}).values()}
+
+    assert planned == set(SCHEDULED_TASKS), (
+        f'beat schedule {planned} vs checked {set(SCHEDULED_TASKS)}'
+    )

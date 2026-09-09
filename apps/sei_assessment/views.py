@@ -10,8 +10,10 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
@@ -161,7 +163,11 @@ def test(request, token):
 
 
 @require_POST
-@ratelimit(key=_rate_key, rate='240/h', method='POST', block=True)
+# The page flushes every five seconds, so a candidate answering steadily for
+# the full twenty minutes makes ~240 calls, and a retake reuses the same token
+# within the hour. A limit at that boundary would start refusing saves in the
+# last minutes of a timed test -- the one place answers cannot be re-entered.
+@ratelimit(key=_rate_key, rate='900/h', method='POST', block=True)
 @_candidate_page
 def save(request, token):
     """Autosave from the page, and the final submit.
@@ -194,18 +200,20 @@ def save(request, token):
             cleaned[str(item)] = rating
 
     finish = bool(incoming.get('finish'))
-    # select_for_update is not used: this is the only writer of `answers`, and
-    # every other writer narrows its save to its own columns.
-    merged = {**(assessment.answers or {}), **cleaned}
-    fields = ['answers', 'updated_at']
-    assessment.answers = merged
-    if finish:
-        from django.utils import timezone
-        assessment.is_submitted = True
-        assessment.submitted_at = timezone.now()
-        assessment.auto_submitted = False
-        fields += ['is_submitted', 'submitted_at', 'auto_submitted']
-    assessment.save(update_fields=fields)
+    # Locked, because two tabs answering at once would otherwise each merge onto
+    # the copy they loaded and the later write would drop the earlier answers.
+    # In a timed sitting there is no chance to enter them again.
+    with transaction.atomic():
+        locked = SEIAssessment.objects.select_for_update().get(pk=assessment.pk)
+        locked.answers = {**(locked.answers or {}), **cleaned}
+        fields = ['answers', 'updated_at']
+        if finish:
+            locked.is_submitted = True
+            locked.submitted_at = timezone.now()
+            locked.auto_submitted = False
+            fields += ['is_submitted', 'submitted_at', 'auto_submitted']
+        locked.save(update_fields=fields)
+    assessment = locked
 
     if finish:
         logger.info('sei.submitted assessment=%s answered=%s',

@@ -164,7 +164,13 @@ class SEIAssessment(models.Model):
     # ── results ──────────────────────────────────────────────────────────
     @property
     def answered_count(self) -> int:
-        return sum(1 for v in (self.answers or {}).values() if v not in (None, ''))
+        """Counted the way the scorer counts.
+
+        Not `len(answers)`: the validity gate below rests on this number, and a
+        looser count here would let a paper the scorer refuses to score be
+        reported as a valid one.
+        """
+        return scoring.answered_items(self.answers or {})
 
     def result(self) -> dict:
         return scoring.score(self.answers or {})

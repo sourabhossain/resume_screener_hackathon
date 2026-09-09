@@ -9,6 +9,8 @@ from django.utils import timezone
 
 from apps.core.links import absolute_url
 
+from . import scoring
+
 from .models import SEIAssessment
 
 logger = logging.getLogger(__name__)
@@ -39,7 +41,8 @@ def send_invite(assessment, *, otp: str) -> None:
         'otp_minutes': SEIAssessment.OTP_VALIDITY_MINUTES,
         'link_days': SEIAssessment.TOKEN_VALIDITY_DAYS,
         'minutes': SEIAssessment.TIME_LIMIT_MINUTES,
-        'question_count': 48,
+        'question_count': len(scoring.ITEMS),
+        'minimum': scoring.MINIMUM_VALID_ANSWERS,
     }
     message = EmailMultiAlternatives(
         subject=f'Assessment for your application — {assessment.resume.job.title}',

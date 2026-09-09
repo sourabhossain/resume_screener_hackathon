@@ -18,8 +18,11 @@ Before you begin, please note:
   you will not be interrupted.
 - You have {{ minutes }} minutes once you begin. When the time is up the
   assessment closes and whatever you have answered is submitted.
-- There are no right or wrong answers. Answer as you actually are, not as you
-  think you should be.
+- Please respond based on your first and most natural reaction. Do not
+  overthink the statements. There are no right or wrong answers.
+- Try to answer every statement. A paper with fewer than {{ minimum }} of
+  {{ question_count }} answered cannot be scored and would have to be taken
+  again.
 
 Your answers are confidential and are used only for this recruitment decision.
 

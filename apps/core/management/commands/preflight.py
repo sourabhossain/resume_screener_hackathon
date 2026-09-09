@@ -17,10 +17,21 @@ from apps.core.links import has_scheme, is_local, site_base_url
 # Dispatched from the web process; each must be registered on a live worker.
 REQUIRED_TASKS = (
     'apps.core.tasks.screen_resume_task',
+    'apps.core.tasks.batch_screen_resumes',
     'apps.core.tasks.verify_resume_links_task',
     'apps.core.tasks.draft_job_description_task',
+    'apps.core.tasks.close_expired_jobs',
     'apps.employee_form.tasks.send_employee_form_invite',
     'apps.reference_checks.tasks.send_reference_check_request',
+    'apps.sei_assessment.tasks.send_sei_invite',
+    'apps.sei_assessment.tasks.close_expired_sittings',
+)
+
+# Work that only ever runs because the scheduler fires it. A worker can be
+# perfectly healthy while beat is down, and nothing else would say so.
+SCHEDULED_TASKS = (
+    'apps.core.tasks.close_expired_jobs',
+    'apps.sei_assessment.tasks.close_expired_sittings',
 )
 
 
@@ -41,6 +52,7 @@ class Command(BaseCommand):
         self._check_openai(good, bad)
         if not options['skip_workers']:
             self._check_workers(good, bad)
+            self._check_scheduler(good, bad)
 
         self.stdout.write('')
         for line in good:
@@ -140,3 +152,38 @@ class Command(BaseCommand):
         else:
             good.append(f'{len(registered)} worker(s), all {len(REQUIRED_TASKS)} '
                         'tasks registered')
+
+    def _check_scheduler(self, good, bad):
+        """Celery beat, which nothing else would report as missing.
+
+        The SEI sitting closes itself on a five-minute sweep. With beat down,
+        an abandoned paper stays open indefinitely and HR reads "In progress"
+        for a candidate who left days ago -- with no error anywhere.
+        """
+        from config.celery import app as celery_app
+
+        try:
+            scheduled = celery_app.conf.beat_schedule or {}
+        except Exception as exc:
+            bad.append(f'Could not read the beat schedule ({type(exc).__name__}).')
+            return
+
+        planned = {entry.get('task') for entry in scheduled.values()}
+        missing = [task for task in SCHEDULED_TASKS if task not in planned]
+        if missing:
+            for task in missing:
+                bad.append(f'{task} is not in the beat schedule, so it will '
+                           'never run on its own.')
+            return
+
+        try:
+            pings = celery_app.control.inspect(timeout=5).ping() or {}
+        except Exception:
+            pings = {}
+        if not any('beat' in name for name in pings):
+            # beat does not answer ping (it is a scheduler, not a worker), so
+            # this is a hint rather than a verdict.
+            good.append(f'{len(planned)} scheduled task(s) configured — confirm '
+                        'the celery-beat container is running')
+        else:
+            good.append(f'{len(planned)} scheduled task(s) configured')
