@@ -235,6 +235,127 @@ def test_band_edges_are_inclusive_of_the_average_range(value, expected):
     assert scoring.band(value, (70, 80)) == expected
 
 
+# ── the sheet's own interpretation text ──────────────────────────────────
+def test_every_dimension_carries_both_readings():
+    for spec in scoring.DIMENSIONS:
+        assert spec['above'], spec['key']
+        assert spec['below'], spec['key']
+        for line in (*spec['above'], *spec['below']):
+            assert line.strip() and line[0].islower(), (spec['key'], line)
+
+
+def test_the_reading_follows_the_band_not_the_score():
+    """Below-average gets the sheet's left column, Average and High its right.
+    Reading off the wrong column would tell HR the opposite of the result."""
+    result = scoring.score(WORKED_EXAMPLE_RAW)
+    by_key = {d['key']: d for d in result['dimensions']}
+    specs = {s['key']: s for s in scoring.DIMENSIONS}
+
+    assert by_key['self_awareness']['band'] == 'low'
+    assert by_key['self_awareness']['reading'] == specs['self_awareness']['below']
+
+    for key in ('self_management', 'internality', 'motivation', 'empathy',
+                'social_skills'):
+        assert by_key[key]['band'] in ('average', 'high'), key
+        assert by_key[key]['reading'] == specs[key]['above'], key
+
+
+def test_a_high_score_reads_as_average_or_high():
+    """'Average or High' is one column on the sheet, so High takes it too."""
+    top_marks = {item: (0 if item in scoring.REVERSED else 3)
+                 for item in scoring.ITEMS}
+    specs = {s['key']: s for s in scoring.DIMENSIONS}
+
+    for dim in scoring.score(top_marks)['dimensions']:
+        assert dim['band'] == 'high', dim['key']
+        assert dim['reading'] == specs[dim['key']]['above'], dim['key']
+
+
+def test_the_contradictory_empathy_sentence_is_not_carried():
+    """The sheet's second Empathy Average-or-High row contradicts itself
+    ('you are emotional and you are not moved by...'). It is dropped on
+    purpose; this pins that so a later transcription pass cannot restore it."""
+    empathy = next(s for s in scoring.DIMENSIONS if s['key'] == 'empathy')
+    joined = ' '.join(empathy['above'] + empathy['below']).lower()
+
+    assert 'are not moved by other' not in joined
+    assert len(empathy['above']) == 1
+
+
+# ── the company's hiring cut-off ─────────────────────────────────────────
+def _raw_totalling(target_raw):
+    """Answers whose scored total is exactly `target_raw` out of 144."""
+    answers, left = {}, target_raw
+    for item in scoring.ITEMS:
+        take = min(scoring.MAX_RATING, left)
+        left -= take
+        answers[item] = (scoring.MAX_RATING - take) if item in scoring.REVERSED else take
+    assert left == 0, target_raw
+    return answers
+
+
+def test_the_cut_off_is_applied_to_the_total_and_nothing_else():
+    """Dimension norms run from 47 to 80, so one number cannot mean the same
+    thing across them. Only the total is measured against the policy."""
+    result = scoring.score(WORKED_EXAMPLE_RAW)
+
+    assert result['threshold'] == scoring.HIRING_THRESHOLD
+    assert result['below_threshold'] is (
+        result['total_percent'] < scoring.HIRING_THRESHOLD)
+    for dim in result['dimensions']:
+        assert 'below_threshold' not in dim, dim['key']
+
+
+@pytest.mark.parametrize('raw,expected', [
+    (85, True),    # 59.5  -- under
+    (86, False),   # 60.2  -- over, though the exact 100/144 would be 59.7
+    (87, False),   # 60.9
+])
+def test_the_cut_off_edge_sits_where_the_published_multiplier_puts_it(raw, expected):
+    """Pinned because TOTAL_FACTOR is the rounded 0.7: raw 86 displays as 60.2
+    and clears a threshold of 60, while the exact 100/144 would put it at 59.7
+    and fail. Moving the threshold means re-reading these numbers."""
+    result = scoring.score(_raw_totalling(raw))
+
+    assert result['total_raw'] == raw
+    assert result['below_threshold'] is expected
+
+
+def test_an_unscoreable_paper_is_never_a_rejection():
+    """No score means a retake, not a decision. Left to the generic default,
+    a None total would compare as below the threshold and decline someone on
+    a paper the scorer refused to score."""
+    result = scoring.score({str(i): 2 for i in range(1, 21)})
+
+    assert result['validity'] == scoring.INVALID
+    assert result['total_percent'] is None
+    assert result['below_threshold'] is False
+
+
+def test_the_threshold_disagrees_with_the_sheet_and_that_is_recorded():
+    """The sheet's own Low boundary is 61; the company rule is 60. A score in
+    between is Low on the instrument yet clears the bar -- deliberate, and
+    pinned so it cannot drift into a silent change."""
+    assert scoring.HIRING_THRESHOLD == 60
+    assert scoring.TOTAL_NORM[0] == 61
+
+    result = scoring.score(_raw_totalling(87))
+
+    assert result['total_percent'] == 60.9
+    assert result['total_band'] == 'low'
+    assert result['below_threshold'] is False
+
+
+def test_no_reading_carries_the_sheets_typos():
+    everything = ' '.join(
+        line for spec in scoring.DIMENSIONS
+        for line in (*spec['above'], *spec['below'], spec['blurb'])
+    )
+    for typo in ('enotions', ' amd ', ' arid ', 'lending teams',
+                 'string up', 'must to know'):
+        assert typo not in everything, typo
+
+
 def test_no_reachable_score_lands_exactly_on_a_band_edge():
     """The bands are written <70 / 70-80 / >80, so an exact 70 or 80 would be
     arguable. No multiple of the multipliers reaches one, which is why the

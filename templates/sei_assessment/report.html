@@ -4,151 +4,401 @@
 {% block title %}Assessment · {{ resume.candidate_name|title }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-4xl pb-20">
+<style>
+    .sei {
+        --ink: #16181d;
+        --ink-2: #4d525e;
+        --ink-3: #878d9b;
+        --rule: #e4e6ea;
+        --rule-firm: #cbd0d8;
+        --paper: #ffffff;
+        --accent: #2f4d8a;
+        --accent-wash: #c3d0e6;
+        --flag: #8f5310;
+        --flag-wash: #e8d5b2;
 
-    <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="Breadcrumb">
-        <a href="{% url 'core:resume_detail' uuid=resume.uuid %}"
-           class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-            Back to {{ resume.candidate_name|title|truncatechars:24 }}
-        </a>
-    </nav>
+        --serif: ui-serif, "Iowan Old Style", Cambria, "Palatino Linotype",
+                 Palatino, Georgia, "Noto Serif", serif;
 
-    <div class="mb-6">
-        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
-            Social &amp; Emotional Intelligence
-        </p>
-        <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
-            {{ resume.candidate_name|title }}
-        </h1>
-        <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-            {{ resume.job.title }}
-            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
-            {{ assessment.status_label }}
-            {% if assessment.submitted_at %}
-            <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
-            {{ assessment.submitted_at|naturaltime }}
-            {% endif %}
-        </p>
-    </div>
+        max-width: 60rem;
+        margin: 0 auto;
+        padding-bottom: 5rem;
+        color: var(--ink);
+    }
+    html.dark .sei {
+        --ink: #f2f3f5;
+        --ink-2: #a8aebc;
+        --ink-3: #6f7683;
+        --rule: #2b2e35;
+        --rule-firm: #3c414a;
+        --paper: #17181c;
+        --accent: #86abea;
+        --accent-wash: #223458;
+        --flag: #d69a4a;
+        --flag-wash: #3c2d15;
+    }
+
+    .sei a.sei-back {
+        display: inline-flex; align-items: center; gap: .4rem;
+        font-size: .8125rem; font-weight: 500; color: var(--ink-2);
+        text-decoration: none; margin-bottom: 2.25rem;
+    }
+    .sei a.sei-back:hover { color: var(--accent); }
+    .sei a.sei-back svg { width: .875rem; height: .875rem; }
+
+    .sei-name {
+        font-size: clamp(1.75rem, 4.5vw, 2.375rem); font-weight: 700;
+        letter-spacing: -.025em; line-height: 1.1; margin: 0;
+    }
+    .sei-sub {
+        margin: .5rem 0 0; font-size: .9375rem; color: var(--ink-2);
+    }
+    .sei-sub em { font-style: normal; color: var(--ink-3); }
+
+    .sei-rule { border: 0; border-top: 1px solid var(--rule); margin: 2.25rem 0; }
+
+    .sei-lede { display: grid; gap: 1.75rem 2.5rem; align-items: start; }
+    @media (min-width: 46rem) {
+        .sei-lede { grid-template-columns: auto 1fr; }
+    }
+    .sei-total { line-height: 1; }
+    .sei-total b {
+        display: block; font-size: clamp(3.5rem, 11vw, 5rem); font-weight: 700;
+        letter-spacing: -.04em;
+    }
+    .sei-total i {
+        display: block; margin-top: .5rem; font-style: normal;
+        font-size: .8125rem; color: var(--ink-3);
+    }
+    .sei-say {
+        font-size: clamp(1.0625rem, 2.4vw, 1.1875rem); line-height: 1.55;
+        color: var(--ink); margin: 0; max-width: 34em; font-weight: 400;
+    }
+    .sei-say strong { font-weight: 600; }
+    .sei-probe { margin: 1rem 0 0; font-size: .9375rem; color: var(--ink-2); }
+    .sei-probe b { color: var(--flag); font-weight: 600; }
+
+    .sei-call {
+        margin-top: 2.25rem; padding: 1.5rem 0 1.5rem 1.5rem;
+        border-left: 3px solid var(--flag);
+    }
+    .sei-call h2 {
+        margin: 0; font-size: clamp(1.25rem, 3vw, 1.5rem); font-weight: 650;
+        letter-spacing: -.02em; color: var(--flag);
+    }
+    .sei-call p { margin: .75rem 0 0; font-size: 1rem; line-height: 1.6; max-width: 40em; }
+    .sei-call p.fine { font-size: .875rem; color: var(--ink-2); }
+
+    .sei-h {
+        font-size: 1.0625rem; font-weight: 600; letter-spacing: -.01em;
+        margin: 0 0 .35rem;
+    }
+    .sei-h + p { margin: 0; font-size: .875rem; line-height: 1.55; color: var(--ink-2); max-width: 46em; }
+
+    .sei-plot { margin-top: 2rem; --lbl: 12.5rem; --val: 10.5rem; --gut: 1.5rem; }
+    .sei-plot-body { position: relative; }
+    .sei-grid {
+        position: absolute; top: 0; bottom: 0; pointer-events: none;
+        left: calc(var(--lbl) + var(--gut)); right: calc(var(--val) + var(--gut));
+    }
+    .sei-grid i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+
+    .sei-line {
+        position: relative;
+        display: flex; align-items: center; gap: var(--gut);
+        padding: .6rem 0;
+    }
+    .sei-line:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+    .sei-line-name { width: var(--lbl); flex: none; font-size: .9375rem; font-weight: 500; }
+    .sei-line-val {
+        width: var(--val); flex: none; font-size: .9375rem; font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    .sei-line-val u { text-decoration: none; font-weight: 500; color: var(--ink-3); margin-left: .5rem; }
+    .sei-line.is-above .sei-line-val u { color: var(--accent); }
+    .sei-line.is-low .sei-line-val u { color: var(--flag); }
+
+    .sei-trk { position: relative; z-index: 1; flex: 1 1 auto; min-width: 0; height: 1rem; }
+    .sei-band {
+        position: absolute; top: 50%; height: .4375rem; transform: translateY(-50%);
+        background: var(--accent-wash); border-radius: 1px;
+    }
+    .sei-line.is-low .sei-band { background: var(--flag-wash); }
+    .sei-dot {
+        position: absolute; top: 50%; width: .625rem; height: .625rem;
+        margin: -.3125rem 0 0 -.3125rem; border-radius: 50%;
+        background: var(--accent); box-shadow: 0 0 0 2.5px var(--paper);
+    }
+    .sei-line.is-low .sei-dot { background: var(--flag); }
+
+    .sei-axis {
+        position: relative; height: 1.125rem; margin-top: .35rem;
+        margin-left: calc(var(--lbl) + var(--gut));
+        margin-right: calc(var(--val) + var(--gut));
+    }
+    .sei-axis span {
+        position: absolute; top: 0; transform: translateX(-50%);
+        font-size: .6875rem; font-variant-numeric: tabular-nums; color: var(--ink-3);
+    }
+
+    @media (max-width: 52rem) {
+        .sei-line {
+            display: grid; grid-template-columns: 1fr auto;
+            grid-template-areas: "name val" "trk trk";
+            align-items: baseline; gap: .4rem .75rem; padding: .7rem 0;
+        }
+        .sei-line-name { grid-area: name; width: auto; }
+        .sei-line-val { grid-area: val; width: auto; text-align: right; }
+        .sei-line-val u { display: block; margin-left: 0; font-size: .8125rem; }
+        .sei-trk { grid-area: trk; }
+        .sei-grid { left: 0; right: 0; }
+        .sei-axis { margin-left: 0; margin-right: 0; }
+    }
+
+    .sei-note {
+        margin-top: 2.25rem; padding-left: 1rem;
+        border-left: 2px solid var(--rule-firm);
+        font-size: .875rem; line-height: 1.6; color: var(--ink-2); max-width: 44em;
+    }
+
+    .sei-dim { padding: 2.5rem 0; border-top: 1px solid var(--rule); }
+    .sei-dim-in { display: grid; gap: 1.25rem 2.5rem; align-items: start; }
+    @media (min-width: 52rem) {
+        .sei-dim-in { grid-template-columns: 15rem 1fr; }
+    }
+    .sei-dim-name { font-size: 1.3125rem; font-weight: 650; letter-spacing: -.015em; margin: 0; }
+    .sei-dim-score {
+        margin: .65rem 0 0; font-size: 1.75rem; font-weight: 700;
+        letter-spacing: -.02em; line-height: 1;
+    }
+    .sei-dim-where { margin: .4rem 0 0; font-size: .8125rem; line-height: 1.55; color: var(--ink-3); }
+    .sei-dim-where b { color: var(--ink-2); font-weight: 600; }
+    .sei-dim.is-low .sei-dim-where b { color: var(--flag); }
+    .sei-dim-blurb { margin: .9rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--ink-2); }
+
+    .sei-read { margin: 0; padding: 0; list-style: none; }
+    .sei-read li {
+        font-family: var(--serif); font-size: 1.0625rem; line-height: 1.7;
+        color: var(--ink); text-indent: -.55rem; padding-left: .55rem;
+    }
+    .sei-read li + li { margin-top: .9rem; }
+    .sei-read li::before { content: "\201C"; color: var(--ink-3); }
+    .sei-read li::after { content: "\201D"; color: var(--ink-3); }
+
+    .sei-foot {
+        margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
+        font-size: .8125rem; line-height: 1.6; color: var(--ink-3); max-width: 44em;
+    }
+
+    .sei-blocked {
+        padding: 2.5rem 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    }
+    .sei-blocked h2 { margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--flag); }
+    .sei-blocked p { margin: .65rem 0 0; font-size: .9375rem; line-height: 1.6; color: var(--ink-2); max-width: 42em; }
+
+    @media print {
+        .sei { max-width: none; padding-bottom: 0; }
+        .sei a.sei-back { display: none; }
+        .sei-band, .sei-dot, .sei-grid i {
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        .sei-dot { box-shadow: none; }
+        .sei-dim { break-inside: avoid; }
+    }
+</style>
+
+<div class="sei">
+
+    <a href="{% url 'core:resume_detail' uuid=resume.uuid %}" class="sei-back">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+        {{ resume.candidate_name|title|truncatechars:28 }}
+    </a>
+
+    <h1 class="sei-name">{{ resume.candidate_name|title }}</h1>
+    <p class="sei-sub">
+        Social and emotional intelligence, taken for {{ resume.job.title }}.
+        <em>
+            {{ assessment.status_label }}{% if assessment.is_submitted and assessment.submitted_at %}
+            {{ assessment.submitted_at|date:"j F Y" }} at {{ assessment.submitted_at|date:"H:i" }}{% endif %}
+        </em>
+    </p>
 
     {% if not assessment.is_submitted %}
-    <div class="rounded-2xl border border-zinc-200/90 bg-white p-10 text-center shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
-        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+    <hr class="sei-rule">
+    <div class="sei-blocked">
+        <h2>No result yet</h2>
+        <p>
             {% if assessment.has_started %}
-            The candidate is part-way through. Results appear once the sitting closes.
+            {{ resume.candidate_name|title }} is part-way through. The result appears
+            once the sitting closes, either on submission or when the clock runs out.
             {% else %}
-            The assessment has been sent but not opened yet.
+            The assessment has been sent but not opened. The clock starts when the
+            questions are first opened, not when the invitation went out.
             {% endif %}
         </p>
         {% if assessment.last_error %}
-        <p class="mt-3 text-xs font-medium text-rose-600 dark:text-rose-400">
-            Last send failed — {{ assessment.last_error }}
+        <p><b>The last send failed:</b> {{ assessment.last_error }}</p>
+        {% endif %}
+    </div>
+
+    {% elif result.validity == 'invalid' %}
+    <hr class="sei-rule">
+    <div class="sei-blocked">
+        <h2>{{ result.validity_label }}</h2>
+        <p>
+            {{ result.answered }} of {{ result.total_items }} statements were answered.
+            Below {{ result.minimum }} there is not enough of the instrument left for
+            the dimension norms to mean anything, so nothing is scored. Ask
+            {{ resume.candidate_name|title }} to take it again.
+        </p>
+        <p>Resend on the candidate page issues a fresh link and a fresh clock.</p>
+    </div>
+
+    {% else %}
+    <hr class="sei-rule">
+
+    <div class="sei-lede">
+        <div class="sei-total">
+            <b>{{ result.total_percent }}</b>
+            <i>out of 100, from a raw {{ result.total_raw }} of {{ result.total_max_raw }}</i>
+        </div>
+        <div>
+            <p class="sei-say">
+                Total emotional intelligence sits
+                {% if result.total_band == 'average' %}inside the average band of {{ result.total_norm.0 }} to {{ result.total_norm.1 }}{% elif result.total_band == 'high' %}above the average band, which ends at {{ result.total_norm.1 }}{% else %}below the average band, which starts at {{ result.total_norm.0 }}{% endif %}.
+                Of the six dimensions,
+                {% if result.by_band.high %}{{ result.by_band.high|length|apnumber }} {% if result.by_band.high|length == 1 %}reads{% else %}read{% endif %} above {% if result.by_band.high|length == 1 %}its{% else %}their{% endif %} own norm{% endif %}{% if result.by_band.average %}{% if result.by_band.high %}, {% endif %}{{ result.by_band.average|length|apnumber }} {% if not result.by_band.high %}{% if result.by_band.average|length == 1 %}reads{% else %}read{% endif %} {% endif %}within{% endif %}{% if result.by_band.low %}{% if result.by_band.high or result.by_band.average %}, and {% endif %}{{ result.by_band.low|length|apnumber }} below{% endif %}.
+            </p>
+            {% if result.by_band.low %}
+            <p class="sei-probe">
+                Worth probing at interview:
+                <b>{% for label in result.by_band.low %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}</b>.
+            </p>
+            {% endif %}
+            {% if result.validity == 'adjusted' %}
+            <p class="sei-probe">
+                {{ result.answered }} of {{ result.total_items }} statements answered.
+                Dimensions are scaled over what was answered, so a blank neither adds
+                nor subtracts &mdash; but any dimension marked pro-rated below rests on
+                fewer answers than the norms assume.
+            </p>
+            {% endif %}
+            {% if assessment.auto_submitted %}
+            <p class="sei-probe">
+                The {{ assessment.TIME_LIMIT_MINUTES }} minutes ran out before
+                {{ resume.candidate_name|title }} finished.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if result.below_threshold %}
+    <div class="sei-call">
+        <h2>Below the threshold to proceed</h2>
+        <p>
+            Total emotional intelligence is {{ result.total_percent }}, under the
+            {{ result.threshold }} that SSL Wireless requires. Company policy is to
+            decline this application. Record who made the call and on what date.
+        </p>
+        <p class="fine">
+            The threshold is a company rule applied to the score, not part of the
+            assessment. The sheet sets its own Low boundary at
+            {{ result.total_norm.0 }} and says nothing about hiring, and the score
+            is a {{ assessment.TIME_LIMIT_MINUTES }}-minute self-report taken on one
+            day. Weigh it with the interview and the rest of the file before
+            declining.
+        </p>
+        {% if result.validity == 'adjusted' or assessment.auto_submitted %}
+        <p class="fine">
+            Confirm before declining on this paper.
+            {% if assessment.auto_submitted %}The clock ran out before
+            {{ resume.candidate_name|title }} finished, at{% else %}It carries only{% endif %}
+            {{ result.answered }} of {{ result.total_items }} answers, so the total
+            rests on less of the instrument than the norms assume.
         </p>
         {% endif %}
     </div>
-    {% else %}
-
-    {% if result.validity == 'invalid' %}
-    <div class="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center dark:border-rose-900/50 dark:bg-rose-950/30">
-        <p class="text-base font-bold text-rose-900 dark:text-rose-300">{{ result.validity_label }}</p>
-        <p class="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-rose-800 dark:text-rose-400">
-            Only {{ result.answered }} of {{ result.total_items }} statements were
-            answered. Below {{ result.minimum }} there is not enough of the
-            instrument left for the dimension norms to mean anything, so no score
-            is reported. Ask the candidate to take it again.
-        </p>
-        <p class="mt-4 text-xs text-rose-700 dark:text-rose-400">
-            Use Resend on the candidate page to issue a fresh link and clock.
-        </p>
-    </div>
-    {% else %}
-
-    {% if result.validity == 'adjusted' %}
-    <div class="mb-5 flex gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
-        <svg class="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        <p class="text-sm leading-relaxed text-sky-800 dark:text-sky-300">
-            {{ result.answered }} of {{ result.total_items }} statements answered.
-            The dimensions below are scaled over the items that were answered, so a
-            blank neither adds nor subtracts — but a dimension marked as pro-rated
-            rests on fewer answers than the norms assume.
-        </p>
-    </div>
     {% endif %}
 
-    {% if assessment.auto_submitted %}
-    <div class="mb-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        <p class="text-sm leading-relaxed text-amber-900 dark:text-amber-300">
-            The {{ assessment.TIME_LIMIT_MINUTES }} minutes ran out before the
-            candidate finished, at {{ result.answered }} of {{ result.total_items }}
-            statements.
-        </p>
-    </div>
-    {% endif %}
+    <hr class="sei-rule">
 
-    <div class="mb-5 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-        <div class="flex flex-wrap items-baseline justify-between gap-3 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
-            <div>
-                <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Total emotional intelligence</p>
-                <p class="mt-1 text-3xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ result.total_percent }}</p>
-            </div>
-            <div class="text-right">
-                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide
-                    {% if result.total_band == 'high' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
-                    {% elif result.total_band == 'average' %}bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300
-                    {% else %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300{% endif %}">
-                    {{ result.total_band }}
-                </span>
-                <p class="mt-1 text-xs text-zinc-400">
-                    low &lt;{{ result.total_norm.0 }} &middot; high &gt;{{ result.total_norm.1 }}
-                </p>
-            </div>
-        </div>
-        <p class="px-6 py-3 text-xs text-zinc-500 dark:text-zinc-500">
-            {{ result.answered }} of {{ result.total_items }} statements answered
-            &middot; raw {{ result.total_raw }} of 144{% if result.validity == "adjusted" %} (scaled){% endif %}
-        </p>
-    </div>
-
-    <div class="space-y-3">
-        {% for dim in result.dimensions %}
-        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-            <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-                <div class="min-w-0">
-                    <h2 class="font-bold text-zinc-900 dark:text-white">{{ dim.label }}</h2>
-                    <p class="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{{ dim.blurb }}</p>
-                </div>
-                <div class="flex shrink-0 items-center gap-3">
-                    <span class="text-2xl font-bold tabular-nums text-zinc-900 dark:text-white">{{ dim.percent }}</span>
-                    <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide
-                        {% if dim.band == 'high' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
-                        {% elif dim.band == 'average' %}bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300
-                        {% else %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300{% endif %}">
-                        {{ dim.band }}
-                    </span>
-                </div>
-            </div>
-            <div class="border-t border-zinc-100 px-6 py-2 dark:border-zinc-800">
-                <p class="text-xs text-zinc-400">
-                    {% if dim.prorated %}
-                    <span class="font-semibold text-sky-600 dark:text-sky-400">pro-rated from {{ dim.answered }} of {{ dim.of }} answered</span>
-                    &middot; raw {{ dim.raw }} scaled to {{ dim.adjusted_raw }} of 24
-                    {% else %}
-                    raw {{ dim.raw }} of 24
-                    {% endif %}
-                    &middot; low &lt;{{ dim.norm.0 }} &middot; high &gt;{{ dim.norm.1 }}
-                </p>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <p class="mt-6 text-center text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
-        A self-report questionnaire, not a clinical instrument. Read it alongside
-        the interview and the rest of the file, never on its own.
+    <h2 class="sei-h">Where each score falls against its own norm</h2>
+    <p>
+        Every dimension carries a different average band, so the same number can read
+        as average on one and low on another. Plotted on one scale, the bands move and
+        the reading becomes comparable.
     </p>
-    {% endif %}
+
+    <div class="sei-plot">
+        <div class="sei-plot-body">
+            <div class="sei-grid" aria-hidden="true">
+                <i style="left: 25%;"></i>
+                <i style="left: 50%;"></i>
+                <i style="left: 75%;"></i>
+            </div>
+            {% for dim in result.dimensions %}
+            <div class="sei-line{% if dim.band == 'low' %} is-low{% elif dim.band == 'high' %} is-above{% endif %}" tabindex="0">
+                <span class="sei-line-name">{{ dim.label }}</span>
+                <div class="sei-trk" aria-hidden="true">
+                    <div class="sei-band" style="left: {{ dim.track.band_start }}%; width: {{ dim.track.band_width }}%;"></div>
+                    <div class="sei-dot" style="left: {{ dim.track.marker }}%;"></div>
+                </div>
+                <span class="sei-line-val">{{ dim.percent }}<u>{% if dim.band == 'average' %}within {{ dim.norm.0 }}&ndash;{{ dim.norm.1 }}{% elif dim.band == 'high' %}above {{ dim.norm.1 }}{% else %}below {{ dim.norm.0 }}{% endif %}</u></span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="sei-axis" aria-hidden="true">
+            <span style="left: 0%;">0</span>
+            <span style="left: 25%;">25</span>
+            <span style="left: 50%;">50</span>
+            <span style="left: 75%;">75</span>
+            <span style="left: 100%;">100</span>
+        </div>
+    </div>
+
+    <p class="sei-note">
+        What follows is the assessment sheet's own interpretation text, quoted as
+        published. It is written to the candidate, so the &ldquo;you&rdquo; in it is
+        {{ resume.candidate_name|title }} rather than the reader. Each passage
+        describes a band, not this individual &mdash; weigh it against the interview
+        instead of reading it as a finding.
+    </p>
+
+    {% for dim in result.dimensions %}
+    <div class="sei-dim{% if dim.band == 'low' %} is-low{% endif %}">
+        <div class="sei-dim-in">
+            <div>
+                <h2 class="sei-dim-name">{{ dim.label }}</h2>
+                <p class="sei-dim-score">{{ dim.percent }}</p>
+                <p class="sei-dim-where">
+                    <b>{% if dim.band == 'average' %}Within its average band{% elif dim.band == 'high' %}Above its average band{% else %}Below its average band{% endif %}</b>
+                    of {{ dim.norm.0 }} to {{ dim.norm.1 }}.<br>
+                    {% if dim.prorated %}
+                    Raw {{ dim.raw }} scaled to {{ dim.adjusted_raw }} of {{ dim.max_raw }},
+                    pro-rated from {{ dim.answered }} of {{ dim.of }} answered.
+                    {% else %}
+                    Raw {{ dim.raw }} of {{ dim.max_raw }}.
+                    {% endif %}
+                </p>
+                <p class="sei-dim-blurb">{{ dim.blurb }}</p>
+            </div>
+            <div>
+                <ul class="sei-read">
+                    {% for line in dim.reading %}
+                    <li>You {{ line }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <p class="sei-foot">
+        A self-report questionnaire, not a clinical instrument. It records how
+        {{ resume.candidate_name|title }} described themselves in
+        {{ assessment.TIME_LIMIT_MINUTES }} minutes on one day. Read it alongside the
+        interview and the rest of the file, never on its own.
+    </p>
     {% endif %}
 </div>
 {% endblock %}
