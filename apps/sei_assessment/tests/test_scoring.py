@@ -282,6 +282,37 @@ def test_the_contradictory_empathy_sentence_is_not_carried():
     assert len(empathy['above']) == 1
 
 
+# ── the plotted zones ────────────────────────────────────────────────────
+def test_the_three_zones_tile_the_axis_exactly():
+    """Low, Average and High are drawn as three abutting blocks. If the widths
+    did not add to 100 the chart would show a gap or an overlap at a norm
+    boundary, which reads as a scoring error rather than a drawing one."""
+    for spec in scoring.DIMENSIONS:
+        t = scoring.track(50.0, spec['norm'])
+        assert t['low_width'] + t['band_width'] + t['high_width'] == 100, spec['key']
+        assert t['band_start'] == t['low_width'], spec['key']
+        assert t['high_start'] == t['low_width'] + t['band_width'], spec['key']
+
+    total = scoring.track(50.0, scoring.TOTAL_NORM)
+    assert total['low_width'] + total['band_width'] + total['high_width'] == 100
+
+
+def test_the_zone_edges_are_the_published_norms():
+    """The drawn boundaries are the sheet's numbers, not eyeballed positions."""
+    by_key = {s['key']: s['norm'] for s in scoring.DIMENSIONS}
+    assert by_key == {
+        'self_awareness': (70, 80), 'self_management': (55, 65),
+        'internality': (64, 74), 'motivation': (65, 75),
+        'empathy': (47, 57), 'social_skills': (62, 72),
+    }
+    assert scoring.TOTAL_NORM == (61, 71)
+
+    for dim in scoring.score(WORKED_EXAMPLE_RAW)['dimensions']:
+        low, high = by_key[dim['key']]
+        assert dim['track']['band_start'] == low
+        assert dim['track']['high_start'] == high
+
+
 # ── the company's hiring cut-off ─────────────────────────────────────────
 def _raw_totalling(target_raw):
     """Answers whose scored total is exactly `target_raw` out of 144."""

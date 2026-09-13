@@ -11,11 +11,12 @@
         --ink-3: #878d9b;
         --rule: #e4e6ea;
         --rule-firm: #cbd0d8;
-        --paper: #ffffff;
+        --paper: #fafafa;
         --accent: #2f4d8a;
-        --accent-wash: #c3d0e6;
         --flag: #8f5310;
-        --flag-wash: #e8d5b2;
+        --zone-lo: #e8ebef;
+        --zone-mid: #d2d7df;
+        --zone-hi: #bcc3ce;
 
         --serif: ui-serif, "Iowan Old Style", Cambria, "Palatino Linotype",
                  Palatino, Georgia, "Noto Serif", serif;
@@ -31,11 +32,12 @@
         --ink-3: #6f7683;
         --rule: #2b2e35;
         --rule-firm: #3c414a;
-        --paper: #17181c;
+        --paper: #09090b;
         --accent: #86abea;
-        --accent-wash: #223458;
         --flag: #d69a4a;
-        --flag-wash: #3c2d15;
+        --zone-lo: #1f2025;
+        --zone-mid: #2e3037;
+        --zone-hi: #42454e;
     }
 
     .sei a.sei-back {
@@ -95,66 +97,66 @@
     }
     .sei-h + p { margin: 0; font-size: .875rem; line-height: 1.55; color: var(--ink-2); max-width: 46em; }
 
-    .sei-plot { margin-top: 2rem; --lbl: 12.5rem; --val: 10.5rem; --gut: 1.5rem; }
-    .sei-plot-body { position: relative; }
-    .sei-grid {
-        position: absolute; top: 0; bottom: 0; pointer-events: none;
-        left: calc(var(--lbl) + var(--gut)); right: calc(var(--val) + var(--gut));
-    }
-    .sei-grid i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+    .sei-plot { margin-top: 2.25rem; --plot-h: 17.5rem; --ygut: 2.25rem; }
+    /* overflow-x:auto forces overflow-y to compute as auto, so the top tick
+       label cannot simply overhang -- the padding is the headroom it needs. */
+    .sei-scroll { overflow-x: auto; overflow-y: hidden; padding: .6rem 0 .25rem; }
+    .sei-chart { position: relative; padding-left: var(--ygut); min-width: 34rem; }
 
-    .sei-line {
-        position: relative;
-        display: flex; align-items: center; gap: var(--gut);
-        padding: .6rem 0;
-    }
-    .sei-line:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
-    .sei-line-name { width: var(--lbl); flex: none; font-size: .9375rem; font-weight: 500; }
-    .sei-line-val {
-        width: var(--val); flex: none; font-size: .9375rem; font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-    .sei-line-val u { text-decoration: none; font-weight: 500; color: var(--ink-3); margin-left: .5rem; }
-    .sei-line.is-above .sei-line-val u { color: var(--accent); }
-    .sei-line.is-low .sei-line-val u { color: var(--flag); }
-
-    .sei-trk { position: relative; z-index: 1; flex: 1 1 auto; min-width: 0; height: 1.625rem; }
-    .sei-band {
-        position: absolute; top: 0; bottom: 0;
-        background: var(--accent-wash); border-radius: 2px;
-    }
-    .sei-line.is-low .sei-band { background: var(--flag-wash); }
-    .sei-bar {
-        position: absolute; left: 0; top: 50%; height: .6875rem;
-        transform: translateY(-50%); border-radius: 0 4px 4px 0;
-        background: var(--accent);
-    }
-    .sei-line.is-low .sei-bar { background: var(--flag); }
-    .sei-base { position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--rule-firm); }
-
-    .sei-axis {
-        position: relative; height: 1.125rem; margin-top: .35rem;
-        margin-left: calc(var(--lbl) + var(--gut));
-        margin-right: calc(var(--val) + var(--gut));
-    }
-    .sei-axis span {
-        position: absolute; top: 0; transform: translateX(-50%);
-        font-size: .6875rem; font-variant-numeric: tabular-nums; color: var(--ink-3);
+    .sei-ygrid { position: absolute; left: var(--ygut); right: 0; top: 0; height: var(--plot-h); }
+    .sei-ygrid i { position: absolute; left: 0; right: 0; height: 1px; background: var(--rule); }
+    .sei-ygrid i.zero { background: var(--rule-firm); }
+    .sei-ygrid i b {
+        position: absolute; right: 100%; margin-right: .6rem; transform: translateY(-50%);
+        font-size: .6875rem; font-weight: 500; font-variant-numeric: tabular-nums;
+        color: var(--ink-3);
     }
 
-    @media (max-width: 52rem) {
-        .sei-line {
-            display: grid; grid-template-columns: 1fr auto;
-            grid-template-areas: "name val" "trk trk";
-            align-items: baseline; gap: .4rem .75rem; padding: .7rem 0;
-        }
-        .sei-line-name { grid-area: name; width: auto; }
-        .sei-line-val { grid-area: val; width: auto; text-align: right; }
-        .sei-line-val u { display: block; margin-left: 0; font-size: .8125rem; }
-        .sei-trk { grid-area: trk; }
-        .sei-grid { left: 0; right: 0; }
-        .sei-axis { margin-left: 0; margin-right: 0; }
+    /* flex-start, not flex-end: a name that wraps to two lines would otherwise
+       push its own column up and break the shared baseline. */
+    .sei-lanes { position: relative; display: flex; align-items: flex-start; gap: .75rem; }
+    .sei-lane { flex: 1 1 0; min-width: 0; }
+    .sei-lane:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
+    .sei-slot { position: relative; height: var(--plot-h); }
+
+    .sei-z { position: absolute; left: 0; right: 0; }
+    .sei-z.lo { background: var(--zone-lo); }
+    .sei-z.mid { background: var(--zone-mid); }
+    .sei-z.hi { background: var(--zone-hi); border-radius: 3px 3px 0 0; }
+    .sei-cut { position: absolute; left: 0; right: 0; height: 2px; margin-bottom: -1px; background: var(--paper); }
+
+    .sei-col {
+        position: absolute; bottom: 0; left: 50%; width: 1.5rem;
+        transform: translateX(-50%); border-radius: 4px 4px 0 0;
+        background: var(--accent); box-shadow: 0 0 0 1.5px var(--paper);
     }
+    .sei-lane.is-low .sei-col { background: var(--flag); }
+    .sei-cap {
+        position: absolute; left: 50%; transform: translateX(-50%); margin-bottom: .375rem;
+        font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums;
+        color: var(--ink); white-space: nowrap;
+    }
+
+    .sei-lane-name {
+        margin-top: .75rem; text-align: center; font-size: .8125rem;
+        font-weight: 500; line-height: 1.35; color: var(--ink);
+    }
+    .sei-lane-name u {
+        display: block; margin-top: .2rem; text-decoration: none;
+        font-size: .75rem; font-weight: 500; font-variant-numeric: tabular-nums;
+        color: var(--ink-3);
+    }
+    .sei-lane.is-above .sei-lane-name u { color: var(--accent); }
+    .sei-lane.is-low .sei-lane-name u { color: var(--flag); }
+
+    .sei-key { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.15rem; margin-top: 1.75rem; }
+    .sei-key span { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; color: var(--ink-2); }
+    .sei-key i { width: 1.5rem; height: .625rem; border-radius: 2px; }
+    .sei-key i.lo { background: var(--zone-lo); }
+    .sei-key i.mid { background: var(--zone-mid); }
+    .sei-key i.hi { background: var(--zone-hi); }
+    .sei-key i.score { width: .875rem; height: 1.125rem; background: var(--accent); border-radius: 2px 2px 0 0; }
+    .sei-key i.flag { width: .875rem; height: 1.125rem; background: var(--flag); border-radius: 2px 2px 0 0; }
 
     .sei-defs { display: grid; gap: 1.75rem 3rem; margin-top: 1.75rem; }
     @media (min-width: 46rem) { .sei-defs { grid-template-columns: 1fr 1fr; } }
@@ -167,9 +169,10 @@
     .sei-def p.num b { font-weight: 600; color: var(--ink-2); }
     .sei-def.is-low p.num b { color: var(--flag); }
 
-    .sei-foot {
-        margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
-        font-size: .8125rem; line-height: 1.6; color: var(--ink-3); max-width: 44em;
+    .sei-foot { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+    .sei-foot p {
+        margin: 0; font-size: .8125rem; line-height: 1.6;
+        color: var(--ink-3); max-width: 44em;
     }
 
     .sei-blocked {
@@ -181,10 +184,11 @@
     @media print {
         .sei { max-width: none; padding-bottom: 0; }
         .sei a.sei-back { display: none; }
-        .sei-band, .sei-bar, .sei-grid i, .sei-base {
+        .sei-z, .sei-cut, .sei-col, .sei-ygrid i, .sei-key i {
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
-        .sei-line, .sei-def, .sei-call { break-inside: avoid; }
+        .sei-scroll { overflow: visible; }
+        .sei-plot, .sei-def, .sei-call { break-inside: avoid; }
     }
 </style>
 
@@ -306,35 +310,48 @@
     <h2 class="sei-h">Where each score falls against its own norm</h2>
     <p>
         Every dimension carries a different average band, so the same number can read
-        as average on one and low on another. Plotted on one scale, the bands move and
-        the reading becomes comparable.
+        as average on one and low on another. Each column is plotted on the same
+        0&ndash;100 scale against its own three bands, which is what makes the six
+        comparable.
     </p>
 
     <div class="sei-plot">
-        <div class="sei-plot-body">
-            <div class="sei-grid" aria-hidden="true">
-                <i style="left: 25%;"></i>
-                <i style="left: 50%;"></i>
-                <i style="left: 75%;"></i>
-            </div>
-            {% for dim in result.dimensions %}
-            <div class="sei-line{% if dim.band == 'low' %} is-low{% elif dim.band == 'high' %} is-above{% endif %}" tabindex="0">
-                <span class="sei-line-name">{{ dim.label }}</span>
-                <div class="sei-trk" aria-hidden="true">
-                    <div class="sei-band" style="left: {{ dim.track.band_start }}%; width: {{ dim.track.band_width }}%;"></div>
-                    <div class="sei-bar" style="width: {{ dim.track.marker }}%;"></div>
-                    <div class="sei-base"></div>
+        <div class="sei-scroll">
+            <div class="sei-chart">
+                <div class="sei-ygrid" aria-hidden="true">
+                    <i style="top: 0%;"><b>100</b></i>
+                    <i style="top: 25%;"><b>75</b></i>
+                    <i style="top: 50%;"><b>50</b></i>
+                    <i style="top: 75%;"><b>25</b></i>
+                    <i class="zero" style="top: 100%;"><b>0</b></i>
                 </div>
-                <span class="sei-line-val">{{ dim.percent }}<u>{% if dim.band == 'average' %}within {{ dim.norm.0 }}&ndash;{{ dim.norm.1 }}{% elif dim.band == 'high' %}above {{ dim.norm.1 }}{% else %}below {{ dim.norm.0 }}{% endif %}</u></span>
+                <div class="sei-lanes">
+                    {% for dim in result.dimensions %}
+                    <div class="sei-lane{% if dim.band == 'low' %} is-low{% elif dim.band == 'high' %} is-above{% endif %}" tabindex="0">
+                        <div class="sei-slot" aria-hidden="true">
+                            <div class="sei-z lo" style="bottom: 0; height: {{ dim.track.low_width }}%;"></div>
+                            <div class="sei-z mid" style="bottom: {{ dim.track.band_start }}%; height: {{ dim.track.band_width }}%;"></div>
+                            <div class="sei-z hi" style="bottom: {{ dim.track.high_start }}%; height: {{ dim.track.high_width }}%;"></div>
+                            <div class="sei-cut" style="bottom: {{ dim.track.band_start }}%;"></div>
+                            <div class="sei-cut" style="bottom: {{ dim.track.high_start }}%;"></div>
+                            <div class="sei-col" style="height: {{ dim.track.marker }}%;"></div>
+                            <span class="sei-cap" style="bottom: {{ dim.track.marker }}%;">{{ dim.percent }}</span>
+                        </div>
+                        <p class="sei-lane-name">
+                            {{ dim.label }}
+                            <u>{% if dim.band == 'average' %}within {{ dim.norm.0 }}&ndash;{{ dim.norm.1 }}{% elif dim.band == 'high' %}above {{ dim.norm.1 }}{% else %}below {{ dim.norm.0 }}{% endif %}</u>
+                        </p>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
-            {% endfor %}
         </div>
-        <div class="sei-axis" aria-hidden="true">
-            <span style="left: 0%;">0</span>
-            <span style="left: 25%;">25</span>
-            <span style="left: 50%;">50</span>
-            <span style="left: 75%;">75</span>
-            <span style="left: 100%;">100</span>
+        <div class="sei-key">
+            <span><i class="lo"></i>Low</span>
+            <span><i class="mid"></i>Average</span>
+            <span><i class="hi"></i>High</span>
+            <span><i class="score"></i>Score</span>
+            {% if result.by_band.low %}<span><i class="flag"></i>Below its norm</span>{% endif %}
         </div>
     </div>
 
@@ -366,12 +383,14 @@
         {% endfor %}
     </div>
 
-    <p class="sei-foot">
-        A self-report questionnaire, not a clinical instrument. It records how
-        {{ resume.candidate_name|title }} described themselves in
-        {{ assessment.TIME_LIMIT_MINUTES }} minutes on one day. Read it alongside the
-        interview and the rest of the file, never on its own.
-    </p>
+    <div class="sei-foot">
+        <p>
+            A self-report questionnaire, not a clinical instrument. It records how
+            {{ resume.candidate_name|title }} described themselves in
+            {{ assessment.TIME_LIMIT_MINUTES }} minutes on one day. Read it alongside
+            the interview and the rest of the file, never on its own.
+        </p>
+    </div>
     {% endif %}
 </div>
 {% endblock %}

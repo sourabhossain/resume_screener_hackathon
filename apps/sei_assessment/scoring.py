@@ -310,19 +310,25 @@ def band(value: float, norm) -> str:
 
 
 def track(value: float, norm) -> dict:
-    """Where a score and its average band sit on a shared 0-100 axis.
+    """Where a score and all three of its bands sit on a shared 0-100 axis.
 
     The report draws all seven scores against the same axis, which is the only
     way to see that the bands themselves sit in different places -- Empathy is
     Average from 47, Self-awareness only from 70. Computed here because a
     template cannot subtract, and clamped because the published multipliers put
     a perfect paper slightly over 100.
+
+    The three widths always tile 0-100 exactly, so the drawn zones cannot leave
+    a gap or overlap however the norms are edited.
     """
     low, high = norm
     return {
         'marker': round(min(max(value, 0.0), 100.0), 2),
+        'low_width': low,
         'band_start': low,
         'band_width': high - low,
+        'high_start': high,
+        'high_width': 100 - high,
     }
 
 
