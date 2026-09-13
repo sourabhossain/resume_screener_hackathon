@@ -118,18 +118,19 @@
     .sei-line.is-above .sei-line-val u { color: var(--accent); }
     .sei-line.is-low .sei-line-val u { color: var(--flag); }
 
-    .sei-trk { position: relative; z-index: 1; flex: 1 1 auto; min-width: 0; height: 1rem; }
+    .sei-trk { position: relative; z-index: 1; flex: 1 1 auto; min-width: 0; height: 1.625rem; }
     .sei-band {
-        position: absolute; top: 50%; height: .4375rem; transform: translateY(-50%);
-        background: var(--accent-wash); border-radius: 1px;
+        position: absolute; top: 0; bottom: 0;
+        background: var(--accent-wash); border-radius: 2px;
     }
     .sei-line.is-low .sei-band { background: var(--flag-wash); }
-    .sei-dot {
-        position: absolute; top: 50%; width: .625rem; height: .625rem;
-        margin: -.3125rem 0 0 -.3125rem; border-radius: 50%;
-        background: var(--accent); box-shadow: 0 0 0 2.5px var(--paper);
+    .sei-bar {
+        position: absolute; left: 0; top: 50%; height: .6875rem;
+        transform: translateY(-50%); border-radius: 0 4px 4px 0;
+        background: var(--accent);
     }
-    .sei-line.is-low .sei-dot { background: var(--flag); }
+    .sei-line.is-low .sei-bar { background: var(--flag); }
+    .sei-base { position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--rule-firm); }
 
     .sei-axis {
         position: relative; height: 1.125rem; margin-top: .35rem;
@@ -155,35 +156,16 @@
         .sei-axis { margin-left: 0; margin-right: 0; }
     }
 
-    .sei-note {
-        margin-top: 2.25rem; padding-left: 1rem;
-        border-left: 2px solid var(--rule-firm);
-        font-size: .875rem; line-height: 1.6; color: var(--ink-2); max-width: 44em;
+    .sei-defs { display: grid; gap: 1.75rem 3rem; margin-top: 1.75rem; }
+    @media (min-width: 46rem) { .sei-defs { grid-template-columns: 1fr 1fr; } }
+    .sei-def h3 { margin: 0; font-size: .9375rem; font-weight: 600; letter-spacing: -.01em; }
+    .sei-def p { margin: .35rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--ink-2); }
+    .sei-def p.num {
+        margin: .55rem 0 0; font-size: .8125rem; line-height: 1.5;
+        color: var(--ink-3); font-variant-numeric: tabular-nums;
     }
-
-    .sei-dim { padding: 2.5rem 0; border-top: 1px solid var(--rule); }
-    .sei-dim-in { display: grid; gap: 1.25rem 2.5rem; align-items: start; }
-    @media (min-width: 52rem) {
-        .sei-dim-in { grid-template-columns: 15rem 1fr; }
-    }
-    .sei-dim-name { font-size: 1.3125rem; font-weight: 650; letter-spacing: -.015em; margin: 0; }
-    .sei-dim-score {
-        margin: .65rem 0 0; font-size: 1.75rem; font-weight: 700;
-        letter-spacing: -.02em; line-height: 1;
-    }
-    .sei-dim-where { margin: .4rem 0 0; font-size: .8125rem; line-height: 1.55; color: var(--ink-3); }
-    .sei-dim-where b { color: var(--ink-2); font-weight: 600; }
-    .sei-dim.is-low .sei-dim-where b { color: var(--flag); }
-    .sei-dim-blurb { margin: .9rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--ink-2); }
-
-    .sei-read { margin: 0; padding: 0; list-style: none; }
-    .sei-read li {
-        font-family: var(--serif); font-size: 1.0625rem; line-height: 1.7;
-        color: var(--ink); text-indent: -.55rem; padding-left: .55rem;
-    }
-    .sei-read li + li { margin-top: .9rem; }
-    .sei-read li::before { content: "\201C"; color: var(--ink-3); }
-    .sei-read li::after { content: "\201D"; color: var(--ink-3); }
+    .sei-def p.num b { font-weight: 600; color: var(--ink-2); }
+    .sei-def.is-low p.num b { color: var(--flag); }
 
     .sei-foot {
         margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
@@ -199,11 +181,10 @@
     @media print {
         .sei { max-width: none; padding-bottom: 0; }
         .sei a.sei-back { display: none; }
-        .sei-band, .sei-dot, .sei-grid i {
+        .sei-band, .sei-bar, .sei-grid i, .sei-base {
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
-        .sei-dot { box-shadow: none; }
-        .sei-dim { break-inside: avoid; }
+        .sei-line, .sei-def, .sei-call { break-inside: avoid; }
     }
 </style>
 
@@ -341,7 +322,8 @@
                 <span class="sei-line-name">{{ dim.label }}</span>
                 <div class="sei-trk" aria-hidden="true">
                     <div class="sei-band" style="left: {{ dim.track.band_start }}%; width: {{ dim.track.band_width }}%;"></div>
-                    <div class="sei-dot" style="left: {{ dim.track.marker }}%;"></div>
+                    <div class="sei-bar" style="width: {{ dim.track.marker }}%;"></div>
+                    <div class="sei-base"></div>
                 </div>
                 <span class="sei-line-val">{{ dim.percent }}<u>{% if dim.band == 'average' %}within {{ dim.norm.0 }}&ndash;{{ dim.norm.1 }}{% elif dim.band == 'high' %}above {{ dim.norm.1 }}{% else %}below {{ dim.norm.0 }}{% endif %}</u></span>
             </div>
@@ -356,42 +338,33 @@
         </div>
     </div>
 
-    <p class="sei-note">
-        What follows is the assessment sheet's own interpretation text, quoted as
-        published. It is written to the candidate, so the &ldquo;you&rdquo; in it is
-        {{ resume.candidate_name|title }} rather than the reader. Each passage
-        describes a band, not this individual &mdash; weigh it against the interview
-        instead of reading it as a finding.
+    <hr class="sei-rule">
+
+    <h2 class="sei-h">What the six dimensions measure</h2>
+    <p>
+        The instrument's own definitions, with the raw column total each score was
+        worked from.
     </p>
 
-    {% for dim in result.dimensions %}
-    <div class="sei-dim{% if dim.band == 'low' %} is-low{% endif %}">
-        <div class="sei-dim-in">
-            <div>
-                <h2 class="sei-dim-name">{{ dim.label }}</h2>
-                <p class="sei-dim-score">{{ dim.percent }}</p>
-                <p class="sei-dim-where">
-                    <b>{% if dim.band == 'average' %}Within its average band{% elif dim.band == 'high' %}Above its average band{% else %}Below its average band{% endif %}</b>
-                    of {{ dim.norm.0 }} to {{ dim.norm.1 }}.<br>
-                    {% if dim.prorated %}
-                    Raw {{ dim.raw }} scaled to {{ dim.adjusted_raw }} of {{ dim.max_raw }},
-                    pro-rated from {{ dim.answered }} of {{ dim.of }} answered.
-                    {% else %}
-                    Raw {{ dim.raw }} of {{ dim.max_raw }}.
-                    {% endif %}
-                </p>
-                <p class="sei-dim-blurb">{{ dim.blurb }}</p>
-            </div>
-            <div>
-                <ul class="sei-read">
-                    {% for line in dim.reading %}
-                    <li>You {{ line }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
+    <div class="sei-defs">
+        {% for dim in result.dimensions %}
+        <div class="sei-def{% if dim.band == 'low' %} is-low{% endif %}">
+            <h3>{{ dim.label }}</h3>
+            <p>{{ dim.blurb }}</p>
+            <p class="num">
+                <b>{{ dim.percent }}</b>,
+                {% if dim.band == 'average' %}within{% elif dim.band == 'high' %}above{% else %}below{% endif %}
+                its average band of {{ dim.norm.0 }} to {{ dim.norm.1 }}.
+                {% if dim.prorated %}
+                Raw {{ dim.raw }} scaled to {{ dim.adjusted_raw }} of {{ dim.max_raw }},
+                pro-rated from {{ dim.answered }} of {{ dim.of }} answered.
+                {% else %}
+                Raw {{ dim.raw }} of {{ dim.max_raw }}.
+                {% endif %}
+            </p>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 
     <p class="sei-foot">
         A self-report questionnaire, not a clinical instrument. It records how
