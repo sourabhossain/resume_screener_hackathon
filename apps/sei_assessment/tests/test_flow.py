@@ -414,14 +414,16 @@ def test_a_scoreable_paper_is_still_protected_from_resending(candidate, sitting)
 
 
 @pytest.mark.django_db
-def test_the_sitting_is_twenty_minutes(client, sitting):
-    assert SEIAssessment.TIME_LIMIT_MINUTES == 20
+def test_the_sitting_is_fifteen_minutes(client, sitting):
+    """Pinned as a literal, not read off the setting: the point is to catch the
+    clock changing length, which a derived assertion would happily allow."""
+    assert SEIAssessment.TIME_LIMIT_MINUTES == 15
 
     _open(client, sitting).get(_test(sitting))
 
     sitting.refresh_from_db()
     span = (sitting.deadline_at - sitting.started_at).total_seconds()
-    assert abs(span - 20 * 60) < 1
+    assert abs(span - 15 * 60) < 1
 
 
 @pytest.mark.django_db
@@ -431,7 +433,7 @@ def test_the_page_carries_the_instruction_wording(client, sitting):
 
     assert 'first and most natural reaction' in body
     assert 'Do not overthink the statements' in body
-    assert 'recommended completion time 20 minutes' in body.lower()
+    assert 'recommended completion time 15 minutes' in body.lower()
 
 
 # ── gaps found in review ─────────────────────────────────────────────────
@@ -486,8 +488,8 @@ def test_a_save_merges_onto_whatever_is_in_the_database_not_what_was_loaded(
 
 @pytest.mark.django_db
 def test_answering_steadily_for_the_whole_sitting_is_not_rate_limited(client, sitting):
-    """The page flushes every five seconds, so a full twenty minutes is about
-    240 calls. A limit at that boundary would start refusing saves in the last
+    """The page flushes every five seconds, so a full fifteen minutes is about
+    180 calls. A limit at that boundary would start refusing saves in the last
     minutes of the test."""
     _open(client, sitting).get(_test(sitting))
 

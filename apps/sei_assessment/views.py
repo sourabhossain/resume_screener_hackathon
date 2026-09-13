@@ -164,7 +164,7 @@ def test(request, token):
 
 @require_POST
 # The page flushes every five seconds, so a candidate answering steadily for
-# the full twenty minutes makes ~240 calls, and a retake reuses the same token
+# the full fifteen minutes makes ~180 calls, and a retake reuses the same token
 # within the hour. A limit at that boundary would start refusing saves in the
 # last minutes of a timed test -- the one place answers cannot be re-entered.
 @ratelimit(key=_rate_key, rate='900/h', method='POST', block=True)

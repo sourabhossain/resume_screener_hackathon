@@ -44,7 +44,7 @@ print nonsense in a hiring file and rewriting it would put words into a
 published instrument, so it is dropped and the remaining Empathy rows stand.
 """
 
-TIME_LIMIT_MINUTES = 20
+TIME_LIMIT_MINUTES = 15
 
 # Below this many answers there is no score, only a request to sit it again.
 MINIMUM_VALID_ANSWERS = 44
