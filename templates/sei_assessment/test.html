@@ -8,14 +8,19 @@
 
 {% block content %}
 <style>
-    .sei-choice { display: block; cursor: pointer; }
+    /* One row whatever the instrument: SEI offers four ratings and PE five,
+       so the widths come from flex rather than a fixed column count. */
+    .sei-choices { display: flex; gap: .5rem; margin-top: .75rem; }
+    .sei-choice { flex: 1 1 0; min-width: 0; display: block; cursor: pointer; }
     .sei-choice > span {
-        display: block;
+        display: flex; align-items: center; justify-content: center;
+        height: 100%;
         border: 1px solid #e4e4e7;
         border-radius: .5rem;
-        padding: .5rem;
+        padding: .6rem .4rem;
         text-align: center;
         font-size: .75rem;
+        line-height: 1.3;
         font-weight: 600;
         color: #52525b;
         transition: background-color .12s, border-color .12s, color .12s;
@@ -32,8 +37,15 @@
     html.dark .sei-choice > input:checked + span {
         border-color: #6366f1; background: #1e1b4b; color: #c7d2fe;
     }
+    /* On a phone four or five boxes across are unreadable, and wrapping them
+       leaves a ragged last row whose width depends on the instrument. One per
+       line is even for every count and easier to tap. */
+    @media (max-width: 34rem) {
+        .sei-choices { flex-direction: column; gap: .375rem; }
+        .sei-choice > span { justify-content: flex-start; padding: .6rem .75rem; text-align: left; }
+    }
 </style>
-<div class="mx-auto max-w-3xl pb-28" x-data="seiTest({{ seconds_left }}, {{ answered }}, {{ total_items }})">
+<div class="mx-auto max-w-4xl pb-28" x-data="seiTest({{ seconds_left }}, {{ answered }}, {{ total_items }})">
 
     <div class="mb-5">
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
@@ -75,7 +87,7 @@
                     <span class="shrink-0 text-xs font-bold tabular-nums text-zinc-400 dark:text-zinc-500" style="padding-top: .2rem;">{{ item.no }}</span>
                     <p class="text-sm font-medium leading-relaxed text-zinc-900 dark:text-zinc-100">{{ item.text }}</p>
                 </div>
-                <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div class="sei-choices">
                     {% for value, label in ratings %}
                     <label class="sei-choice">
                         <input type="radio" name="q{{ item.no }}" value="{{ value }}"
@@ -92,7 +104,7 @@
     </form>
 
     <div class="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200/80 bg-white/90 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/85">
-        <div class="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-4 py-3">
+        <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-3 px-4 py-3">
             <div class="flex items-center gap-2">
                 <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 <span class="text-lg font-bold tabular-nums"

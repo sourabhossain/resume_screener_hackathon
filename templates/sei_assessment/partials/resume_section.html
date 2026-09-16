@@ -50,6 +50,9 @@
                     Started — the {{ entry.spec.time_limit_minutes }}-minute clock is running.
                 {% elif entry.sitting.is_expired %}
                     The link expired before the candidate opened it.
+                {% elif not entry.sitting.invited_at %}
+                    Prepared but not emailed yet. The invitation is queued; if it
+                    keeps saying this, send it again.
                 {% else %}
                     Sent. The clock starts when the candidate opens the questions.
                 {% endif %}
