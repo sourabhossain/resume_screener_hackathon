@@ -37,7 +37,7 @@
 
     <div class="mb-5">
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
-            Social &amp; Emotional Intelligence
+            {{ instrument.label }}
         </p>
         <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
             About you
@@ -53,9 +53,15 @@
             overthink the statements. There are no right or wrong answers.
         </p>
         <p class="mt-2 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Your answers save as you go. Try to answer every statement — a paper
-            with fewer than {{ minimum_answers }} of {{ total_items }} answered
-            cannot be scored and would have to be taken again.
+            Your answers save as you go.
+            {% if minimum_answers >= total_items %}
+            Every one of the {{ total_items }} has to be answered — a paper with
+            any left blank cannot be scored and would have to be taken again.
+            {% else %}
+            Try to answer every statement — a paper with fewer than
+            {{ minimum_answers }} of {{ total_items }} answered cannot be scored
+            and would have to be taken again.
+            {% endif %}
         </p>
     </div>
 

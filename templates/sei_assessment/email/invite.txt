@@ -1,9 +1,13 @@
 Dear {{ candidate_name|title }},
 
 Thank you for your application for the position of {{ job_title }} at SSL
-Wireless. As the next step we would like you to complete a short assessment.
+Wireless. As the next step we would like you to complete a short assessment:
+{{ instrument.label }}.
 
-Open the assessment:
+If more than one assessment was sent to you, each has its own link, its own
+code and its own timer. They can be taken at different times.
+
+Open the {{ instrument.label }} assessment:
 {{ assessment_url }}
 
 Your verification code is: {{ otp }}
@@ -20,9 +24,12 @@ Before you begin, please note:
   assessment closes and whatever you have answered is submitted.
 - Please respond based on your first and most natural reaction. Do not
   overthink the statements. There are no right or wrong answers.
-- Try to answer every statement. A paper with fewer than {{ minimum }} of
+{% if minimum >= question_count %}- Every one of the {{ question_count }} has to be answered. A paper with any
+  left blank cannot be scored and would have to be taken again.
+{% else %}- Try to answer every statement. A paper with fewer than {{ minimum }} of
   {{ question_count }} answered cannot be scored and would have to be taken
   again.
+{% endif %}
 
 Your answers are confidential and are used only for this recruitment decision.
 

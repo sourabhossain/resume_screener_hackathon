@@ -104,6 +104,13 @@ class Job(SoftDeleteModel):
     required_skills = models.JSONField(default=list, blank=True, help_text="Required skills for matching")
     required_experience = models.FloatField(null=True, blank=True, help_text="Required years of experience")
     required_education = models.JSONField(default=list, blank=True, help_text="Required education levels")
+
+    # Instrument keys from apps.sei_assessment.instruments. Empty means this
+    # job sends no assessment at all, which is the default: a job has to ask
+    # for a questionnaire before a shortlisted candidate is sent one.
+    assessments = models.JSONField(
+        default=list, blank=True,
+        help_text="Assessments emailed to a candidate when they are shortlisted")
     
     class Meta:
         db_table = 'job_description'

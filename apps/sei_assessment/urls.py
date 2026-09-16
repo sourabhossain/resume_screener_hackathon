@@ -5,9 +5,11 @@ from . import views
 app_name = 'sei_assessment'
 
 urlpatterns = [
-    # HR side, keyed by the resume's opaque uuid.
-    path('resumes/<uuid:uuid>/assessment/', views.report, name='report'),
-    path('resumes/<uuid:uuid>/assessment/send/', views.send, name='send'),
+    # HR side, keyed by the resume's opaque uuid and which instrument.
+    path('resumes/<uuid:uuid>/assessment/<slug:instrument>/',
+         views.report, name='report'),
+    path('resumes/<uuid:uuid>/assessment/<slug:instrument>/send/',
+         views.send, name='send'),
 
     # Candidate side: no login, reached by the emailed token plus a code.
     path('assessment/<uuid:token>/', views.entry, name='entry'),

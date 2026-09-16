@@ -438,13 +438,28 @@ def _candidate_forms_context(request, resume) -> dict:
     """
     from apps.hr_verification.views import STATUSES_ALLOWING_START
     from apps.reference_checks import services as reference_services
-    from apps.sei_assessment.models import SEIAssessment
+    from apps.sei_assessment import instruments
 
-    # Once shortlisted the assessment has been sent, and it stays resendable
+    # Once shortlisted the assessments have been sent, and they stay resendable
     # through the rest of the pipeline rather than vanishing at the next stage.
     SEI_STATUSES_ALLOWING_SEND = {
         'shortlisted', 'phone_screen', 'interviewing', 'offer_extended',
     }
+
+    # One row per assessment the job asks for, whether or not it has been sent
+    # yet, so the recruiter sees the whole set rather than only what exists.
+    sittings = {a.instrument: a for a in resume.sittings.all()}
+    job_assessments = [
+        {'spec': instruments.get(key), 'sitting': sittings.get(key)}
+        for key in instruments.clean_keys(resume.job.assessments)
+    ]
+    # A sitting for an instrument the job no longer asks for still has to be
+    # readable -- the candidate sat it, and the result is part of their file.
+    job_assessments += [
+        {'spec': instruments.get(key), 'sitting': sitting, 'dropped': True}
+        for key, sitting in sittings.items()
+        if key not in set(resume.job.assessments or ()) and key in instruments.REGISTRY
+    ]
 
     return {
         'resume': resume,
@@ -464,11 +479,10 @@ def _candidate_forms_context(request, resume) -> dict:
         'hr_verification_can_start': (
             resume.recruiter_status in STATUSES_ALLOWING_START
         ),
-        # The assessment goes out on shortlisting, but the card stays visible
-        # from then on so HR can resend or read the result.
-        'sei_assessment': getattr(resume, 'sei_assessment', None),
+        # The assessments go out on shortlisting, but the card stays visible
+        # from then on so HR can resend or read a result.
+        'job_assessments': job_assessments,
         'sei_can_send': resume.recruiter_status in SEI_STATUSES_ALLOWING_SEND,
-        'sei_time_limit': SEIAssessment.TIME_LIMIT_MINUTES,
     }
 
 
@@ -1022,19 +1036,28 @@ def resume_status_update(request, uuid):
                 f'Information form sent to {resume.email}.',
             )
 
-        # The SEI assessment goes out on the same trigger, as a separate email:
-        # the information form is paperwork the candidate can do at leisure,
-        # this one is a timed sitting, and putting both in one message invites
-        # someone to open the test while filling in their passport number.
-        # Sent independently so a failure on one does not swallow the other.
+        # The assessments go out on the same trigger, one email each: the
+        # information form is paperwork the candidate can do at leisure, these
+        # are timed sittings, and putting several in one message invites
+        # someone to open a test while filling in their passport number.
+        # Sent independently so a failure on one does not swallow the others.
+        #
+        # Which ones go is the job's choice. A job with none selected sends
+        # none -- that is the default for every job, so a new job has to ask
+        # for an assessment before a shortlisted candidate is sent one.
+        from apps.sei_assessment import instruments
         from apps.sei_assessment.services import (
             InviteError as SEIInviteError, issue_invite as issue_sei)
-        try:
-            issue_sei(resume, user=request.user)
-        except SEIInviteError as exc:
-            logger.warning('sei.invite_skipped resume=%s reason=%s', resume.pk, exc)
-            if invite_note and invite_note[0] == 'success':
-                invite_note = ('error', f'Assessment not sent: {exc}')
+        for key in instruments.clean_keys(resume.job.assessments):
+            try:
+                issue_sei(resume, user=request.user, instrument=key)
+            except SEIInviteError as exc:
+                logger.warning('sei.invite_skipped resume=%s instrument=%s '
+                               'reason=%s', resume.pk, key, exc)
+                if invite_note and invite_note[0] == 'success':
+                    invite_note = (
+                        'error',
+                        f'{instruments.get(key).label} assessment not sent: {exc}')
 
     if is_htmx:
         # 'card' (candidate detail page) swaps the control in place; 'cell'

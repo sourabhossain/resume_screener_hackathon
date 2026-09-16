@@ -1,6 +1,9 @@
 import os
 
 from django import forms
+
+from apps.sei_assessment import instruments as sei_instruments
+
 from .form_utils import AriaInvalidMixin, clean_label_text, clean_person_text, clean_phone_text
 from .models import Job, Resume
 
@@ -66,6 +69,18 @@ class FileSaveMixin:
 class JobForm(AriaInvalidMixin, forms.ModelForm):
     """Form for creating and editing job descriptions."""
 
+    # Not a model field on the form: Job.assessments is a JSONField holding
+    # instrument keys, and a checkbox group is the honest widget for it.
+    # Leaving every box clear is a real answer -- that job sends no assessment.
+    assessments = forms.MultipleChoiceField(
+        required=False,
+        choices=sei_instruments.choices,
+        widget=forms.CheckboxSelectMultiple,
+        label='Assessments',
+        help_text='Emailed to a candidate when they are shortlisted, one '
+                  'message each. Leave both clear to send none.',
+    )
+
     class Meta:
         model = Job
         fields = [
@@ -120,6 +135,22 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         self.fields['location'].required = False
         self.fields['employment_type'].choices = [('', 'Select employment type…')] + list(Job.EMPLOYMENT_TYPE_CHOICES)
         self.fields['location_type'].choices = [('', 'Select location type…')] + list(Job.LOCATION_TYPE_CHOICES)
+        if self.instance and self.instance.pk:
+            self.fields['assessments'].initial = sei_instruments.clean_keys(
+                self.instance.assessments)
+
+    @property
+    def assessment_options(self):
+        """(checkbox, instrument) pairs, so the template can show each one's
+        blurb without a dictionary lookup filter."""
+        specs = {i.key: i for i in sei_instruments.all_instruments()}
+        return [(choice, specs[choice.data['value']])
+                for choice in self['assessments']]
+
+    def clean_assessments(self):
+        """Store them in the registry's order, so two jobs with the same set
+        email their candidates in the same sequence."""
+        return sei_instruments.clean_keys(self.cleaned_data.get('assessments'))
 
     def clean(self):
         data = super().clean()
@@ -128,6 +159,13 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         if posted and closing and closing < posted:
             self.add_error('closing_date', 'Application deadline cannot be before the posted date.')
         return data
+
+    def save(self, commit=True):
+        job = super().save(commit=False)
+        job.assessments = self.cleaned_data.get('assessments', [])
+        if commit:
+            job.save()
+        return job
 
     def clean_title(self):
         return clean_label_text(self.cleaned_data.get('title'), required=True)

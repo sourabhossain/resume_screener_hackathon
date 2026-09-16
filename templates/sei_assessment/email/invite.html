@@ -3,12 +3,17 @@
 
   <p>Thank you for your application for the position of
     <strong>{{ job_title }}</strong> at SSL Wireless. As the next step we would
-    like you to complete a short assessment.</p>
+    like you to complete a short assessment:
+    <strong>{{ instrument.label }}</strong>.</p>
+
+  <p style="color:#52525b;font-size:14px">If more than one assessment was sent to
+    you, each has its own link, its own code and its own timer. They can be taken
+    at different times.</p>
 
   <p style="margin:28px 0">
     <a href="{{ assessment_url }}"
        style="background:#4f46e5;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;display:inline-block">
-      Open the assessment
+      Open the {{ instrument.short_label }} assessment
     </a>
   </p>
 
@@ -31,9 +36,15 @@
     <p style="margin:0 0 6px">Please respond based on your first and most natural
       reaction. Do not overthink the statements. There are no right or wrong
       answers.</p>
+    {% if minimum >= question_count %}
+    <p style="margin:0">Every one of the {{ question_count }} has to be answered.
+      A paper with any left blank cannot be scored and would have to be taken
+      again.</p>
+    {% else %}
     <p style="margin:0">Try to answer every statement. A paper with fewer than
       {{ minimum }} of {{ question_count }} answered cannot be scored and would
       have to be taken again.</p>
+    {% endif %}
   </div>
 
   <p style="color:#52525b;font-size:14px;margin-top:24px">

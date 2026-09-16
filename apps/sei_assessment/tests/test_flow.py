@@ -13,12 +13,21 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Resume
-from apps.sei_assessment import scoring, services
+from apps.sei_assessment import instruments, scoring, services
 from apps.sei_assessment.models import SEIAssessment
+
+SEI_MINUTES = instruments.get(instruments.SEI).time_limit_minutes
+# The subject names the instrument, so a candidate sent two can tell the
+# two emails apart in an inbox.
+SEI_SUBJECT = instruments.get(instruments.SEI).label + ' assessment'
 
 
 @pytest.fixture
 def candidate(db, sample_job):
+    # Shortlisting only sends what the job asks for, so a job that is meant to
+    # send the SEI has to say so.
+    sample_job.assessments = [instruments.SEI]
+    sample_job.save(update_fields=['assessments'])
     return Resume.objects.create(
         job=sample_job, candidate_name='Ayesha Rahman',
         email='ayesha@example.com', recruiter_status='new')
@@ -93,7 +102,7 @@ def test_the_clock_starts_when_the_questions_are_opened_not_when_sent(client, si
 
     sitting.refresh_from_db()
     assert sitting.started_at is not None
-    expected = sitting.started_at + timedelta(minutes=SEIAssessment.TIME_LIMIT_MINUTES)
+    expected = sitting.started_at + timedelta(minutes=SEI_MINUTES)
     assert abs((sitting.deadline_at - expected).total_seconds()) < 1
 
 
@@ -290,7 +299,7 @@ def test_shortlisting_sends_the_assessment(authenticated_client, candidate):
 
     assessment = SEIAssessment.objects.get(resume=candidate)
     assert assessment.invite_count == 1
-    sent = [m for m in mail.outbox if 'Assessment for your application' in m.subject]
+    sent = [m for m in mail.outbox if SEI_SUBJECT in m.subject]
     assert len(sent) == 1
     assert str(assessment.token) in sent[0].body
 
@@ -304,10 +313,10 @@ def test_the_invitation_says_the_clock_has_not_started(authenticated_client, can
         {'recruiter_status': 'shortlisted'})
 
     body = [m for m in mail.outbox
-            if 'Assessment for your application' in m.subject][0].body
+            if SEI_SUBJECT in m.subject][0].body
 
     assert 'timer starts when you open the questions' in body
-    assert str(SEIAssessment.TIME_LIMIT_MINUTES) in body
+    assert str(SEI_MINUTES) in body
 
 
 @pytest.mark.django_db
@@ -364,7 +373,8 @@ def test_too_few_answers_yields_no_score_and_asks_for_a_retake(
     assert sitting.result()['total_percent'] is None
 
     body = hr_client.get(
-        reverse('sei_assessment:report', kwargs={'uuid': candidate.uuid})
+        reverse('sei_assessment:report',
+                kwargs={'uuid': candidate.uuid, 'instrument': instruments.SEI})
     ).content.decode()
     assert 'Insufficient Responses' in body
     assert 'take it again' in body
@@ -417,7 +427,7 @@ def test_a_scoreable_paper_is_still_protected_from_resending(candidate, sitting)
 def test_the_sitting_is_fifteen_minutes(client, sitting):
     """Pinned as a literal, not read off the setting: the point is to catch the
     clock changing length, which a derived assertion would happily allow."""
-    assert SEIAssessment.TIME_LIMIT_MINUTES == 15
+    assert SEI_MINUTES == 15
 
     _open(client, sitting).get(_test(sitting))
 
@@ -534,10 +544,10 @@ def test_the_invitation_tells_the_candidate_what_makes_a_paper_count(
         {'recruiter_status': 'shortlisted'})
 
     raw = [m for m in mail.outbox
-           if 'Assessment for your application' in m.subject][0].body
+           if SEI_SUBJECT in m.subject][0].body
     body = ' '.join(raw.split())   # the template wraps across lines
 
     assert 'first and most natural reaction' in body
     assert 'Do not overthink the statements' in body
     assert f'fewer than {scoring.MINIMUM_VALID_ANSWERS} of 48' in body
-    assert f'{SEIAssessment.TIME_LIMIT_MINUTES} minutes' in body
+    assert f'{SEI_MINUTES} minutes' in body

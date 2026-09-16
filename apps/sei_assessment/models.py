@@ -1,4 +1,9 @@
-"""The candidate-facing SEI assessment: one timed sitting per candidate."""
+"""The candidate-facing assessments: one timed sitting per instrument.
+
+One model carries every instrument. What differs between them -- the items,
+the rating scale, the clock, the scoring -- lives in `instruments.py` and the
+scoring modules it points at; what is shared is everything below.
+"""
 import secrets
 import uuid
 from datetime import timedelta
@@ -7,31 +12,44 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
-from . import scoring
+from . import instruments
+
+# Both instruments word an unscoreable paper the same way, and the recruiter
+# sees it as a status rather than as a score.
+INVALID_LABEL = 'Invalid - Insufficient Responses'
 
 
 class SEIAssessment(models.Model):
-    """A single sitting of the Social & Emotional Intelligence instrument.
+    """A single sitting of one instrument by one candidate.
 
     The clock starts when the candidate first opens the questions, not when the
     invitation is sent -- an email that sat unread for an hour must not cost
-    them their fifteen minutes.
+    them their time.
 
     The deadline is enforced here rather than in the browser. The page runs a
     countdown and submits itself, but a countdown is a courtesy: it can be
     paused with the devtools, and the tab can be closed. What actually decides
     the sitting is `deadline_at`, written once when the clock starts.
+
+    The class name and table still say SEI because that was the only instrument
+    when they were written -- see the naming note in instruments.py.
     """
 
     TOKEN_VALIDITY_DAYS = 7
     OTP_VALIDITY_MINUTES = 15
     OTP_MAX_ATTEMPTS = 5
     OTP_DIGITS = 6
-    TIME_LIMIT_MINUTES = scoring.TIME_LIMIT_MINUTES
     OTP_FIELDS = ('otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at')
 
-    resume = models.OneToOneField(
-        'core.Resume', on_delete=models.CASCADE, related_name='sei_assessment')
+    # `sittings`, not `assessments`: Job.assessments already means "which
+    # questionnaires this job asks for". Two different things under one name on
+    # neighbouring models is a trap for whoever reads this next.
+    resume = models.ForeignKey(
+        'core.Resume', on_delete=models.CASCADE, related_name='sittings')
+    # Which questionnaire this sitting is. Every row written before there was
+    # more than one is SEI, which is what the migration backfills.
+    instrument = models.CharField(
+        max_length=32, default=instruments.SEI, db_index=True)
 
     # The candidate is not logged in, so the token identifies them. Paired with
     # an emailed code, so a forwarded link alone cannot sit the test for them.
@@ -68,9 +86,32 @@ class SEIAssessment(models.Model):
     class Meta:
         db_table = 'sei_assessment'
         ordering = ['-created_at']
+        constraints = [
+            # One sitting per instrument per candidate. Resending reuses the
+            # row rather than opening a second one, so two live links for the
+            # same questionnaire cannot exist.
+            models.UniqueConstraint(
+                fields=['resume', 'instrument'], name='one_sitting_per_instrument'),
+        ]
 
     def __str__(self):
-        return f'SEI assessment for {self.resume.candidate_name}'
+        return f'{self.instrument_label} for {self.resume.candidate_name}'
+
+    # ── which instrument ─────────────────────────────────────────────────
+    @property
+    def spec(self):
+        """The instrument definition this sitting belongs to."""
+        return instruments.get(self.instrument)
+
+    @property
+    def instrument_label(self) -> str:
+        return self.spec.label
+
+    @property
+    def TIME_LIMIT_MINUTES(self) -> int:
+        """Per instrument, not per app. Kept under the old name because the
+        emails and pages already read it that way."""
+        return self.spec.time_limit_minutes
 
     def save(self, *args, **kwargs):
         if not self.token_expires_at:
@@ -170,15 +211,15 @@ class SEIAssessment(models.Model):
         looser count here would let a paper the scorer refuses to score be
         reported as a valid one.
         """
-        return scoring.answered_items(self.answers or {})
+        return self.spec.answered_items(self.answers or {})
 
     def result(self) -> dict:
-        return scoring.score(self.answers or {})
+        return self.spec.score(self.answers or {})
 
     @property
     def is_valid_result(self) -> bool:
         """Whether enough of the instrument was answered to score it at all."""
-        return (self.answered_count >= scoring.MINIMUM_VALID_ANSWERS
+        return (self.answered_count >= self.spec.minimum_answers
                 if self.is_submitted else False)
 
     @property
@@ -190,7 +231,7 @@ class SEIAssessment(models.Model):
     def status_label(self) -> str:
         if self.is_submitted:
             if not self.is_valid_result:
-                return scoring.INVALID_LABEL
+                return INVALID_LABEL
             if self.auto_submitted:
                 return 'Time expired'
             return 'Completed'

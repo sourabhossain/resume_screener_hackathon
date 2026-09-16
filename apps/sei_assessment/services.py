@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.core.links import absolute_url
 
-from . import scoring
+from . import instruments
 
 from .models import SEIAssessment
 
@@ -32,6 +32,7 @@ def send_invite(assessment, *, otp: str) -> None:
             f'{assessment.resume.candidate_name} has no email address on file, '
             'so the assessment could not be sent.')
 
+    spec = assessment.spec
     context = {
         'assessment': assessment,
         'candidate_name': assessment.resume.candidate_name,
@@ -40,12 +41,14 @@ def send_invite(assessment, *, otp: str) -> None:
         'otp': otp,
         'otp_minutes': SEIAssessment.OTP_VALIDITY_MINUTES,
         'link_days': SEIAssessment.TOKEN_VALIDITY_DAYS,
-        'minutes': SEIAssessment.TIME_LIMIT_MINUTES,
-        'question_count': len(scoring.ITEMS),
-        'minimum': scoring.MINIMUM_VALID_ANSWERS,
+        'minutes': spec.time_limit_minutes,
+        'question_count': spec.total_items,
+        'minimum': spec.minimum_answers,
+        'instrument': spec,
     }
     message = EmailMultiAlternatives(
-        subject=f'Assessment for your application — {assessment.resume.job.title}',
+        subject=f'{spec.label} assessment for your application '
+                f'— {assessment.resume.job.title}',
         body=render_to_string('sei_assessment/email/invite.txt', context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
@@ -61,11 +64,17 @@ def send_invite(assessment, *, otp: str) -> None:
             'sei.not_delivered assessment=%s backend=%s — written to this '
             "process's output, not sent to %s",
             assessment.pk, settings.EMAIL_BACKEND, recipient)
-    logger.info('sei.sent assessment=%s attempt=%s',
-                assessment.pk, assessment.invite_count + 1)
+    logger.info('sei.sent assessment=%s instrument=%s attempt=%s',
+                assessment.pk, assessment.instrument, assessment.invite_count + 1)
 
 
-def issue_invite(resume, *, user=None, resend=False):
+def sitting_for(resume, instrument_key):
+    """The candidate's sitting of one instrument, or None."""
+    return SEIAssessment.objects.filter(
+        resume=resume, instrument=instrument_key).first()
+
+
+def issue_invite(resume, *, user=None, resend=False, instrument=instruments.SEI):
     """Create the sitting if needed and queue its invitation.
 
     Whether it *may* be sent is decided synchronously so the recruiter learns
@@ -73,15 +82,18 @@ def issue_invite(resume, *, user=None, resend=False):
     """
     from .tasks import send_sei_invite
 
+    spec = instruments.get(instrument)
+
     if not (resume.email or '').strip():
         raise InviteError(
-            f'{resume.candidate_name} has no email address, so the assessment '
-            'could not be sent. Add one and try again.')
+            f'{resume.candidate_name} has no email address, so the '
+            f'{spec.label} assessment could not be sent. Add one and try again.')
 
-    assessment = getattr(resume, 'sei_assessment', None)
+    assessment = sitting_for(resume, instrument)
     if assessment and assessment.is_submitted and assessment.is_valid_result:
         raise InviteError(
-            f'{resume.candidate_name} has already completed the assessment.')
+            f'{resume.candidate_name} has already completed the '
+            f'{spec.label} assessment.')
     if assessment and assessment.needs_retaking:
         # Too few answers to score. Sending again is the point, so the sitting
         # is reset rather than refused -- but only on an explicit resend, never
@@ -107,7 +119,7 @@ def issue_invite(resume, *, user=None, resend=False):
         return assessment
 
     if assessment is None:
-        assessment = SEIAssessment(resume=resume)
+        assessment = SEIAssessment(resume=resume, instrument=instrument)
     elif assessment.is_expired:
         assessment.renew()
     assessment.invited_by = user
@@ -117,7 +129,8 @@ def issue_invite(resume, *, user=None, resend=False):
         assessment.save()
 
     send_sei_invite.delay(assessment.pk)
-    logger.info('sei.queued assessment=%s resume=%s', assessment.pk, resume.pk)
+    logger.info('sei.queued assessment=%s instrument=%s resume=%s',
+                assessment.pk, instrument, resume.pk)
     return assessment
 
 

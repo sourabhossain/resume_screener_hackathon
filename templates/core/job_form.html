@@ -97,6 +97,33 @@
                     {% include 'core/partials/choice_field.html' with field=form.status preset='job_status' %}
                 </div>
 
+                <div>
+                    <span class="block mb-1 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                        Assessments <span class="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span>
+                    </span>
+                    <p class="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+                        {{ form.assessments.help_text }}
+                    </p>
+                    <div class="space-y-2">
+                        {% for choice, spec in form.assessment_options %}
+                        <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-4 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                            {{ choice.tag }}
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-zinc-800 dark:text-zinc-100">{{ spec.label }}</span>
+                                <span class="mt-0.5 block text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                                    {{ spec.blurb }} Timed at {{ spec.time_limit_minutes }} minutes.
+                                </span>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if form.assessments.errors %}
+                    <p class="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400">
+                        {{ form.assessments.errors.0 }}
+                    </p>
+                    {% endif %}
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                         <label for="id_employment_type" class="block mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100">

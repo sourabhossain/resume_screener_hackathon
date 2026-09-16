@@ -11,7 +11,7 @@ from functools import wraps
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -19,7 +19,7 @@ from django_ratelimit.decorators import ratelimit
 
 from apps.core.models import Resume
 
-from . import scoring, services
+from . import instruments, services
 from .models import SEIAssessment
 
 logger = logging.getLogger(__name__)
@@ -146,19 +146,21 @@ def test(request, token):
     if started_now:
         logger.info('sei.started assessment=%s', assessment.pk)
 
+    spec = assessment.spec
     answers = assessment.answers or {}
     return render(request, 'sei_assessment/test.html', {
         'assessment': assessment,
+        'instrument': spec,
         'items': [
             {'no': no, 'text': text, 'value': answers.get(str(no))}
-            for no, text in sorted(scoring.ITEMS.items())
+            for no, text in spec.sorted_items
         ],
-        'ratings': scoring.RATING_LABELS,
+        'ratings': spec.rating_labels,
         'seconds_left': assessment.seconds_left,
-        'minutes': assessment.TIME_LIMIT_MINUTES,
+        'minutes': spec.time_limit_minutes,
         'answered': assessment.answered_count,
-        'total_items': len(scoring.ITEMS),
-        'minimum_answers': scoring.MINIMUM_VALID_ANSWERS,
+        'total_items': spec.total_items,
+        'minimum_answers': spec.minimum_answers,
     })
 
 
@@ -190,13 +192,17 @@ def save(request, token):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'error': 'bad payload'}, status=400)
 
+    spec = assessment.spec
     cleaned = {}
     for key, value in (incoming.get('answers') or {}).items():
         try:
             item, rating = int(key), int(value)
         except (TypeError, ValueError):
             continue
-        if item in scoring.ITEMS and scoring.MIN_RATING <= rating <= scoring.MAX_RATING:
+        # Validated against this sitting's own instrument. SEI runs 0-3 over 48
+        # items and PE 0-4 over 15, so a shared rule would either drop a real
+        # PE answer of 4 or accept an SEI item number that does not exist.
+        if item in spec.items and spec.min_rating <= rating <= spec.max_rating:
             cleaned[str(item)] = rating
 
     finish = bool(incoming.get('finish'))
@@ -247,31 +253,50 @@ def _hr_admin_required(view_fn):
     return wrapper
 
 
+def _instrument_or_404(key):
+    try:
+        return instruments.get(key)
+    except KeyError:
+        raise Http404(f'No assessment named {key!r}')
+
+
 @_hr_admin_required
-def report(request, uuid):
+def report(request, uuid, instrument):
+    spec = _instrument_or_404(instrument)
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
-    assessment = getattr(resume, 'sei_assessment', None)
+    assessment = services.sitting_for(resume, instrument)
     if assessment is None:
-        messages.info(request, 'No assessment has been sent to this candidate.')
+        messages.info(
+            request,
+            f'The {spec.label} assessment has not been sent to this candidate.')
         return redirect('core:resume_detail', uuid=uuid)
 
     services.finalise_if_time_is_up(assessment)
-    return render(request, 'sei_assessment/report.html', {
+    context = {
         'resume': resume,
         'assessment': assessment,
+        'instrument': spec,
         'result': assessment.result(),
-        'items': scoring.ITEMS,
-    })
+    }
+    if instrument == instruments.PE:
+        from . import pe_scoring
+        # The sheet prints all eight so a reader can see where this one sits
+        # among them, rather than being handed a bare label.
+        context['categories'] = list(pe_scoring.CATEGORIES.items())
+    return render(request, spec.report_template, context)
 
 
 @_hr_admin_required
 @require_POST
-def send(request, uuid):
+def send(request, uuid, instrument):
+    spec = _instrument_or_404(instrument)
     resume = get_object_or_404(Resume, uuid=uuid)
     try:
-        services.issue_invite(resume, user=request.user, resend=True)
+        services.issue_invite(
+            resume, user=request.user, resend=True, instrument=instrument)
     except services.InviteError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, f'Assessment sent to {resume.email}.')
+        messages.success(
+            request, f'{spec.label} assessment sent to {resume.email}.')
     return redirect('core:resume_detail', uuid=uuid)

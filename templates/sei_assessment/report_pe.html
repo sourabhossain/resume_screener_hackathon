@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ instrument.short_label }} · {{ resume.candidate_name|title }}{% endblock %}
+
+{% block content %}
+<style>
+    .pe {
+        --ink: #16181d;
+        --ink-2: #4d525e;
+        --ink-3: #878d9b;
+        --rule: #e4e6ea;
+        --rule-firm: #cbd0d8;
+        --paper: #fafafa;
+        --high: #2f4d8a;
+        --low: #8f5310;
+        --zone-lo: #e8ebef;
+        --zone-hi: #d2d7df;
+
+        max-width: 60rem; margin: 0 auto; padding-bottom: 5rem; color: var(--ink);
+    }
+    html.dark .pe {
+        --ink: #f2f3f5;
+        --ink-2: #a8aebc;
+        --ink-3: #6f7683;
+        --rule: #2b2e35;
+        --rule-firm: #3c414a;
+        --paper: #09090b;
+        --high: #86abea;
+        --low: #d69a4a;
+        --zone-lo: #1f2025;
+        --zone-hi: #2e3037;
+    }
+
+    .pe a.pe-back {
+        display: inline-flex; align-items: center; gap: .4rem; margin-bottom: 2.25rem;
+        font-size: .8125rem; font-weight: 500; color: var(--ink-2); text-decoration: none;
+    }
+    .pe a.pe-back:hover { color: var(--high); }
+    .pe a.pe-back svg { width: .875rem; height: .875rem; }
+
+    .pe-name {
+        margin: 0; font-size: clamp(1.75rem, 4.5vw, 2.375rem); font-weight: 700;
+        letter-spacing: -.025em; line-height: 1.1;
+    }
+    .pe-sub { margin: .5rem 0 0; font-size: .9375rem; color: var(--ink-2); }
+    .pe-sub em { font-style: normal; color: var(--ink-3); }
+    .pe-rule { border: 0; border-top: 1px solid var(--rule); margin: 2.25rem 0; }
+
+    .pe-lede { display: grid; gap: 1.5rem 2.5rem; align-items: start; }
+    @media (min-width: 46rem) { .pe-lede { grid-template-columns: auto 1fr; } }
+    .pe-cat { line-height: 1; }
+    .pe-cat b {
+        display: block; font-size: clamp(2.25rem, 6vw, 3rem); font-weight: 700;
+        letter-spacing: -.03em;
+    }
+    .pe-cat i {
+        display: block; margin-top: .6rem; font-style: normal; font-size: .8125rem;
+        font-variant-numeric: tabular-nums; color: var(--ink-3);
+    }
+    .pe-say { margin: 0; font-size: clamp(1.0625rem, 2.4vw, 1.1875rem); line-height: 1.55; max-width: 34em; }
+
+    .pe-h { margin: 0 0 .35rem; font-size: 1.0625rem; font-weight: 600; letter-spacing: -.01em; }
+    .pe-h + p { margin: 0; max-width: 46em; font-size: .875rem; line-height: 1.55; color: var(--ink-2); }
+
+    .pe-rows { margin-top: 1.75rem; display: grid; gap: 1.5rem; }
+    .pe-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+    .pe-row-name { font-size: .9375rem; font-weight: 500; }
+    .pe-row-val { font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pe-row-val u { margin-left: .5rem; text-decoration: none; font-weight: 600; }
+    .pe-row.is-high .pe-row-val u { color: var(--high); }
+    .pe-row.is-low .pe-row-val u { color: var(--low); }
+
+    .pe-track { position: relative; height: 1.375rem; margin-top: .55rem; border-radius: 2px; }
+    .pe-zone { position: absolute; top: 0; bottom: 0; }
+    .pe-zone.lo { left: 0; background: var(--zone-lo); border-radius: 2px 0 0 2px; }
+    .pe-zone.hi { right: 0; background: var(--zone-hi); border-radius: 0 2px 2px 0; }
+    .pe-cut { position: absolute; top: -.2rem; bottom: -.2rem; width: 2px; margin-left: -1px; background: var(--rule-firm); }
+    .pe-bar {
+        position: absolute; left: 0; top: 50%; height: .625rem; transform: translateY(-50%);
+        border-radius: 0 3px 3px 0; background: var(--high); box-shadow: 0 0 0 1.5px var(--paper);
+    }
+    .pe-row.is-low .pe-bar { background: var(--low); }
+    .pe-scale {
+        position: relative; height: 1rem; margin-top: .3rem;
+        font-size: .6875rem; font-variant-numeric: tabular-nums; color: var(--ink-3);
+    }
+    .pe-scale span { position: absolute; top: 0; transform: translateX(-50%); }
+
+    .pe-key { display: flex; flex-wrap: wrap; gap: .35rem 1.15rem; margin-top: 1.75rem; }
+    .pe-key span { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; color: var(--ink-2); }
+    .pe-key i { width: 1.5rem; height: .625rem; border-radius: 2px; }
+    .pe-key i.lo { background: var(--zone-lo); }
+    .pe-key i.hi { background: var(--zone-hi); }
+
+    .pe-grid { display: grid; gap: .5rem; margin-top: 1.5rem; }
+    @media (min-width: 40rem) { .pe-grid { grid-template-columns: repeat(2, 1fr); } }
+    .pe-opt {
+        display: flex; align-items: baseline; gap: .6rem; padding: .55rem .75rem;
+        border: 1px solid var(--rule); border-radius: .5rem;
+        font-size: .875rem; color: var(--ink-2);
+    }
+    .pe-opt.is-this { border-color: var(--high); color: var(--ink); font-weight: 600; }
+    .pe-opt b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink-3); letter-spacing: .06em; }
+    .pe-opt.is-this b { color: var(--high); }
+
+    .pe-foot { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+    .pe-foot p { margin: 0; max-width: 44em; font-size: .8125rem; line-height: 1.6; color: var(--ink-3); }
+
+    .pe-blocked { padding: 2.5rem 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .pe-blocked h2 { margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--low); }
+    .pe-blocked p { margin: .65rem 0 0; max-width: 42em; font-size: .9375rem; line-height: 1.6; color: var(--ink-2); }
+
+    @media print {
+        .pe a.pe-back { display: none; }
+        .pe-zone, .pe-bar, .pe-cut { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .pe-bar { box-shadow: none; }
+    }
+</style>
+
+<div class="pe">
+    <a href="{% url 'core:resume_detail' uuid=resume.uuid %}" class="pe-back">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+        {{ resume.candidate_name|title|truncatechars:28 }}
+    </a>
+
+    <h1 class="pe-name">{{ resume.candidate_name|title }}</h1>
+    <p class="pe-sub">
+        {{ instrument.label }}, taken for {{ resume.job.title }}.
+        <em>
+            {{ assessment.status_label }}{% if assessment.is_submitted and assessment.submitted_at %}
+            {{ assessment.submitted_at|date:"j F Y" }} at {{ assessment.submitted_at|date:"H:i" }}{% endif %}
+        </em>
+    </p>
+
+    {% if not assessment.is_submitted %}
+    <hr class="pe-rule">
+    <div class="pe-blocked">
+        <h2>No result yet</h2>
+        <p>
+            {% if assessment.has_started %}
+            {{ resume.candidate_name|title }} is part-way through. The result appears
+            once the sitting closes, either on submission or when the clock runs out.
+            {% else %}
+            The assessment has been sent but not opened. The clock starts when the
+            questions are first opened, not when the invitation went out.
+            {% endif %}
+        </p>
+        {% if assessment.last_error %}<p><b>The last send failed:</b> {{ assessment.last_error }}</p>{% endif %}
+    </div>
+
+    {% elif result.validity == 'invalid' %}
+    <hr class="pe-rule">
+    <div class="pe-blocked">
+        <h2>{{ result.validity_label }}</h2>
+        <p>
+            {{ result.answered }} of {{ result.total_items }} statements were answered.
+            This instrument needs all {{ result.total_items }}: with five items to a
+            column, one blank can move a total by up to four, which is enough to cross
+            the High/Low line on its own. Ask {{ resume.candidate_name|title }} to take
+            it again.
+        </p>
+        <p>Resend on the candidate page issues a fresh link and a fresh clock.</p>
+    </div>
+
+    {% else %}
+    <hr class="pe-rule">
+
+    <div class="pe-lede">
+        <div class="pe-cat">
+            <b>{{ result.category }}</b>
+            <i>{% for m in result.marks %}{{ m }}{% endfor %} &middot;
+               {% for d in result.dimensions %}{{ d.raw }}{% if not forloop.last %} / {% endif %}{% endfor %}
+               of {{ result.dimension_max }} each</i>
+        </div>
+        <div>
+            <p class="pe-say">
+                The three column totals read
+                {% for d in result.dimensions %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{% if d.is_high %}High{% else %}Low{% endif %} on {{ d.label|lower }}{% endfor %},
+                which the sheet names <strong>{{ result.category }}</strong>.
+            </p>
+        </div>
+    </div>
+
+    <hr class="pe-rule">
+
+    <h2 class="pe-h">Each column against the High/Low line</h2>
+    <p>
+        Every column is five statements scored 0 to 4, so each runs 0 to
+        {{ result.dimension_max }}. A total above {{ result.dimensions.0.high_above }}
+        reads High; {{ result.dimensions.0.high_above }} itself or below reads Low.
+    </p>
+
+    <div class="pe-rows">
+        {% for dim in result.dimensions %}
+        <div class="pe-row {% if dim.is_high %}is-high{% else %}is-low{% endif %}">
+            <div class="pe-row-top">
+                <span class="pe-row-name">{{ dim.label }}</span>
+                <span class="pe-row-val">{{ dim.raw }} of {{ dim.max }}<u>{% if dim.is_high %}High{% else %}Low{% endif %}</u></span>
+            </div>
+            <div class="pe-track" aria-hidden="true">
+                <div class="pe-zone lo" style="width: {{ dim.cut_percent }}%;"></div>
+                <div class="pe-zone hi" style="left: {{ dim.cut_percent }}%;"></div>
+                <div class="pe-cut" style="left: {{ dim.cut_percent }}%;"></div>
+                <div class="pe-bar" style="width: {{ dim.percent_of_max }}%;"></div>
+            </div>
+            <div class="pe-scale" aria-hidden="true">
+                <span style="left: 0%;">0</span>
+                <span style="left: {{ dim.cut_percent }}%;">{{ dim.high_above }}</span>
+                <span style="left: 100%;">{{ dim.max }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="pe-key">
+        <span><i class="lo"></i>Low, at or below {{ result.dimensions.0.high_above }}</span>
+        <span><i class="hi"></i>High, above {{ result.dimensions.0.high_above }}</span>
+    </div>
+
+    <hr class="pe-rule">
+
+    <h2 class="pe-h">The sheet's eight categories</h2>
+    <p>
+        Each is one combination of the three letters, in column order:
+        self-disclosure, openness to feedback, perceptiveness.
+    </p>
+    <div class="pe-grid">
+        {% for combo, name in categories %}
+        <div class="pe-opt{% if combo == result.marks %} is-this{% endif %}">
+            <b>{% for m in combo %}{{ m }}{% endfor %}</b>
+            <span>{{ name }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="pe-foot">
+        <p>
+            A self-report questionnaire, not a clinical instrument. It records how
+            {{ resume.candidate_name|title }} described themselves in
+            {{ instrument.time_limit_minutes }} minutes on one day. The sheet names a
+            category; it does not rank one above another, and it says nothing about
+            hiring. Read it alongside the interview and the rest of the file, never on
+            its own.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
