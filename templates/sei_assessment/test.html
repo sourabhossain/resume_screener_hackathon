@@ -5,6 +5,10 @@
 {% block recruiter_logout %}{% endblock %}
 {% block mobile_recruiter_nav %}{% endblock %}
 {% block nav_action %}{% endblock %}
+{# The submit bar is fixed to the bottom, so the site footer would sit under
+   it unreachable -- and its links would walk a candidate out of a sitting
+   whose clock is still running. #}
+{% block site_footer %}{% endblock %}
 
 {% block content %}
 <style>
