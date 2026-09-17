@@ -36,10 +36,20 @@ QUESTIONS_PER_PAGE = 5
 
 # One hue at rising intensity, so the scale reads as "more of this", not as
 # good versus bad. `ink` is the text colour that clears the fill it sits on.
+#
+# Dark needs its own steps rather than the same hexes: on a dark ground the
+# lightest step is the loudest, which would stand the scale on its head -- the
+# first option would shout and the last would disappear. These rise in
+# lightness instead, and every step stays visible against the dark card.
 _RAMP_5 = (('#E6F1FB', '#042C53'), ('#B5D4F4', '#042C53'), ('#85B7EB', '#042C53'),
            ('#378ADD', '#ffffff'), ('#185FA5', '#ffffff'))
 _RAMP_4 = (('#E6F1FB', '#042C53'), ('#A9CCF1', '#042C53'),
            ('#5FA0E4', '#ffffff'), ('#185FA5', '#ffffff'))
+
+_DARK_5 = (('#2b3a4d', '#dbe7f5'), ('#31517a', '#e3edf9'), ('#37699f', '#eef4fc'),
+           ('#3e86cc', '#ffffff'), ('#5aa6f0', '#0a2238'))
+_DARK_4 = (('#2b3a4d', '#dbe7f5'), ('#33587f', '#e6f0fa'),
+           ('#3b7bbd', '#ffffff'), ('#5aa6f0', '#0a2238'))
 
 
 @dataclass(frozen=True)
@@ -54,6 +64,7 @@ class Instrument:
     rating_labels: tuple
     rating_short: tuple
     ramp: tuple
+    dark_ramp: tuple
     min_rating: int
     max_rating: int
     time_limit_minutes: int
@@ -72,11 +83,13 @@ class Instrument:
 
     @property
     def scale(self):
-        """One row of the response scale: value, what the candidate reads, the
-        fill for that step and the text colour that clears it."""
+        """One row of the response scale: value, what the candidate reads, and
+        the fill plus the text colour that clears it, in both themes."""
         return [
-            {'value': value, 'label': label, 'fill': fill, 'ink': ink}
-            for (value, label), (fill, ink) in zip(self.rating_short, self.ramp)
+            {'value': value, 'label': label,
+             'fill': fill, 'ink': ink, 'dark_fill': dfill, 'dark_ink': dink}
+            for (value, label), (fill, ink), (dfill, dink)
+            in zip(self.rating_short, self.ramp, self.dark_ramp)
         ]
 
     def paginate(self, answers: dict):
@@ -102,6 +115,7 @@ REGISTRY = {
         rating_labels=scoring.RATING_LABELS,
         rating_short=scoring.RATING_SHORT,
         ramp=_RAMP_4,
+        dark_ramp=_DARK_4,
         min_rating=scoring.MIN_RATING,
         max_rating=scoring.MAX_RATING,
         time_limit_minutes=scoring.TIME_LIMIT_MINUTES,
@@ -120,6 +134,7 @@ REGISTRY = {
         rating_labels=pe_scoring.RATING_LABELS,
         rating_short=pe_scoring.RATING_SHORT,
         ramp=_RAMP_5,
+        dark_ramp=_DARK_5,
         min_rating=pe_scoring.MIN_RATING,
         max_rating=pe_scoring.MAX_RATING,
         time_limit_minutes=8,

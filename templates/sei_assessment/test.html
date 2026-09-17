@@ -5,9 +5,6 @@
 {% block recruiter_logout %}{% endblock %}
 {% block mobile_recruiter_nav %}{% endblock %}
 {% block nav_action %}{% endblock %}
-{# The action bar is fixed to the bottom, so the site footer would sit under it
-   unreachable -- and its links would walk a candidate out of a sitting whose
-   clock is still running. #}
 {% block site_footer %}{% endblock %}
 
 {% block content %}
@@ -23,6 +20,7 @@
         --accent-deep: #042C53;
         --wash: #E6F1FB;
         --done: #1D9E75;
+        --btn-ink: #ffffff;
         max-width: 52rem; margin: 0 auto; padding-bottom: 7rem;
     }
     html.dark .q {
@@ -36,6 +34,7 @@
         --accent-deep: #cfe2f7;
         --wash: #16283c;
         --done: #35b98d;
+        --btn-ink: #0a2238;
     }
 
     .q-progress { position: sticky; top: 0; z-index: 20; height: 3px; background: var(--line); }
@@ -86,7 +85,8 @@
     .q-tick svg { width: 1.05rem; height: 1.05rem; display: block; }
 
     .q-scale { display: grid; gap: .375rem; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-    .q-opt { display: block; cursor: pointer; }
+    .q-opt { display: block; cursor: pointer; --fill: var(--fl); --fill-ink: var(--fli); }
+    html.dark .q-opt { --fill: var(--fd); --fill-ink: var(--fdi); }
     .q-opt > span {
         display: flex; flex-direction: column; align-items: center; gap: .3rem;
         height: 100%; padding: .5rem .25rem; border-radius: .4rem;
@@ -94,13 +94,14 @@
         font-size: .6875rem; line-height: 1.2; text-align: center;
         color: var(--ink-2); transition: background-color .15s, border-color .15s, color .15s;
     }
-    .q-opt > span i { width: .8rem; height: .8rem; border-radius: 50%; display: block; flex: none; }
+    .q-opt > span i { width: .8rem; height: .8rem; border-radius: 50%; display: block; flex: none; background: var(--fill); }
     .q-opt:hover > span { border-color: var(--line-firm); }
     .q-opt > input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
     .q-opt > input:checked + span {
         border-color: var(--accent-deep); border-width: 1.5px;
         background: var(--fill); color: var(--fill-ink); font-weight: 600;
     }
+    .q-opt > input:checked + span i { display: none; }
 
     .q-step { font-variant-numeric: tabular-nums; }
     .q-btn {
@@ -109,7 +110,7 @@
         cursor: pointer;
     }
     .q-btn:disabled { opacity: .45; cursor: default; }
-    .q-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .q-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-ink); }
 
     .q-dock {
         position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -124,6 +125,16 @@
     .q-clock.low { color: #c0392b; }
     .q-status { flex: 1 1 8rem; min-width: 0; font-size: .75rem; color: var(--ink-3); }
     .q-status b { color: #c0392b; font-weight: 600; }
+
+    .q-stuck {
+        opacity: 0; animation: q-late 0s linear 5s forwards;
+        margin-top: 1.25rem; padding: 1rem 1.15rem; border-radius: .5rem;
+        border: 1px solid #f0c9c2; background: #fdf2f0; color: #7d2c1c;
+        font-size: .875rem; line-height: 1.6;
+    }
+    html.dark .q-stuck { border-color: #5a2f24; background: #2a1712; color: #f0c0b2; }
+    .q.is-live .q-stuck { display: none; }
+    @keyframes q-late { to { opacity: 1; } }
 
     @media (max-width: 34rem) {
         .q-scale { grid-auto-flow: row; grid-auto-columns: auto; }
@@ -158,6 +169,21 @@
         <div class="q-ring"><span x-text="`${answered}/${totalItems}`">{{ answered }}/{{ total_items }}</span></div>
     </div>
 
+    <noscript>
+        <div style="margin-top:1.25rem;padding:1rem 1.15rem;border-radius:.5rem;border:1px solid #f0c9c2;background:#fdf2f0;color:#7d2c1c;font-size:.875rem;line-height:1.6;">
+            This assessment needs JavaScript switched on &mdash; without it your
+            answers cannot be saved. Turn it on and reload this page, or open the
+            link in a different browser. Your time has not started running.
+        </div>
+    </noscript>
+
+    <div class="q-stuck">
+        The questions have not finished loading. Check your connection and reload
+        the page &mdash; your answers so far are already saved, and reloading does
+        not restart the clock. If it keeps happening, reply to the invitation
+        email and we will sort it out.
+    </div>
+
     <form id="sei-form" class="mt-5" @submit.prevent="finish()" @keydown="hotkey($event)">
         {% for page in pages %}
         <div x-show="page === {{ forloop.counter0 }}" x-cloak>
@@ -174,11 +200,11 @@
                 </div>
                 <div class="q-scale">
                     {% for step in scale %}
-                    <label class="q-opt" style="--fill: {{ step.fill }}; --fill-ink: {{ step.ink }};">
+                    <label class="q-opt" style="--fl: {{ step.fill }}; --fli: {{ step.ink }}; --fd: {{ step.dark_fill }}; --fdi: {{ step.dark_ink }};">
                         <input type="radio" name="q{{ item.no }}" value="{{ step.value }}" class="sr-only"
                                {% if item.value == step.value %}checked{% endif %}
                                @change="record({{ item.no }}, {{ step.value }})">
-                        <span><i style="background: {{ step.fill }};"></i>{{ step.label }}</span>
+                        <span><i></i>{{ step.label }}</span>
                     </label>
                     {% endfor %}
                 </div>
@@ -188,9 +214,6 @@
         {% endfor %}
     </form>
 
-    {# Navigation lives in the dock, not under the questions: a Next button
-       below a screenful of statements is one the candidate has to go looking
-       for, while Submit sits in front of them the whole time. #}
     <div class="q-dock">
         <div class="q-dock-in">
             <span class="q-clock" :class="secondsLeft <= 60 ? 'low' : ''">
@@ -233,6 +256,7 @@
             done: false,
 
             init() {
+                this.$root.classList.add('is-live');
                 this.tick = setInterval(() => {
                     this.secondsLeft = Math.max(0, this.secondsLeft - 1);
                     if (this.secondsLeft === 0 && !this.done) { this.finish(true); }

@@ -98,8 +98,6 @@
     .sei-h + p { margin: 0; font-size: .875rem; line-height: 1.55; color: var(--ink-2); max-width: 46em; }
 
     .sei-plot { margin-top: 2.25rem; --plot-h: 17.5rem; --ygut: 2.25rem; }
-    /* overflow-x:auto forces overflow-y to compute as auto, so the top tick
-       label cannot simply overhang -- the padding is the headroom it needs. */
     .sei-scroll { overflow-x: auto; overflow-y: hidden; padding: .6rem 0 .25rem; }
     .sei-chart { position: relative; padding-left: var(--ygut); min-width: 34rem; }
 
@@ -112,8 +110,6 @@
         color: var(--ink-3);
     }
 
-    /* flex-start, not flex-end: a name that wraps to two lines would otherwise
-       push its own column up and break the shared baseline. */
     .sei-lanes { position: relative; display: flex; align-items: flex-start; gap: .75rem; }
     .sei-lane { flex: 1 1 0; min-width: 0; }
     .sei-lane:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
