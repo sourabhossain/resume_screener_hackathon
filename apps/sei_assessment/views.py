@@ -147,15 +147,15 @@ def test(request, token):
         logger.info('sei.started assessment=%s', assessment.pk)
 
     spec = assessment.spec
-    answers = assessment.answers or {}
+    # Just the first name for the greeting. truncatewords would append an
+    # ellipsis, and a full name in a "Hi ..." line reads like a form letter.
+    full_name = (assessment.resume.candidate_name or '').strip()
     return render(request, 'sei_assessment/test.html', {
         'assessment': assessment,
         'instrument': spec,
-        'items': [
-            {'no': no, 'text': text, 'value': answers.get(str(no))}
-            for no, text in spec.sorted_items
-        ],
-        'ratings': spec.rating_labels,
+        'first_name': full_name.split()[0].title() if full_name else 'there',
+        'pages': spec.paginate(assessment.answers),
+        'scale': spec.scale,
         'seconds_left': assessment.seconds_left,
         'minutes': spec.time_limit_minutes,
         'answered': assessment.answered_count,

@@ -443,7 +443,11 @@ def test_the_page_carries_the_instruction_wording(client, sitting):
 
     assert 'first and most natural reaction' in body
     assert 'Do not overthink the statements' in body
-    assert 'recommended completion time 15 minutes' in body.lower()
+    # Not "recommended completion time": the server closes the sitting on its
+    # own deadline and submits whatever is there, so calling the limit a
+    # recommendation told the candidate the opposite of what happens.
+    assert f'{SEI_MINUTES} minutes once you begin' in body
+    assert 'recommended completion time' not in body.lower()
 
 
 # ── gaps found in review ─────────────────────────────────────────────────

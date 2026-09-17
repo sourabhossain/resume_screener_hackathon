@@ -63,6 +63,15 @@ RATING_LABELS = (
     (3, 'Definitely true'),
 )
 
+# What the candidate reads -- see the note on pe_scoring.RATING_SHORT. These
+# are only a trim of the sheet's own wording rather than a rewording of it.
+RATING_SHORT = (
+    (0, 'Not true'),
+    (1, 'A little'),
+    (2, 'Fairly'),
+    (3, 'Definitely'),
+)
+
 ITEMS = {
     1: 'I can tell when I am getting upset and why',
     2: 'I get angry when I am criticized by my peers',

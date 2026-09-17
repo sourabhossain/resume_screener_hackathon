@@ -28,6 +28,19 @@ from . import pe_scoring, scoring
 SEI = 'sei'
 PE = 'pe'
 
+# How many statements a candidate sees at once. One long scroll of 48 is where
+# people lose their place; five to a screen keeps the page short enough to
+# check before moving on. The clock is unaffected -- it belongs to the sitting,
+# not the page.
+QUESTIONS_PER_PAGE = 5
+
+# One hue at rising intensity, so the scale reads as "more of this", not as
+# good versus bad. `ink` is the text colour that clears the fill it sits on.
+_RAMP_5 = (('#E6F1FB', '#042C53'), ('#B5D4F4', '#042C53'), ('#85B7EB', '#042C53'),
+           ('#378ADD', '#ffffff'), ('#185FA5', '#ffffff'))
+_RAMP_4 = (('#E6F1FB', '#042C53'), ('#A9CCF1', '#042C53'),
+           ('#5FA0E4', '#ffffff'), ('#185FA5', '#ffffff'))
+
 
 @dataclass(frozen=True)
 class Instrument:
@@ -39,6 +52,8 @@ class Instrument:
     blurb: str
     items: dict
     rating_labels: tuple
+    rating_short: tuple
+    ramp: tuple
     min_rating: int
     max_rating: int
     time_limit_minutes: int
@@ -55,6 +70,26 @@ class Instrument:
     def sorted_items(self):
         return sorted(self.items.items())
 
+    @property
+    def scale(self):
+        """One row of the response scale: value, what the candidate reads, the
+        fill for that step and the text colour that clears it."""
+        return [
+            {'value': value, 'label': label, 'fill': fill, 'ink': ink}
+            for (value, label), (fill, ink) in zip(self.rating_short, self.ramp)
+        ]
+
+    def paginate(self, answers: dict):
+        """The statements in screens of QUESTIONS_PER_PAGE, each carrying the
+        answer already stored for it so a resumed sitting comes back filled."""
+        answers = answers or {}
+        items = [
+            {'no': no, 'text': text, 'value': answers.get(str(no))}
+            for no, text in self.sorted_items
+        ]
+        return [items[i:i + QUESTIONS_PER_PAGE]
+                for i in range(0, len(items), QUESTIONS_PER_PAGE)]
+
 
 REGISTRY = {
     SEI: Instrument(
@@ -65,6 +100,8 @@ REGISTRY = {
               'norms on six dimensions.',
         items=scoring.ITEMS,
         rating_labels=scoring.RATING_LABELS,
+        rating_short=scoring.RATING_SHORT,
+        ramp=_RAMP_4,
         min_rating=scoring.MIN_RATING,
         max_rating=scoring.MAX_RATING,
         time_limit_minutes=scoring.TIME_LIMIT_MINUTES,
@@ -81,6 +118,8 @@ REGISTRY = {
               'that read High or Low and name one of eight categories.',
         items=pe_scoring.ITEMS,
         rating_labels=pe_scoring.RATING_LABELS,
+        rating_short=pe_scoring.RATING_SHORT,
+        ramp=_RAMP_5,
         min_rating=pe_scoring.MIN_RATING,
         max_rating=pe_scoring.MAX_RATING,
         time_limit_minutes=8,

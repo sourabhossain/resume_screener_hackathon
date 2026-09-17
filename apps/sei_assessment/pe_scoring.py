@@ -37,12 +37,28 @@ INVALID_LABEL = 'Invalid - Insufficient Responses'
 # Above this a column is High; at it or below, Low.
 HIGH_ABOVE = 11
 
+# The sheet's own anchors, kept here as the record of what the instrument
+# actually asks even though the page shows the short forms below.
 RATING_LABELS = (
     (0, 'Not at all characteristic'),
     (1, 'Not true, only occasionally'),
     (2, 'Somewhat true'),
     (3, 'Fairly true, quite often'),
     (4, 'Most characteristic'),
+)
+
+# What the candidate reads. Shortened on an explicit instruction, against the
+# advice that anchors are part of the instrument: a candidate answering
+# "Rarely" is not answering quite the same question as one answering "not true
+# of you, or you only occasionally feel or behave this way". Scores stay
+# comparable within this system; strictly they are no longer the sheet's own
+# norms. Reverting means pointing the page back at RATING_LABELS.
+RATING_SHORT = (
+    (0, 'Not at all'),
+    (1, 'Rarely'),
+    (2, 'Sometimes'),
+    (3, 'Often'),
+    (4, 'Always'),
 )
 
 ITEMS = {
