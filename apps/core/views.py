@@ -110,66 +110,16 @@ def health_check(request):
 @login_required
 def dashboard(request):
     # Single-company internal tool: every authenticated recruiter sees all data.
-    from django.utils import timezone as tz
-    from apps.interviews.models import InterviewEvaluation
+    from . import dashboard as metrics
 
-    job_stats = Job.objects.aggregate(
-        total=Count('id'),
-        active=Count('id', filter=Q(status='active'))
-    )
-
-    resume_stats = Resume.objects.filter(job__is_deleted=False).aggregate(
-        total=Count('id'),
-        avg_score=Avg('final_score', filter=Q(final_score__isnull=False, screening_status='completed')),
-        top_tier=Count('id', filter=Q(tier='top')),
-        mid_tier=Count('id', filter=Q(tier='mid')),
-        low_tier=Count('id', filter=Q(tier='low')),
-        pending=Count('id', filter=Q(screening_status='pending')),
-        processing=Count('id', filter=Q(screening_status='processing')),
-        screening_failed=Count('id', filter=Q(screening_status='failed')),
-        needs_review=Count('id', filter=Q(screening_status='needs_review')),
-        talent_pool_count=Count('id', filter=Q(recommendation='talent_pool')),
-    )
-
-    # Actionable alerts: evaluations expiring in <= 3 days, not yet submitted
-    expiry_threshold = tz.now() + timedelta(days=3)
-    expiring_evals = InterviewEvaluation.objects.filter(
-        is_submitted=False,
-        token_expires_at__lte=expiry_threshold,
-        token_expires_at__gte=tz.now(),
-    ).count()
-
-    # Both cards say "Latest", so both have to be ordered by recency here.
-    #
-    # order_by is not decoration in either case. Annotating with an aggregate
-    # makes Django drop the model's Meta.ordering -- the SQL came out as
-    # "GROUP BY job_description.id LIMIT 5" with no ORDER BY at all, so the
-    # card showed whichever five rows MySQL happened to return. And Resume's
-    # Meta.ordering sorts by final_score, so without this the "Latest
-    # submissions" card was really the highest-scoring ones, oldest included.
-    recent_jobs = Job.objects.annotate(
+    context = metrics.build(request.user, request.GET)
+    # order_by is not decoration: annotating drops Meta.ordering, and Resume's
+    # Meta.ordering sorts by score, so "latest" has to be explicit.
+    context['recent_jobs'] = Job.objects.annotate(
         resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
     ).order_by('-created_at')[:5]
-    recent_resumes = Resume.objects.filter(
+    context['recent_resumes'] = Resume.objects.filter(
         job__is_deleted=False).select_related('job').order_by('-created_at')[:5]
-
-    context = {
-        'total_jobs': job_stats['total'],
-        'active_jobs': job_stats['active'],
-        'total_resumes': resume_stats['total'],
-        'avg_score': round(resume_stats['avg_score'] or 0, 1),
-        'recent_jobs': recent_jobs,
-        'recent_resumes': recent_resumes,
-        'top_tier': resume_stats['top_tier'],
-        'mid_tier': resume_stats['mid_tier'],
-        'low_tier': resume_stats['low_tier'],
-        'pending_screening': resume_stats['pending'],
-        'processing_screening': resume_stats['processing'],
-        'screening_failed': resume_stats['screening_failed'],
-        'needs_review_count': resume_stats['needs_review'],
-        'talent_pool_count': resume_stats['talent_pool_count'],
-        'expiring_evals': expiring_evals,
-    }
     return render(request, 'core/dashboard.html', context)
 
 

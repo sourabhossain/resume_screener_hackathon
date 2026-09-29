@@ -163,20 +163,21 @@ class TestDashboardView:
         response = authenticated_client.get(reverse('core:dashboard'))
         assert 'total_jobs' in response.context
         assert 'active_jobs' in response.context
-        assert 'total_resumes' in response.context
+        assert {k['key'] for k in response.context['kpis']} >= {'candidates', 'hire_conversion'}
 
     def test_dashboard_counts_needs_review(self, authenticated_client, sample_job):
         from apps.core.models import Resume
         Resume.objects.create(job=sample_job, candidate_name="Pat", screening_status="needs_review")
         response = authenticated_client.get(reverse('core:dashboard'))
-        assert response.context['needs_review_count'] == 1
+        items = {i['label']: i['count'] for i in response.context['attention']}
+        assert items['Needs review'] == 1
         assert b'Needs review' in response.content  # surfaced in the attention panel
 
     def test_dashboard_stats_deleted_job_resumes(self, authenticated_client, sample_job, sample_resume):
         """Test dashboard counts exclude resumes from deleted jobs."""
         # Initial check
         response = authenticated_client.get(reverse('core:dashboard'))
-        assert response.context['total_resumes'] == 1
+        assert response.context['kpis'][0]['value'] == 1
         
         # Soft delete the job
         sample_job.soft_delete()
@@ -186,7 +187,7 @@ class TestDashboardView:
         
         # We EXPECT resumes from deleted jobs to be excluded? 
         # Usually yes. If the job is deleted, we shouldn't count its resumes as "active" in the system overview.
-        assert response.context['total_resumes'] == 0
+        assert response.context['kpis'][0]['value'] == 0
 
 
 @pytest.mark.django_db

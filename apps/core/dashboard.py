@@ -1,0 +1,509 @@
+"""Numbers and chart geometry for the recruiter dashboard."""
+import math
+from collections import Counter
+from datetime import timedelta
+
+from django.db.models import Avg, Count, Q
+from django.urls import reverse
+from django.utils import timezone
+
+from .models import Job, Resume
+
+RANGES = [
+    ('7d', 'Last 7 days', 7),
+    ('30d', 'Last 30 days', 30),
+    ('90d', 'Last 90 days', 90),
+    ('12m', 'Last 12 months', 365),
+    ('all', 'All time', None),
+]
+RANGE_DAYS = {key: days for key, _, days in RANGES}
+DEFAULT_RANGE = 'all'
+
+FUNNEL_STAGES = [
+    ('applied', 'Applications'),
+    ('shortlisted', 'Shortlisted'),
+    ('phone_screen', 'Phone screen'),
+    ('interviewing', 'Interviewing'),
+    ('offer_extended', 'Offer extended'),
+    ('hired', 'Hired'),
+]
+STAGE_RANK = {key: rank for rank, (key, _) in enumerate(FUNNEL_STAGES)}
+STAGE_RANK['new'] = 0
+
+CHART_W, CHART_H = 640, 200
+PAD_L, PAD_R, PAD_T, PAD_B = 36, 12, 12, 28
+
+
+def _pct(part, whole):
+    return round(part * 100 / whole, 1) if whole else None
+
+
+def _nice_max(value, ticks=4):
+    """Smallest round ceiling >= value that splits into `ticks` whole-number steps."""
+    if value <= ticks:
+        return ticks
+    raw = value / ticks
+    exponent = 0
+    while True:
+        for factor in (1, 1.5, 2, 2.5, 3, 4, 5):
+            step = factor * 10 ** exponent
+            if step == int(step) and step >= raw:
+                return int(step) * ticks
+        exponent += 1
+
+
+def _ticks(maximum, count=4):
+    return [maximum * i // count for i in range(count + 1)]
+
+
+# ── Filters ──────────────────────────────────────────────────────────────
+def parse_filters(params):
+    range_key = params.get('range') if params.get('range') in RANGE_DAYS else DEFAULT_RANGE
+    job = None
+    slug = params.get('job') or ''
+    if slug:
+        job = Job.objects.filter(slug=slug).first()
+    return range_key, job
+
+
+def scoped_resumes(range_key, job, *, offset_days=0):
+    qs = Resume.objects.filter(job__is_deleted=False)
+    if job:
+        qs = qs.filter(job=job)
+    days = RANGE_DAYS[range_key]
+    if days:
+        end = timezone.now() - timedelta(days=offset_days)
+        qs = qs.filter(created_at__gt=end - timedelta(days=days), created_at__lte=end)
+    return qs
+
+
+# ── Funnel: furthest stage each candidate reached ────────────────────────
+def furthest_stages(resumes):
+    """{resume_id: stage rank}, from the current status plus what has happened since.
+
+    A rejected candidate keeps the furthest stage their records prove: an
+    information form means they were shortlisted, an interview means they were
+    interviewed, an issued offer letter means an offer went out.
+    """
+    from apps.hr_verification.models import HRVerification
+    from apps.interviews.models import Interview
+
+    rows = list(resumes.values_list('id', 'recruiter_status'))
+    ids = [pk for pk, _ in rows]
+    shortlisted = set(Resume.objects.filter(id__in=ids, employee_form__isnull=False)
+                      .values_list('id', flat=True))
+    interviewed = set(Interview.objects.filter(resume_id__in=ids).values_list('resume_id', flat=True))
+    offered = {
+        v.resume_id for v in HRVerification.objects.filter(resume_id__in=ids).only('resume_id', 'answers')
+        if (v.answers or {}).get('offer_letter_issued') == 'yes'
+    }
+    ranks = {}
+    for pk, status in rows:
+        rank = STAGE_RANK.get(status, 0)
+        if pk in shortlisted:
+            rank = max(rank, STAGE_RANK['shortlisted'])
+        if pk in interviewed:
+            rank = max(rank, STAGE_RANK['interviewing'])
+        if pk in offered:
+            rank = max(rank, STAGE_RANK['offer_extended'])
+        ranks[pk] = rank
+    return ranks
+
+
+def funnel(ranks):
+    total = len(ranks)
+    stages, previous = [], None
+    for rank, (key, label) in enumerate(FUNNEL_STAGES):
+        count = sum(1 for r in ranks.values() if r >= rank)
+        stages.append({
+            'key': key,
+            'label': label,
+            'count': count,
+            'share': _pct(count, total),
+            'width': (count * 100 / total) if total else 0,
+            'step_rate': _pct(count, previous) if previous is not None else None,
+        })
+        previous = count
+    return {'stages': stages, 'total': total}
+
+
+# ── Trend ────────────────────────────────────────────────────────────────
+def _buckets(range_key, now):
+    today = timezone.localtime(now).date()
+    if range_key in ('7d', '30d'):
+        days = RANGE_DAYS[range_key]
+        return 'day', [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
+    if range_key == '90d':
+        start = today - timedelta(days=today.weekday())
+        return 'week', [start - timedelta(weeks=i) for i in range(12, -1, -1)]
+    first = today.replace(day=1)
+    months = []
+    for i in range(11, -1, -1):
+        y, m = first.year, first.month - i
+        while m <= 0:
+            y, m = y - 1, m + 12
+        months.append(first.replace(year=y, month=m))
+    return 'month', months
+
+
+def _bucket_of(unit, day):
+    if unit == 'day':
+        return day
+    if unit == 'week':
+        return day - timedelta(days=day.weekday())
+    return day.replace(day=1)
+
+
+def _bucket_label(unit, day):
+    if unit == 'month':
+        return day.strftime('%b %Y')
+    if unit == 'week':
+        return f"Week of {day.strftime('%d %b')}"
+    return day.strftime('%d %b')
+
+
+def trend(range_key, job):
+    now = timezone.now()
+    unit, buckets = _buckets(range_key, now)
+    qs = Resume.objects.filter(job__is_deleted=False, created_at__date__gte=buckets[0])
+    if job:
+        qs = qs.filter(job=job)
+    counts = Counter(_bucket_of(unit, timezone.localtime(ts).date())
+                     for ts in qs.values_list('created_at', flat=True))
+    values = [counts.get(b, 0) for b in buckets]
+    peak = _nice_max(max(values) if values else 0)
+    plot_w, plot_h = CHART_W - PAD_L - PAD_R, CHART_H - PAD_T - PAD_B
+    step = plot_w / max(len(values) - 1, 1)
+    points = []
+    for i, (bucket, value) in enumerate(zip(buckets, values)):
+        x = PAD_L + i * step
+        y = PAD_T + plot_h - (value / peak) * plot_h
+        points.append({
+            'x': round(x, 1), 'y': round(y, 1), 'value': value,
+            'label': _bucket_label(unit, bucket),
+            'hit_x': round(x - step / 2, 1), 'hit_w': round(step, 1),
+            'tick': i in (0, len(values) - 1) or (len(values) > 6 and i == len(values) // 2),
+        })
+    line = ' '.join(f"{'M' if i == 0 else 'L'}{p['x']},{p['y']}" for i, p in enumerate(points))
+    base_y = PAD_T + plot_h
+    area = f"{line} L{points[-1]['x']},{base_y} L{points[0]['x']},{base_y} Z" if points else ''
+    grid = [{'y': round(PAD_T + plot_h - (t / peak) * plot_h, 1), 'label': t}
+            for t in _ticks(peak)]
+    last = points[-1] if points else None
+    return {
+        'unit': unit, 'points': points, 'line': line, 'area': area, 'grid': grid,
+        'last': last, 'total': sum(values), 'width': CHART_W, 'height': CHART_H,
+        'pad_l': PAD_L, 'pad_r': CHART_W - PAD_R, 'base_y': base_y,
+        'spark': _sparkline(values),
+    }
+
+
+def _sparkline(values, width=120, height=32):
+    if not values:
+        return ''
+    peak = max(values) or 1
+    step = width / max(len(values) - 1, 1)
+    return ' '.join(
+        f"{'M' if i == 0 else 'L'}{round(i * step, 1)},{round(height - 2 - (v / peak) * (height - 4), 1)}"
+        for i, v in enumerate(values))
+
+
+# ── Screening quality ────────────────────────────────────────────────────
+def score_distribution(resumes):
+    scores = list(resumes.filter(screening_status='completed', final_score__isnull=False)
+                  .values_list('final_score', flat=True))
+    bins = [0] * 10
+    for score in scores:
+        bins[min(int(score // 10), 9)] += 1
+    peak = _nice_max(max(bins) if bins else 0)
+    tallest = max(bins) if bins else 0
+    bars = [{
+        'is_peak': count == tallest and count > 0 and bins.index(tallest) == i,
+        'label': f'{i * 10}–{i * 10 + 9 if i < 9 else 100}',
+        'count': count,
+        'height': (count / peak * 100) if peak else 0,
+        'band': 'top' if i >= 8 else 'mid' if i >= 6 else 'low',
+    } for i, count in enumerate(bins)]
+    return {'bars': bars, 'total': len(scores), 'peak': peak}
+
+
+def tier_mix(resumes):
+    stats = resumes.aggregate(
+        top=Count('id', filter=Q(tier='top')),
+        mid=Count('id', filter=Q(tier='mid')),
+        low=Count('id', filter=Q(tier='low')),
+    )
+    total = sum(stats.values())
+    return {
+        'total': total,
+        'segments': [
+            {'key': key, 'label': label, 'range': rng, 'count': stats[key],
+             'share': _pct(stats[key], total), 'width': (stats[key] * 100 / total) if total else 0}
+            for key, label, rng in (('top', 'Top', '≥ 80%'), ('mid', 'Mid', '60–79%'),
+                                    ('low', 'Low', '< 60%'))
+        ],
+    }
+
+
+# ── Post-shortlist pipeline ──────────────────────────────────────────────
+def pipeline_progress(resumes, *, hr_view):
+    from apps.employee_form.models import EmployeeForm
+    from apps.hr_verification.models import HRVerification
+    from apps.reference_checks.models import ReferenceCheck
+    from apps.sei_assessment.models import AssessmentInvitation, SEIAssessment
+
+    ids = resumes.values('id')
+    forms = EmployeeForm.objects.filter(resume_id__in=ids)
+    form_stats = forms.aggregate(
+        sent=Count('id', filter=Q(invited_at__isnull=False)),
+        done=Count('id', filter=Q(is_submitted=True)),
+        failed=Count('id', filter=~Q(last_error='') & Q(is_submitted=False)),
+    )
+    invitations = AssessmentInvitation.objects.filter(resume_id__in=ids, invited_at__isnull=False)
+    sittings = list(SEIAssessment.objects.filter(invitation__in=invitations))
+    refs = list(ReferenceCheck.objects.filter(resume_id__in=ids, invited_at__isnull=False))
+    rows = [
+        _meter('Information form', form_stats['done'], form_stats['sent'], 'submitted',
+               note=f"{form_stats['failed']} invite failed" if form_stats['failed'] else ''),
+        _meter('Assessments', sum(1 for s in sittings if s.is_valid_result), len(sittings),
+               'completed',
+               note=_plural(sum(1 for s in sittings if s.needs_retaking), 'needs a retake',
+                            'need a retake')),
+        _meter('Reference checks', sum(1 for r in refs if r.is_submitted), len(refs), 'replied',
+               note=_plural(sum(1 for r in refs if r.is_submitted and r.flagged),
+                            'reply flagged', 'replies flagged')),
+    ]
+    if hr_view:
+        bgv = HRVerification.objects.filter(resume_id__in=ids).aggregate(
+            started=Count('id'), done=Count('id', filter=Q(is_submitted=True)))
+        rows.append(_meter('Background verification', bgv['done'], bgv['started'], 'signed off'))
+    return rows
+
+
+def _plural(count, one, many):
+    if not count:
+        return ''
+    return f'{count} {one if count == 1 else many}'
+
+
+def _meter(label, done, total, verb, note=''):
+    return {'label': label, 'done': done, 'total': total, 'verb': verb, 'note': note,
+            'share': _pct(done, total), 'width': (done * 100 / total) if total else 0}
+
+
+def interview_summary(resumes):
+    from apps.interviews.models import Interview, InterviewEvaluation
+
+    today = timezone.localdate()
+    interviews = Interview.objects.filter(resume_id__in=resumes.values('id'))
+    stats = interviews.aggregate(
+        upcoming=Count('id', filter=Q(status='scheduled', scheduled_date__gte=today)),
+        overdue=Count('id', filter=Q(status='scheduled', scheduled_date__lt=today)),
+        completed=Count('id', filter=Q(status='completed')),
+    )
+    evals = InterviewEvaluation.objects.filter(interview__in=interviews)
+    verdicts = evals.filter(is_submitted=True).aggregate(
+        yes=Count('id', filter=Q(recommendation='yes')),
+        maybe=Count('id', filter=Q(recommendation='maybe')),
+        no=Count('id', filter=Q(recommendation='no')),
+    )
+    submitted = sum(verdicts.values())
+    return {
+        **stats,
+        'evaluations_pending': evals.filter(is_submitted=False).count(),
+        'evaluations_submitted': submitted,
+        'verdicts': [
+            {'key': key, 'label': label, 'count': verdicts[key],
+             'share': _pct(verdicts[key], submitted),
+             'width': (verdicts[key] * 100 / submitted) if submitted else 0}
+            for key, label in (('yes', 'Hire'), ('maybe', 'Further review'), ('no', 'Reject'))
+        ],
+    }
+
+
+def bgv_outcomes(resumes):
+    from apps.hr_verification.models import HRVerification
+    from apps.hr_verification.schema import JOINING_CLEARANCE, RISK_RATING
+
+    answers = [v.answers or {} for v in HRVerification.objects.filter(
+        resume_id__in=resumes.values('id')).only('answers')]
+    risk = Counter(a.get('risk_rating') for a in answers if a.get('risk_rating'))
+    clearance = Counter(a.get('final_joining_clearance') for a in answers
+                        if a.get('final_joining_clearance'))
+    rated = sum(risk.values())
+    short = {'green': 'Green', 'amber': 'Amber', 'red': 'Red', 'critical': 'Critical'}
+    return {
+        'rated': rated,
+        'risk': [{'key': key, 'label': short[key], 'detail': label.split('–', 1)[-1].strip(),
+                  'count': risk.get(key, 0), 'share': _pct(risk.get(key, 0), rated),
+                  'width': (risk.get(key, 0) * 100 / rated) if rated else 0}
+                 for key, label in RISK_RATING],
+        'clearance': [{'label': label, 'count': clearance.get(key, 0)}
+                      for key, label in JOINING_CLEARANCE],
+    }
+
+
+# ── Jobs and recruiters ──────────────────────────────────────────────────
+def job_leaderboard(resumes, ranks, limit=8):
+    per_job = Counter()
+    hired = Counter()
+    job_of = dict(resumes.values_list('id', 'job_id'))
+    for pk, job_id in job_of.items():
+        per_job[job_id] += 1
+        if ranks.get(pk, 0) >= STAGE_RANK['hired']:
+            hired[job_id] += 1
+    jobs = {j.pk: j for j in Job.objects.filter(pk__in=per_job)}
+    top = per_job.most_common(limit)
+    peak = top[0][1] if top else 0
+    return [{
+        'job': jobs[job_id], 'count': count, 'hired': hired[job_id],
+        'width': (count * 100 / peak) if peak else 0,
+    } for job_id, count in top if job_id in jobs]
+
+
+def recruiter_table(resumes, ranks):
+    rows = {}
+    for pk, owner_id, first, last, username, job_id in resumes.values_list(
+            'id', 'job__owner_id', 'job__owner__first_name', 'job__owner__last_name',
+            'job__owner__username', 'job_id'):
+        name = f'{first} {last}'.strip() or username or 'Unassigned'
+        row = rows.setdefault(owner_id, {'name': name, 'jobs': set(), 'candidates': 0,
+                                         'shortlisted': 0, 'hired': 0})
+        row['jobs'].add(job_id)
+        row['candidates'] += 1
+        rank = ranks.get(pk, 0)
+        row['shortlisted'] += rank >= STAGE_RANK['shortlisted']
+        row['hired'] += rank >= STAGE_RANK['hired']
+    out = []
+    for row in rows.values():
+        out.append({**row, 'jobs': len(row['jobs']),
+                    'shortlist_rate': _pct(row['shortlisted'], row['candidates']),
+                    'hire_rate': _pct(row['hired'], row['shortlisted'])})
+    return sorted(out, key=lambda r: (-r['candidates'], r['name']))
+
+
+# ── Needs attention ──────────────────────────────────────────────────────
+def attention_items(*, hr_view):
+    from apps.employee_form.models import EmployeeForm
+    from apps.hr_verification.models import HRVerification
+    from apps.interviews.models import InterviewEvaluation
+    from apps.reference_checks.models import ReferenceCheck
+    from apps.sei_assessment.models import AssessmentInvitation
+
+    now = timezone.now()
+    live = Resume.objects.filter(job__is_deleted=False)
+    stats = live.aggregate(
+        failed=Count('id', filter=Q(screening_status='failed')),
+        review=Count('id', filter=Q(screening_status='needs_review')),
+        unseen=Count('id', filter=Q(seen_status='unseen')),
+        pool=Count('id', filter=Q(recommendation='talent_pool')),
+    )
+    invite_failures = (
+        EmployeeForm.objects.filter(is_submitted=False).exclude(last_error='').count()
+        + AssessmentInvitation.objects.exclude(last_error='').count()
+        + ReferenceCheck.objects.filter(is_submitted=False).exclude(last_error='').count()
+    )
+    stalled_forms = EmployeeForm.objects.filter(
+        is_submitted=False, invited_at__lt=now - timedelta(days=3), token_expires_at__gt=now).count()
+    expiring = InterviewEvaluation.objects.filter(
+        is_submitted=False, token_expires_at__gte=now,
+        token_expires_at__lte=now + timedelta(days=3)).count()
+    flagged = sum(1 for r in ReferenceCheck.objects.filter(is_submitted=True).only(
+        'kind', 'answers') if r.flagged)
+
+    items = [
+        ('critical', stats['failed'], 'Screening failed', reverse('core:screening_failed')),
+        ('warning', stats['review'], 'Needs review', reverse('core:needs_review')),
+        ('critical', invite_failures, 'Invites failed to send', None),
+        ('warning', expiring, 'Evaluation links expiring in 3 days', None),
+        ('warning', stalled_forms, 'Information forms waiting over 3 days', None),
+        ('info', stats['unseen'], 'Unseen candidates', reverse('core:job_list')),
+        ('info', stats['pool'], 'Talent pool candidates', reverse('core:talent_pool')),
+    ]
+    if hr_view:
+        items.insert(3, ('warning', flagged, 'Reference replies flagged', None))
+        awaiting = HRVerification.objects.filter(is_submitted=False).count()
+        items.append(('info', awaiting, 'Background checks awaiting sign-off', None))
+    return [{'tone': tone, 'count': count, 'label': label, 'url': url}
+            for tone, count, label, url in items if count]
+
+
+# ── Everything ───────────────────────────────────────────────────────────
+def build(user, params):
+    range_key, job = parse_filters(params)
+    hr_view = bool(user.is_staff or user.is_superuser)
+    resumes = scoped_resumes(range_key, job)
+    ranks = furthest_stages(resumes)
+    total = len(ranks)
+    shortlisted = sum(1 for r in ranks.values() if r >= STAGE_RANK['shortlisted'])
+    hired = sum(1 for r in ranks.values() if r >= STAGE_RANK['hired'])
+    rejected = resumes.filter(recruiter_status='rejected').count()
+    avg_score = resumes.filter(screening_status='completed', final_score__isnull=False).aggregate(
+        v=Avg('final_score'))['v']
+
+    previous = None
+    if RANGE_DAYS[range_key]:
+        previous = scoped_resumes(range_key, job, offset_days=RANGE_DAYS[range_key]).count()
+
+    offers = _offer_stats(resumes)
+    series = trend(range_key, job)
+    range_label = dict((k, label) for k, label, _ in RANGES)[range_key]
+
+    kpis = [
+        {'key': 'candidates', 'label': 'Candidates', 'value': total, 'format': 'int',
+         'delta': (total - previous) if previous is not None else None,
+         'delta_base': range_label.lower().replace('last', 'previous'),
+         'spark': series['spark']},
+        {'key': 'shortlisted', 'label': 'Shortlisted', 'value': shortlisted, 'format': 'int',
+         'caption': f'{_fmt_pct(_pct(shortlisted, total))} of candidates'},
+        {'key': 'hire_conversion', 'label': 'Hire conversion', 'value': _pct(hired, shortlisted),
+         'format': 'pct', 'caption': f'{hired} hired of {shortlisted} shortlisted'},
+        {'key': 'offer_acceptance', 'label': 'Offer acceptance',
+         'value': _pct(offers['accepted'], offers['issued']), 'format': 'pct',
+         'caption': f"{offers['accepted']} accepted of {offers['issued']} offers"},
+        {'key': 'rejection', 'label': 'Rejection rate', 'value': _pct(rejected, total),
+         'format': 'pct', 'caption': f'{rejected} of {total} candidates'},
+        {'key': 'avg_score', 'label': 'Avg. AI score',
+         'value': round(avg_score, 1) if avg_score is not None else None, 'format': 'pct',
+         'caption': 'Screened resumes'},
+    ]
+    job_stats = Job.objects.aggregate(total=Count('id'), active=Count('id', filter=Q(status='active')))
+    return {
+        'range_key': range_key,
+        'range_label': range_label,
+        'ranges': [(k, label) for k, label, _ in RANGES],
+        'job': job,
+        'job_options': Job.objects.filter(status__in=['active', 'closed']).order_by('title'),
+        'hr_view': hr_view,
+        'total_jobs': job_stats['total'],
+        'active_jobs': job_stats['active'],
+        'kpis': kpis,
+        'funnel': funnel(ranks),
+        'trend': series,
+        'scores': score_distribution(resumes),
+        'tiers': tier_mix(resumes),
+        'pipeline': pipeline_progress(resumes, hr_view=hr_view),
+        'interviews': interview_summary(resumes),
+        'bgv': bgv_outcomes(resumes) if hr_view else None,
+        'jobs_board': job_leaderboard(resumes, ranks),
+        'recruiters': recruiter_table(resumes, ranks),
+        'attention': attention_items(hr_view=hr_view),
+        'pending_screening': resumes.filter(screening_status='pending').count(),
+        'processing_screening': resumes.filter(screening_status='processing').count(),
+    }
+
+
+def _offer_stats(resumes):
+    from apps.hr_verification.models import HRVerification
+
+    issued = accepted = 0
+    for v in HRVerification.objects.filter(resume_id__in=resumes.values('id')).only('answers'):
+        answers = v.answers or {}
+        if answers.get('offer_letter_issued') == 'yes':
+            issued += 1
+            accepted += answers.get('offer_accepted') == 'yes'
+    return {'issued': issued, 'accepted': accepted}
+
+
+def _fmt_pct(value):
+    return '—' if value is None else f'{value:g}%'
