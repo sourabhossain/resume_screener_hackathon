@@ -1,9 +1,9 @@
-<div data-question="{{ question.key }}"
+<div data-question="{{ question.key }}"{% if question.key in uploaded_keys %} data-uploaded{% endif %}
      class="{% if item.half %}sm:col-span-1{% else %}sm:col-span-2{% endif %}">
 
     {% if question.type == 'boolean' %}
     <label class="-mt-1 inline-flex cursor-pointer items-start gap-2.5 rounded-lg py-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        <input type="checkbox"
+        <input type="checkbox" data-boolean
                name="{{ field.html_name }}"
                id="{{ field.id_for_label }}"
                {% if field.value %}checked{% endif %}
@@ -108,14 +108,14 @@
                         {% if question.key in uploaded_keys %}Replace file{% else %}Choose a file{% endif %}
                     </span>
                     <span class="block truncate text-xs text-zinc-500 dark:text-zinc-500">
-                        {% if question.type == 'files' %}Up to {{ question.max_files }} files{% else %}One file{% endif %} &middot; PDF, DOC, JPG, PNG
+                        {% if question.type == 'files' %}Up to {{ question.max_files }} files{% else %}One file{% endif %} &middot; {% if question.formats == 'pdf_image' %}PDF, JPG, PNG{% else %}PDF, DOC, JPG, PNG{% endif %}
                     </span>
                 </span>
                 <input type="file"
                        name="{{ field.html_name }}"
                        id="{{ field.id_for_label }}"
                        {% if question.type == 'files' %}multiple{% endif %}
-                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                       accept="{% if question.formats == 'pdf_image' %}.pdf,.jpg,.jpeg,.png,.webp{% else %}.pdf,.doc,.docx,.jpg,.jpeg,.png,.webp{% endif %}"
                        @change="picked = Array.from($event.target.files).map(f => f.name)"
                        class="sr-only">
             </label>

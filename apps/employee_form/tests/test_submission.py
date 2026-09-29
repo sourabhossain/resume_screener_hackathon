@@ -24,10 +24,10 @@ def _png(name='scan.png'):
     return SimpleUploadedFile(name, PNG, content_type='image/png')
 
 
-# Answers per step for a Banking candidate with one previous employer -- the one
-# department-to-section mapping the source PDF confirms.
+# Answers per step for a Banking candidate with one previous employer.
 STEP_DATA = {
     'section_a': lambda: {
+        'requisition_id': 'REQ-2026-014',
         'candidate_full_name': 'Ayesha Rahman',
         'mobile_number': '+8801711123456',
         'personal_email': 'ayesha@example.com',
@@ -42,7 +42,7 @@ STEP_DATA = {
     },
     'section_b': lambda: {
         'highest_degree': 'bachelors',
-            'bachelors_institution': 'University of Dhaka',
+        'bachelors_institution': 'University of Dhaka',
         'bachelors_degree_name': 'BBA',
         'bachelors_major': 'Marketing',
         'bachelors_completion_date': '2019-01-31',
@@ -55,25 +55,25 @@ STEP_DATA = {
         'ssc_institution': 'Ideal School',
         'ssc_board': 'Dhaka',
         'ssc_passing_year': '2012',
-        'ssc_result': '5.00',
+        'ssc_result': 'A+',
         'ssc_certificate': _pdf('ssc.pdf'),
         'training_certification_names': 'Consultative Selling (2022)',
         'training_certificates': [_pdf('t1.pdf'), _pdf('t2.pdf')],
     },
-    'employer_1': lambda: {
+    'employment': lambda: {
+        'has_employment': 'yes',
         'employer_1_name': 'Berger Paints Bangladesh Ltd',
+        'employer_1_employment_type': 'full_time',
         'employer_1_hr_contact': '+8802 9887301',
         'employer_1_hr_email': 'hr@bergerbd.com',
         'employer_1_position': 'Senior Territory Officer',
         'employer_1_start_date': '2021-03-01',
         'employer_1_end_date': '2026-07-15',
         'employer_1_reason_leaving': 'Seeking a broader enterprise portfolio.',
+        'employer_1_separation': 'voluntary_resignation',
         'employer_1_contact_permission': 'yes',
+        'employer_1_another': 'no',
     },
-    # Employers 2-4 are optional; submitted empty to prove they can be skipped.
-    'employer_2': lambda: {},
-    'employer_3': lambda: {},
-    'employer_4': lambda: {},
     'reference_1': lambda: {
         'reference_1_name': 'Kamrul Hasan',
         'reference_1_designation': 'Head of Sales, Berger Paints',
@@ -90,24 +90,32 @@ STEP_DATA = {
         'reference_2_email': 'nusrat@bergerbd.com',
         'reference_2_contact_permission': 'no',
     },
+    'team_reporting': lambda: {
+        'manages_team': 'no',
+        'reporting_head': 'Kamrul Hasan, Head of Sales',
+        'reporting_types': ['sales', 'performance'],
+    },
     # Section D and its role block share a page, so they post together.
     'department': lambda: {
         'department': 'banking_financial_services',
-        'sales_target_achievement': '112',
-        'sales_key_accounts': 'Retail banking clients',
-        'sales_portfolio_value': 'BDT 2 crore',
+        'customer_facing': 'yes',
+        'customer_segments': ['corporate', 'bank_fi'],
+        'sales_key_accounts': 'Retail banking clients across three districts',
+        'sales_portfolio_value': 'BDT 2 crore / year',
+        'sales_products': 'Dealer financing products',
+        'sales_business_type': 'New dealer acquisition and account growth',
+        'sales_target_achievement': '112%',
         'sales_cycle_length': '6 weeks',
-        'sales_crm_tools': 'Salesforce, HubSpot',
-        'sales_new_business': 'Owned new dealer acquisition for three districts',
+        'sales_crm_tools': 'Salesforce; owned new dealer acquisition',
         'sales_largest_achievement': 'Closed a BDT 40 lakh account',
     },
     'd7_declaration': lambda: {
         'total_experience_years': '5',
-        'notice_period_days': '30',
-        'earliest_joining_date': '2026-09-20',
-        'current_responsibilities': 'Own enterprise dealer relationships.',
-        'measurable_achievements': '112% of target FY24; Best Employee Award.',
         'availability_status': 'serving_notice',
+        'notice_period': '2 months',
+        'remaining_notice_period': '30 days',
+        'last_working_day': '2026-10-30',
+        'earliest_joining_date': '2026-11-01',
         'declaration_agreement': 'agree',
         # Drawn on the canvas rather than uploaded, so the full submission
         # exercises the data: URL path end to end.
@@ -165,21 +173,15 @@ def test_full_submission(verified):
     assert form.submitted_at is not None
     assert visited[-1] == schema.FINAL_STEP
 
-    # The PDF's Section C is linear: all four employer steps are walked even
-    # though only the first is filled in. Banking routes through D1 only.
-    for index in (1, 2, 3, 4):
-        assert f'employer_{index}' in visited
-    # D1 is answered on the department page, so it is never a step of its own.
-    assert 'department' in visited
-    assert 'd1_sales' not in visited
-    # Numeric questions are stored as numbers, not as whatever string was typed.
-    assert form.answers['sales_target_achievement'] == 112.0
+    assert visited == ['section_a', 'section_b', 'employment', 'reference_1',
+                       'reference_2', 'team_reporting', 'department', 'd7_declaration']
     assert form.answers['hsc_passing_year'] == 2014
-    assert form.answers['ssc_passing_year'] == 2012
-    assert form.answers['hsc_result'] == 5.0
+    assert form.answers['hsc_result'] == '5.00'
+    assert form.answers['ssc_result'] == 'A+'
     assert form.answers['total_experience_years'] == 5.0
-    assert form.answers['notice_period_days'] == 30
-    assert form.answers['sales_new_business']
+    assert form.answers['notice_period'] == '2 months'
+    assert form.answers['requisition_id'] == 'REQ-2026-014'
+    assert form.answers['customer_segments'] == ['corporate', 'bank_fi']
 
     # Answers stored under their schema keys, with choices kept as values.
     assert form.answers['candidate_full_name'] == 'Ayesha Rahman'
@@ -187,8 +189,9 @@ def test_full_submission(verified):
     assert form.answers['date_of_birth'] == '1996-04-12'
     assert form.answers['employer_1_contact_permission'] == 'yes'
     assert form.answers['reference_2_contact_permission'] == 'no'
-    # Skipped optional employers leave nothing behind.
+    # Employers the candidate did not add leave nothing behind.
     assert not form.answers.get('employer_2_name')
+    assert schema.declared_employer_indices(form.answers) == [1]
 
     # Every upload is attached to the question it was given for.
     keys = set(form.files.values_list('question_key', flat=True))

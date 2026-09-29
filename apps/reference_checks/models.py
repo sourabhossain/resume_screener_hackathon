@@ -13,8 +13,8 @@ from . import schema
 class ReferenceCheck(models.Model):
     """One verification request sent to one person outside SSL.
 
-    Three shapes of it -- a former employer's HR, a professional referee, an
-    academic referee -- differing only in which schema they answer. The
+    Two shapes of it -- a former employer's HR and a professional referee --
+    differing only in which schema they answer (academic is kept only for older requests). The
     respondent is not a user of this system: they are reached by an emailed link
     plus a one-time code, exactly as the candidate is for their own form.
 
@@ -165,8 +165,20 @@ class ReferenceCheck(models.Model):
         return schema.total_steps(self.kind)
 
     @property
+    def resume_step(self) -> str:
+        """Where the respondent picks up; older rows may name a retired section."""
+        if self.current_step in self.steps:
+            return self.current_step
+        return schema.first_step(self.kind) or ''
+
+    @property
     def step_number(self) -> int:
-        return schema.step_number(self.kind, self.current_step) or 1
+        return schema.step_number(self.kind, self.resume_step) or 1
+
+    @property
+    def verification_reference_id(self) -> str:
+        """The reference quoted to the respondent -- never the secret token."""
+        return f'SSLW-VR-{self.pk:06d}' if self.pk else ''
 
     @property
     def status_label(self) -> str:
@@ -186,23 +198,21 @@ class ReferenceCheck(models.Model):
         if raw in (None, '', []):
             return ''
         if question['type'] in schema.CHOICE_TYPES:
+            if isinstance(raw, list):
+                return ', '.join(
+                    str(schema.choice_label(self.kind, question['key'], v)) for v in raw)
             return schema.choice_label(self.kind, question['key'], raw)
         return raw
 
     def answered_sections(self):
         """Every section with its answers, for the HR-facing review page.
 
-        Sections the respondent left entirely blank are still listed, marked as
-        such. Dropping them would be the tidier page and the worse one: on a
-        conduct or integrity section, "they chose not to answer" is itself
-        something HR needs to see, and an absent heading reads as "nothing to
-        ask" rather than "nothing was said".
+        Blank sections stay listed: on a conduct section, silence is information.
         """
         out = []
-        for step_key in schema.step_keys(self.kind):
-            step = schema.get_step(self.kind, step_key)
+        for step in schema.steps(self.kind):
             rows = []
-            for question in schema.questions(self.kind, step_key):
+            for question in step['questions']:
                 value = self.display_value(question)
                 if value != '':
                     rows.append({
@@ -210,48 +220,49 @@ class ReferenceCheck(models.Model):
                         'label': question['label'],
                         'value': value,
                     })
-            out.append({'key': step_key, 'title': step['title'], 'rows': rows})
+            out.append({'key': step['key'], 'title': schema.step_heading(step),
+                        'rows': rows})
         return out
+
+    HEADLINES = {
+        schema.EMPLOYER: ('rehire_eligible', 'Eligible for rehire'),
+        schema.PROFESSIONAL: ('hire_again', 'Would work with / recommend again'),
+        schema.ACADEMIC: ('recommend', 'Recommends'),
+    }
 
     @property
     def headline(self) -> str:
         """The one answer HR looks for first, per form."""
-        key = {
-            schema.EMPLOYER: 'rehire_eligible',
-            schema.PROFESSIONAL: 'recommend',
-            schema.ACADEMIC: 'recommend',
-        }[self.kind]
+        key = self.HEADLINES.get(self.kind, ('', ''))[0]
         question = schema.questions_by_key(self.kind).get(key)
         return self.display_value(question) if question else ''
 
     @property
     def headline_label(self) -> str:
-        return {
-            schema.EMPLOYER: 'Eligible for rehire',
-            schema.PROFESSIONAL: 'Recommends',
-            schema.ACADEMIC: 'Recommends',
-        }[self.kind]
+        return self.HEADLINES.get(self.kind, ('', ''))[1]
 
     @property
     def flagged(self) -> bool:
         """Whether the response contains something HR must read.
 
-        Deliberately conservative: a concern reported by a former employer or
-        referee is the whole reason for asking, so it is surfaced rather than
-        left for someone to notice halfway down a page. A qualified answer --
-        "with reservations", "conditional" -- counts too. A referee who cannot
-        give a clean yes is telling us something, and the badge only asks
-        someone to read the reply, it decides nothing on its own.
+        Conservative on purpose: a concern, a qualified verdict, an involuntary
+        exit or an employer who cannot confirm employment all raise it. Keys of
+        the pre-FINAL forms are still read so older replies keep their badge.
         """
         answers = self.answers or {}
+        concern = (answers.get('conduct_concerns') == 'yes'
+                   or answers.get('integrity_concerns') == 'yes')
         if self.kind == schema.EMPLOYER:
-            return (answers.get('disciplinary_action') == 'yes'
-                    or answers.get('integrity_concerns') == 'yes'
-                    or answers.get('separation_nature') == 'involuntary'
+            return (concern
+                    or answers.get('disciplinary_action') == 'yes'
+                    or answers.get('was_employed') == 'no'
+                    or answers.get('separation_nature') in {
+                        'asked_to_resign', 'termination', 'involuntary'}
                     or answers.get('rehire_eligible') in {'no', 'conditional'})
         if self.kind == schema.PROFESSIONAL:
-            return (answers.get('conduct_concerns') == 'yes'
-                    or answers.get('hire_again') in {'no', 'yes_reservations'}
+            return (concern
+                    or answers.get('hire_again') in {'no', 'conditional',
+                                                     'yes_reservations'}
                     or answers.get('recommend') in {'no', 'yes_reservations'})
-        return (answers.get('integrity_concerns') == 'yes'
+        return (concern
                 or answers.get('recommend') in {'unable', 'reservations'})

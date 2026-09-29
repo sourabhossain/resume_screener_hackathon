@@ -19,12 +19,16 @@ from apps.core.form_utils import (
     clean_phone_text,
 )
 
+from apps.core.form_logic import ConditionalFormMixin, is_conditional
+
 from . import schema
 from .models import EmployeeForm
 
 # Candidate documents are ID scans and certificates, so images are allowed here
 # in addition to the PDF/DOCX the resume upload accepts.
 ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webp']
+PDF_IMAGE_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp']
+FORMAT_EXTENSIONS = {'pdf_image': PDF_IMAGE_EXTENSIONS}
 MAX_FILE_SIZE = schema.MAX_UPLOAD_MB * 1024 * 1024
 
 # Leading bytes per format. Checked so a renamed executable cannot be stored as
@@ -71,34 +75,17 @@ NOT_FUTURE_DATE_KEYS = frozenset({
     'date_of_birth',
     'masters_completion_date',
     'bachelors_completion_date',
-    *(f'employer_{i}_start_date' for i in range(1, 5)),
-    *(f'employer_{i}_end_date' for i in range(1, 5)),
+    *(f'employer_{i}_start_date' for i in range(1, schema.EMPLOYER_MAX + 1)),
+    *(f'employer_{i}_end_date' for i in range(1, schema.EMPLOYER_MAX + 1)),
 })
 
-# (start, end) pairs that must be in order.
 DATE_RANGE_PAIRS = tuple(
-    (f'employer_{i}_start_date', f'employer_{i}_end_date') for i in range(1, 5)
-)
-
-# Gated by the "I have a Master's" tick box. Untick and these are hidden in the
-# browser and cleared here, so the stored answers can never say "no Master's"
-# while carrying a university name -- the same reasoning as the address mirror.
-MASTERS_GATED_KEYS = (
-    'masters_institution', 'masters_degree_name', 'masters_major',
-    'masters_completion_date', 'masters_certificate',
-)
-
-# An employer block is all-or-nothing: naming an employer commits you to the rest
-# of it. No block is required outright, so a fresher submits them all blank —
-# but a half-filled employer would go to a background-check agency with no way to
-# reach them, which is worse than no entry at all.
-EMPLOYER_REQUIRED_ONCE_NAMED = (
-    'hr_contact', 'hr_email', 'position', 'start_date', 'end_date',
-    'contact_permission',
+    (f'employer_{i}_start_date', f'employer_{i}_end_date')
+    for i in range(1, schema.EMPLOYER_MAX + 1)
 )
 
 
-def _validate_upload(upload):
+def _validate_upload(upload, formats=None):
     """Size, extension and magic-byte checks for one uploaded document."""
     if not upload:
         return upload
@@ -108,7 +95,10 @@ def _validate_upload(upload):
 
     _, raw_ext = os.path.splitext(upload.name)
     ext = raw_ext.lstrip('.').lower()
-    if ext not in ALLOWED_EXTENSIONS:
+    allowed = FORMAT_EXTENSIONS.get(formats, ALLOWED_EXTENSIONS)
+    if ext not in allowed:
+        if allowed is PDF_IMAGE_EXTENSIONS:
+            raise forms.ValidationError('Invalid file type. Allowed: PDF, JPG, PNG or WEBP.')
         raise forms.ValidationError(
             'Invalid file type. Allowed: PDF, DOC, DOCX, JPG, PNG or WEBP.'
         )
@@ -213,7 +203,7 @@ def _number_field(question, field_class, *, step, inputmode,
 
     return field_class(
         label=question['label'],
-        required=question['required'],
+        required=question['required'] and not is_conditional(question),
         help_text=question['help'],
         min_value=low,
         max_value=high,
@@ -232,10 +222,12 @@ def build_field(question):
     qtype = question['type']
     common = {
         'label': question['label'],
-        'required': question['required'],
+        'required': question['required'] and not is_conditional(question),
         'help_text': question['help'],
     }
     styled = {'class': 'form-input'}
+    if question.get('readonly'):
+        styled = {**styled, 'readonly': 'readonly', 'aria-readonly': 'true'}
 
     if qtype == schema.TEXTAREA:
         return forms.CharField(
@@ -307,7 +299,7 @@ def build_field(question):
     )
 
 
-class StepForm(AriaInvalidMixin, forms.Form):
+class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
     """The questions of a single step.
 
     `already_uploaded` lists the file-question keys that already have a stored
@@ -315,8 +307,9 @@ class StepForm(AriaInvalidMixin, forms.Form):
     candidate revisits the step via Back.
     """
 
-    def __init__(self, *args, step_key=None, already_uploaded=(), **kwargs):
+    def __init__(self, *args, step_key=None, already_uploaded=(), context=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.logic_context = context or {}
         self.step_key = step_key
         self.step = schema.get_step(step_key)
         self.already_uploaded = set(already_uploaded)
@@ -362,10 +355,11 @@ class StepForm(AriaInvalidMixin, forms.Form):
 
             if question['type'] in schema.FILE_TYPES:
                 try:
+                    formats = question.get('formats')
                     if question['type'] == schema.FILES:
-                        cleaned[key] = [_validate_upload(u) for u in (value or [])]
+                        cleaned[key] = [_validate_upload(u, formats) for u in (value or [])]
                     elif value:
-                        cleaned[key] = _validate_upload(value)
+                        cleaned[key] = _validate_upload(value, formats)
                 except forms.ValidationError as exc:
                     self.add_error(key, exc)
                 continue
@@ -399,9 +393,8 @@ class StepForm(AriaInvalidMixin, forms.Form):
             if start and end and end < start:
                 self.add_error(end_key, 'The end date cannot be before the start date.')
 
-        self._validate_employer_block(cleaned)
+        self.apply_logic(cleaned)
         self._mirror_permanent_address(cleaned)
-        self._apply_masters_gate(cleaned)
         return cleaned
 
     def _clean_signature(self, cleaned, question):
@@ -424,7 +417,7 @@ class StepForm(AriaInvalidMixin, forms.Form):
 
         if upload:
             try:
-                cleaned[key] = _validate_upload(upload)
+                cleaned[key] = _validate_upload(upload, question.get('formats'))
             except forms.ValidationError as exc:
                 self.add_error(key, exc)
             return
@@ -432,69 +425,24 @@ class StepForm(AriaInvalidMixin, forms.Form):
         cleaned[key] = None
         # `already_uploaded` means a signature is on file from an earlier visit,
         # so returning to this step via Back must not demand it again.
-        if question['required'] and key not in self.already_uploaded:
+        if (question['required'] and not is_conditional(question)
+                and key not in self.already_uploaded):
             self.add_error(
                 key, 'Please sign in the box, or upload an image of your signature.'
             )
 
-    def _apply_masters_gate(self, cleaned):
-        """Drop any Master's detail when the candidate says they have no Master's."""
-        if 'has_masters' not in self.fields:
-            return
-        if cleaned.get('has_masters') == 'yes':
-            return
-        for key in MASTERS_GATED_KEYS:
-            if key in self.fields:
-                cleaned[key] = None if key in schema.FILE_QUESTION_KEYS else ''
-                self.errors.pop(key, None)
-
     def gated_off_file_keys(self):
-        """File questions whose answer was gated away, for the view to unlink.
-
-        Clearing the text answers is not enough: an upload made before the tick
-        box was cleared would otherwise stay attached to a Master's the candidate
-        now says they do not have.
-        """
-        if 'has_masters' not in self.fields:
-            return []
-        if (self.cleaned_data or {}).get('has_masters') == 'yes':
-            return []
-        return [k for k in MASTERS_GATED_KEYS if k in schema.FILE_QUESTION_KEYS]
+        """File questions hidden by the answers, for the view to unlink."""
+        return self.hidden_file_keys()
 
     def _mirror_permanent_address(self, cleaned):
-        """When "same as present" is ticked, derive the permanent address here.
-
-        The tick box copies the field in the browser too, but that is a
-        convenience: this is the authoritative copy. Trusting the posted value
-        would let a tampered or JS-disabled submission store "Yes" alongside two
-        different addresses -- exactly the contradiction the tick box replaces.
-        """
-        if 'address_same' not in self.fields or 'permanent_address' not in self.fields:
+        """Q10 "Yes": store the present address as the permanent one too."""
+        if 'address_same' not in self.fields:
             return
-        if cleaned.get('address_same') != 'yes':
-            return
-        present = (cleaned.get('present_address') or '').strip()
-        if present:
-            cleaned['permanent_address'] = present
-            # Clear any "this field is required" raised while it was mirrored.
-            self.errors.pop('permanent_address', None)
-
-    def _validate_employer_block(self, cleaned):
-        """Naming an employer makes the rest of that employer required."""
-        for index in range(1, 5):
-            name_key = f'employer_{index}_name'
-            if name_key not in self.fields:
-                continue
-            if not (cleaned.get(name_key) or '').strip():
-                continue
-            for suffix in EMPLOYER_REQUIRED_ONCE_NAMED:
-                key = f'employer_{index}_{suffix}'
-                if key in self.fields and not cleaned.get(key):
-                    self.add_error(
-                        key,
-                        'Required once you name this employer. Clear the employer '
-                        'name to skip this section.',
-                    )
+        if cleaned.get('address_same') == 'yes':
+            present = (cleaned.get('present_address') or '').strip()
+            if present:
+                cleaned['permanent_address'] = present
 
     def field_groups(self):
         """Bound fields arranged into the step's titled blocks.

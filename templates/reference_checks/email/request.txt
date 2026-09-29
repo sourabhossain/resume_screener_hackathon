@@ -4,8 +4,10 @@ Dear {{ recipient_name }},
 SSL Wireless and has given us your name as a contact for this
 {{ form_title|lower }}.
 
-We would be grateful for a few minutes of your time. The form is short and you
-may leave blank anything your records or policy do not allow you to answer.
+We would be grateful for a few minutes of your time. Please provide only
+factual information that you are authorised to disclose.
+
+Verification Reference ID: {{ reference_id }}
 
 Open the form:
 {{ check_url }}

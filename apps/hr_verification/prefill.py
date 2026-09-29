@@ -1,133 +1,152 @@
-"""Starting values taken from what the candidate already told us.
+"""Starting values copied from the candidate's Employee Information Form (EIF).
 
-The source document says the identity questions mirror the Employee Information
-Form and that "Employer 1-4 must match the same employer number". Retyping ~40
-fields off
-another screen is where transcription errors come from -- a mistyped NID or a
-shifted employer number sends the background check after the wrong facts -- so
-the overlap is carried across and left editable.
-
-Two things are deliberately never prefilled: anything that is HR's own finding
-(verified? / discrepancy? / status), and the sign-off fields. A prefilled
-judgement is a judgement nobody made.
+Only facts the candidate declared are carried across, in the same employer order
+and reference numbering. HR's own judgements and the sign-off are never prefilled.
 """
 from django.utils import timezone
 
-# HR question key <- Employee Information Form question key, where the two ask
-# for the same fact in the same words.
+from apps.core.documents import display_date
+from apps.employee_form.schema import declared_employer_indices
+
+from .schema import EMPLOYER_MAX, REFERENCE_COUNT
+
+# HR key <- EIF key, same fact in the same words.
 DIRECT_MAP = {
+    'requisition_id': 'requisition_id',
     'candidate_full_name': 'candidate_full_name',
     'position_applied_for': 'position_applied_for',
     'department': 'department',
-
     'candidate_nid_number': 'nid_number',
     'candidate_birth_certificate_number': 'birth_certificate_number',
     'candidate_date_of_birth': 'date_of_birth',
     'candidate_present_address': 'present_address',
-    'candidate_permanent_address': 'permanent_address',
-
-    'highest_degree': 'highest_degree',
-    'masters_institution': 'masters_institution',
-    'masters_completion_date': 'masters_completion_date',
-    'bachelors_institution': 'bachelors_institution',
-    'bachelors_completion_date': 'bachelors_completion_date',
-    'hsc_institution': 'hsc_institution',
-    'hsc_passing_year': 'hsc_passing_year',
-    'ssc_institution': 'ssc_institution',
-    'ssc_passing_year': 'ssc_passing_year',
+    'nid_submitted_value': 'nid_number',
+    'birth_certificate_submitted_value': 'birth_certificate_number',
+    'present_address_submitted_value': 'present_address',
+    'permanent_address_submitted_value': 'permanent_address',
     'training_certification_names': 'training_certification_names',
-
-    'additional_employer_notes': 'additional_employment_history',
+    'other_details': 'other_qualification_details',
 }
 
-# The candidate form asks for degree name and major separately; this one asks for
-# "Degree / Major (as applicable)" in a single field.
-DEGREE_MAJOR_SOURCES = {
-    'masters_degree_major': ('masters_degree_name', 'masters_major'),
-    'bachelors_degree_major': ('bachelors_degree_name', 'bachelors_major'),
-}
+DEGREE_MAP = {'masters': 'masters', 'bachelors': 'bachelors', 'other': 'other',
+              'hsc': 'hsc', 'ssc': 'ssc'}
 
-# Per employer: HR suffix <- candidate suffix. Everything HR has to establish
-# themselves (confirmed dates, verification status) is absent on purpose.
-EMPLOYER_MAP = {
-    'name': 'name',
-    'hr_contact': 'hr_contact',
-    'hr_email': 'hr_email',
-    'position': 'position',
-    'claimed_start_date': 'start_date',
-    'claimed_end_date': 'end_date',
-    'claimed_reason_leaving': 'reason_leaving',
-}
-
-REFERENCE_MAP = {
-    'name': 'name',
-    'designation': 'designation',
-    'relationship': 'relationship',
-    'contact': 'contact',
-    'email': 'email',
-}
-
-EMPLOYER_COUNT = 4
-REFERENCE_COUNT = 2
+RELATIONSHIP_MAP = {'hr_other': 'hr'}
 
 
 def _candidate_answers(resume) -> dict:
-    """The candidate's own answers, or {} if they have no form yet."""
     form = getattr(resume, 'employee_form', None)
     return dict(form.answers or {}) if form else {}
 
 
-def _joined(answers, keys):
-    parts = [str(answers.get(k) or '').strip() for k in keys]
-    return ' — '.join(p for p in parts if p)
+def _text(value) -> str:
+    return str(value if value is not None else '').strip()
+
+
+def _joined(parts, sep=' — '):
+    return sep.join(p for p in (_text(x) for x in parts) if p)
+
+
+def _labelled(answers, pairs):
+    out = []
+    for key, label in pairs:
+        value = _text(answers.get(key))
+        if value:
+            out.append(f'{label}: {value}' if label else value)
+    return ' — '.join(out)
+
+
+def _education_details(c) -> dict:
+    out = {}
+    for level in ('masters', 'bachelors'):
+        completed = _text(c.get(f'{level}_completion_date'))
+        out[f'{level}_details'] = _joined([
+            c.get(f'{level}_institution'), c.get(f'{level}_degree_name'),
+            c.get(f'{level}_major'),
+            f'Completed {display_date(completed)}' if completed else '',
+        ])
+    for level in ('hsc', 'ssc'):
+        out[f'{level}_details'] = _labelled(c, [
+            (f'{level}_institution', ''), (f'{level}_board', 'Board'),
+            (f'{level}_passing_year', 'Passing year'), (f'{level}_result', 'Result'),
+        ])
+    return out
+
+
+def _employers(c) -> dict:
+    out = {}
+    indices = declared_employer_indices(c)[:EMPLOYER_MAX]
+    if indices:
+        out['has_employment'] = 'yes'
+    elif c.get('has_employment') == 'no':
+        out['has_employment'] = 'no'
+    for position, index in enumerate(indices, start=1):
+        src = f'employer_{index}_'
+        dst = f'employer_{position}_'
+        current = c.get(f'{src}separation') == 'currently_employed'
+        out[f'{dst}name'] = c.get(f'{src}name')
+        out[f'{dst}hr_contact'] = _joined([c.get(f'{src}hr_contact'),
+                                           c.get(f'{src}hr_email')], sep='\n')
+        out[f'{dst}position'] = c.get(f'{src}position')
+        out[f'{dst}claimed_start_date'] = c.get(f'{src}start_date')
+        if current:
+            out[f'{dst}claimed_current'] = 'yes'
+        else:
+            out[f'{dst}claimed_end_date'] = c.get(f'{src}end_date')
+        out[f'{dst}claimed_reason_leaving'] = c.get(f'{src}reason_leaving')
+        if position < EMPLOYER_MAX:
+            out[f'{dst}another'] = 'yes' if position < len(indices) else 'no'
+    return out
+
+
+def _references(c) -> dict:
+    out = {}
+    for index in range(1, REFERENCE_COUNT + 1):
+        p = f'reference_{index}_'
+        relationship = c.get(f'{p}relationship')
+        out[f'{p}name'] = c.get(f'{p}name')
+        out[f'{p}designation'] = c.get(f'{p}designation')
+        out[f'{p}relationship'] = RELATIONSHIP_MAP.get(relationship, relationship)
+        out[f'{p}contact'] = _joined([c.get(f'{p}contact'), c.get(f'{p}email')], sep='\n')
+    return out
 
 
 def prefill_answers(resume, user=None) -> dict:
     """Values to start an HR verification with. Blanks are dropped."""
-    candidate = _candidate_answers(resume)
-    values = {}
+    c = _candidate_answers(resume)
+    values = {hr_key: c.get(eif_key) for hr_key, eif_key in DIRECT_MAP.items()}
 
-    for hr_key, candidate_key in DIRECT_MAP.items():
-        values[hr_key] = candidate.get(candidate_key)
+    present = _text(c.get('present_address'))
+    permanent = _text(c.get('permanent_address'))
+    same = c.get('address_same')
+    if same == 'no' or (same is None and permanent and permanent != present):
+        values['candidate_permanent_address'] = permanent
 
-    for hr_key, sources in DEGREE_MAJOR_SOURCES.items():
-        values[hr_key] = _joined(candidate, sources)
+    if c.get('date_of_birth'):
+        values['dob_submitted_value'] = display_date(c['date_of_birth'])
 
-    for index in range(1, EMPLOYER_COUNT + 1):
-        for hr_suffix, candidate_suffix in EMPLOYER_MAP.items():
-            values[f'employer_{index}_{hr_suffix}'] = candidate.get(
-                f'employer_{index}_{candidate_suffix}'
-            )
+    values['highest_degree'] = DEGREE_MAP.get(c.get('highest_degree'))
+    values.update(_education_details(c))
+    values.update(_employers(c))
+    values.update(_references(c))
 
-    for index in range(1, REFERENCE_COUNT + 1):
-        for hr_suffix, candidate_suffix in REFERENCE_MAP.items():
-            values[f'reference_{index}_{hr_suffix}'] = candidate.get(
-                f'reference_{index}_{candidate_suffix}'
-            )
+    if not _text(values.get('candidate_full_name')):
+        values['candidate_full_name'] = _text(resume.candidate_name)
+    if not _text(values.get('position_applied_for')):
+        values['position_applied_for'] = _text(resume.job.title)
+    if not _text(values.get('requisition_id')):
+        values['requisition_id'] = _text(getattr(resume.job, 'requisition_id', ''))
 
-    # Fall back to the Resume itself where the candidate never filled the form.
-    values.setdefault('candidate_full_name', None)
-    if not values.get('candidate_full_name'):
-        values['candidate_full_name'] = (resume.candidate_name or '').strip()
-    if not values.get('position_applied_for'):
-        values['position_applied_for'] = (resume.job.title or '').strip()
-
-    # HR's own starting context, not the candidate's.
     values['verification_start_date'] = timezone.localdate().isoformat()
     if user is not None:
-        full_name = (user.get_full_name() or '').strip() or user.get_username()
-        values['hr_reviewer_name'] = full_name
+        values['hr_reviewer_name'] = (user.get_full_name() or '').strip() or user.get_username()
 
     return {key: value for key, value in values.items()
-            if value not in (None, '', [])}
+            if value is not None and _text(value) != ''}
 
 
 def pending_prefill(verification, user=None) -> dict:
-    """Prefill values for questions HR has not answered yet.
-
-    Applied on GET only, so a value HR cleared on purpose is not helpfully put
-    back the next time they open the section.
-    """
+    """Prefill values for questions HR has not answered yet."""
     answered = verification.answers or {}
     suggested = prefill_answers(verification.resume, user=user)
     return {

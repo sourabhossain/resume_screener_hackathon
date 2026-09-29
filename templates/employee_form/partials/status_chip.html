@@ -1,4 +1,12 @@
-{% if form_obj.is_submitted %}
+{% if form_obj.is_submitted and form_obj.consent_declined %}
+<span class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+    Consent declined — HR review
+</span>
+{% elif form_obj.is_submitted and form_obj.declaration_declined %}
+<span class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+    Declaration not agreed — HR review
+</span>
+{% elif form_obj.is_submitted %}
 <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
     Submitted

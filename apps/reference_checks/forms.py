@@ -1,69 +1,87 @@
 """Django forms built at runtime from `schema.FORMS`.
 
-One class serves all three verification forms; the `kind` decides which schema
-it reads. Field construction is reused from the Employee Information Form -- the
-whole family shares one question vocabulary.
+One class serves every verification form; the `kind` decides which schema it
+reads. Field construction is shared with the Employee Information Form.
 """
 from django import forms
+from django.utils import timezone
 
+from apps.core.form_logic import ConditionalFormMixin, is_visible
 from apps.core.form_utils import AriaInvalidMixin, clean_phone_text
 from apps.employee_form.forms import build_field
 
 from . import schema
 
+NOT_FUTURE_DATE_KEYS = frozenset({'employment_start_date', 'employment_end_date'})
+DECLARATION_ERROR = 'Please tick the declaration to submit this form.'
 
-class StepForm(AriaInvalidMixin, forms.Form):
-    """The questions of a single section of one verification form."""
 
-    def __init__(self, *args, kind=None, step_key=None, **kwargs):
+class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
+    """The questions of a single section of one verification form.
+
+    `fixed` holds the read-only Section A facts; whatever is posted for those
+    keys is ignored and the fixed value stored instead.
+    """
+
+    def __init__(self, *args, kind=None, step_key=None, fixed=None, context=None,
+                 **kwargs):
         super().__init__(*args, **kwargs)
+        self.initial = dict(self.initial or {})
         self.kind = kind
         self.step_key = step_key
         self.step = schema.get_step(kind, step_key)
-        self.questions = schema.questions(kind, step_key)
-        self.rules = schema.conditional_rules(kind, step_key)
+        self.fixed = dict(fixed or {})
+        self.logic_context = context or {}
+        self.questions = []
 
-        for question in self.questions:
+        for question in schema.questions(kind, step_key):
+            if question.get('readonly') and not self.fixed.get(question['key']):
+                # Nothing on file to show, so the respondent has to type it.
+                question = {**question, 'readonly': False}
             self.fields[question['key']] = build_field(question)
+            if question.get('readonly'):
+                self.fields[question['key']].required = False
+                self.initial[question['key']] = self.fixed[question['key']]
+            self.questions.append(question)
 
     def clean(self):
         cleaned = super().clean()
         for question in self.questions:
             key = question['key']
+            if question.get('readonly'):
+                cleaned[key] = self.fixed[key]
+                self.errors.pop(key, None)
+                continue
             if key not in cleaned:
                 continue
+            value = cleaned[key]
             if question['type'] == schema.PHONE:
                 try:
-                    cleaned[key] = clean_phone_text(
-                        cleaned[key], required=question['required'])
+                    cleaned[key] = clean_phone_text(value, required=question['required'])
                 except forms.ValidationError as exc:
                     self.add_error(key, exc)
             elif question['type'] == schema.TEXT:
-                cleaned[key] = (cleaned[key] or '').strip()
+                cleaned[key] = (value or '').strip()
+            elif question['type'] == schema.DATE:
+                if value and key in NOT_FUTURE_DATE_KEYS and value > timezone.localdate():
+                    self.add_error(key, 'This date cannot be in the future.')
 
-        self._apply_conditional_rules(cleaned)
+        start, end = cleaned.get('employment_start_date'), cleaned.get('employment_end_date')
+        if start and end and end < start:
+            self.add_error('employment_end_date',
+                           'The end date cannot be before the start date.')
+
+        self.apply_logic(cleaned)
+        self._require_declaration(cleaned)
         return cleaned
 
-    def _apply_conditional_rules(self, cleaned):
-        """"If Yes, please provide details" has to actually come with them.
-
-        A reported concern with no detail cannot be acted on, and every one of
-        these questions already offers "Not known" for the case where the
-        respondent has nothing to say.
-        """
-        for rule in self.rules:
-            answer = cleaned.get(rule['trigger'])
-            if answer not in rule['when']:
+    def _require_declaration(self, cleaned):
+        answers = self.logic_answers(cleaned)
+        for question in self.questions:
+            if question['type'] != schema.BOOLEAN or not question['required']:
                 continue
-            for key in rule['keys']:
-                if key not in self.fields or self.errors.get(key):
-                    # add_error drops the key from cleaned_data, so a field that
-                    # already failed must not also be told it is missing.
-                    continue
-                if cleaned.get(key) in (None, '', []):
-                    label = schema.questions_by_key(self.kind).get(
-                        rule['trigger'], {}).get('label', 'that answer')
-                    self.add_error(key, f'Required by your answer to "{label}".')
+            if is_visible(question, answers) and cleaned.get(question['key']) != 'yes':
+                self.add_error(question['key'], DECLARATION_ERROR)
 
     def field_rows(self):
         """Bound fields with their layout hints, in schema order."""
@@ -72,15 +90,20 @@ class StepForm(AriaInvalidMixin, forms.Form):
                 'question': question,
                 'field': self[question['key']],
                 'half': schema.is_half_width(question),
-                'label': question['label'],
+                'label': question.get('statement') or question['label'],
             }
             for question in self.questions
         ]
 
     def storable_answers(self):
         """Cleaned answers, JSON-serialisable for the answers field."""
-        return {
-            question['key']: self.cleaned_data[question['key']]
-            for question in self.questions
-            if question['key'] in self.cleaned_data
-        }
+        out = {}
+        for question in self.questions:
+            key = question['key']
+            if key not in self.cleaned_data:
+                continue
+            value = self.cleaned_data[key]
+            if question['type'] == schema.DATE and value:
+                value = value.isoformat()
+            out[key] = value
+        return out

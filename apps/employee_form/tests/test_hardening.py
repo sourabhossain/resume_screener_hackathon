@@ -42,6 +42,7 @@ def verified(client, candidate):
 
 
 SECTION_A = {
+    'requisition_id': 'REQ-1',
     'candidate_full_name': 'Probe Candidate',
     'mobile_number': '+8801711123456',
     'personal_email': 'probe@example.com',
@@ -59,6 +60,22 @@ SECTION_B = {
     'hsc_institution': 'H', 'hsc_board': 'D', 'hsc_passing_year': '2014',
     'hsc_result': '5', 'ssc_institution': 'S', 'ssc_board': 'D',
     'ssc_passing_year': '2012', 'ssc_result': '5',
+}
+
+
+EMPLOYER_1 = {
+    'has_employment': 'yes',
+    'employer_1_name': 'Acme Ltd',
+    'employer_1_employment_type': 'full_time',
+    'employer_1_hr_contact': '+8801711000000',
+    'employer_1_hr_email': 'hr@acme.com',
+    'employer_1_position': 'Manager',
+    'employer_1_start_date': '2021-01-01',
+    'employer_1_end_date': '2024-01-01',
+    'employer_1_reason_leaving': 'Growth',
+    'employer_1_separation': 'voluntary_resignation',
+    'employer_1_contact_permission': 'yes',
+    'employer_1_another': 'no',
 }
 
 
@@ -138,26 +155,14 @@ def test_uploaded_document_requires_login(client, verified):
 # ── PROBE 5: employer end date must not precede the start date ───────────
 def test_employer_end_before_start_is_rejected(verified):
     client, form = verified
-    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
-    _post(client, form, 'section_b', {
-        **SECTION_B,
-        'bachelors_certificate': _pdf('b.pdf'),
-        'hsc_certificate': _pdf('h.pdf'),
-        'ssc_certificate': _pdf('s.pdf'),
-    })
-    _post(client, form, 'employer_1', {
-        'employer_1_name': 'Acme',
-        'employer_1_hr_contact': '+8801711000000',
-        'employer_1_hr_email': 'hr@acme.com',
-        'employer_1_position': 'Manager',
-        'employer_1_start_date': '2024-01-01',
+    _reach_employment(client, form)
+    _post(client, form, 'employment', {
+        **EMPLOYER_1, 'employer_1_start_date': '2024-01-01',
         'employer_1_end_date': '2020-01-01',
-        'employer_1_reason_leaving': 'x',
-        'employer_1_contact_permission': 'yes',
     })
 
     form.refresh_from_db()
-    assert form.current_step == 'employer_1', (
+    assert form.current_step == 'employment', (
         'employment ending before it started was accepted into background verification data'
     )
 
@@ -187,7 +192,7 @@ def test_step_total_is_stable_once_branching_is_known(verified):
     })
     form.refresh_from_db(); totals.append(form.total_steps)
 
-    _post(client, form, 'employer_1', {})
+    _post(client, form, 'employment', {'has_employment': 'no'})
     form.refresh_from_db(); totals.append(form.total_steps)
 
     assert totals == sorted(totals), f'displayed step total went backwards: {totals}'
@@ -206,16 +211,11 @@ def _reference(index):
 
 
 def _walk_to_department(client, form):
-    """Section C is linear: four employers then two references, then Department."""
-    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
-    _post(client, form, 'section_b', {
-        **SECTION_B, 'bachelors_certificate': _pdf('b.pdf'),
-        'hsc_certificate': _pdf('h.pdf'), 'ssc_certificate': _pdf('s.pdf'),
-    })
-    for i in range(1, 5):
-        _post(client, form, f'employer_{i}', {})       # no employer: all optional
+    _reach_employment(client, form)
+    _post(client, form, 'employment', {'has_employment': 'no'})
     for i in range(1, 3):
         _post(client, form, f'reference_{i}', _reference(i))
+    _post(client, form, 'team_reporting', {'manages_team': 'no'})
     form.refresh_from_db()
     assert form.current_step == 'department', form.current_step
 
@@ -231,12 +231,14 @@ def test_changing_a_branch_answer_keeps_navigation_sane(verified):
     # together with it.
     _post(client, form, 'department', {
         'department': 'banking_financial_services',
-        'sales_target_achievement': '112',
-        'sales_key_accounts': 'Two banks',
+        'customer_facing': 'no',
+        'sales_business_type': 'Dealer sales',
+        'sales_target_achievement': '112%',
+        'sales_largest_achievement': 'Closed two banks',
     })
     form.refresh_from_db()
     assert 'd1_sales' in form.review_path, form.review_path
-    assert form.answers['sales_target_achievement'] == 112.0
+    assert form.answers['sales_target_achievement'] == '112%'
 
     # Candidate goes back and picks a different department.
     _post(client, form, 'department', {
@@ -250,7 +252,7 @@ def test_changing_a_branch_answer_keeps_navigation_sane(verified):
     # The abandoned branch's answers must go too, or a Finance candidate's form
     # would still carry what they typed while it said Sales.
     assert 'sales_target_achievement' not in form.answers, form.answers
-    assert 'sales_key_accounts' not in form.answers, form.answers
+    assert 'sales_business_type' not in form.answers, form.answers
     assert form.answers['tech_stack'] == 'Django, Postgres'
     assert form.current_step in form.path, 'current_step left off the active branch'
     response = client.get(reverse('employee_form:step', kwargs={
@@ -347,8 +349,8 @@ def test_an_invalid_upload_is_not_stored_even_if_the_rest_is_fine(verified):
     assert not form.files.filter(question_key='nid_copy').exists()
 
 
-# ── Employers are all-or-nothing ─────────────────────────────────────────
-def _reach_employer_1(client, form):
+# ── Employment history: Q39 gate and the repeating employer block ───────
+def _reach_employment(client, form):
     _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
     _post(client, form, 'section_b', {
         **SECTION_B,
@@ -357,62 +359,128 @@ def _reach_employer_1(client, form):
         'ssc_certificate': _pdf('s.pdf'),
     })
     form.refresh_from_db()
-    assert form.current_step == 'employer_1'
+    assert form.current_step == 'employment'
 
 
-def test_fresher_can_pass_every_employer_step_blank(verified):
-    """The PDF marks Employer 1 required; that would block freshers outright."""
+def test_a_fresher_answers_no_and_skips_every_employer(verified):
     client, form = verified
-    _reach_employer_1(client, form)
+    _reach_employment(client, form)
 
-    for index in (1, 2, 3, 4):
-        response = _post(client, form, f'employer_{index}', {})
-        assert response.status_code == 302, f'employer_{index} blocked a fresher'
-        form.refresh_from_db()
+    response = _post(client, form, 'employment', {'has_employment': 'no'})
 
+    assert response.status_code == 302
+    form.refresh_from_db()
     assert form.current_step == 'reference_1'
+    assert schema.declared_employer_indices(form.answers) == []
 
 
-def test_naming_an_employer_requires_the_rest_of_that_block(verified):
+def test_the_employment_gate_itself_is_required(verified):
     client, form = verified
-    _reach_employer_1(client, form)
+    _reach_employment(client, form)
 
-    _post(client, form, 'employer_1', {'employer_1_name': 'Acme Ltd'})
+    _post(client, form, 'employment', {})
 
     form.refresh_from_db()
-    assert form.current_step == 'employer_1', 'a half-filled employer was accepted'
-    assert not form.answers.get('employer_1_name')
+    assert form.current_step == 'employment'
 
 
-def test_a_fully_named_employer_is_accepted(verified):
+def test_yes_requires_the_whole_first_employer(verified):
     client, form = verified
-    _reach_employer_1(client, form)
+    _reach_employment(client, form)
 
-    response = _post(client, form, 'employer_1', {
-        'employer_1_name': 'Acme Ltd',
-        'employer_1_hr_contact': '+8801711000000',
-        'employer_1_hr_email': 'hr@acme.com',
-        'employer_1_position': 'Manager',
-        'employer_1_start_date': '2021-01-01',
-        'employer_1_end_date': '2024-01-01',
-        'employer_1_contact_permission': 'yes',
-    })
+    _post(client, form, 'employment', {'has_employment': 'yes', 'employer_1_name': 'Acme'})
+
+    form.refresh_from_db()
+    assert form.current_step == 'employment', 'a half-filled employer was accepted'
+
+
+def test_a_complete_employer_is_accepted(verified):
+    client, form = verified
+    _reach_employment(client, form)
+
+    response = _post(client, form, 'employment', EMPLOYER_1)
 
     assert response.status_code == 302
     form.refresh_from_db()
     assert form.answers['employer_1_name'] == 'Acme Ltd'
-    assert form.current_step == 'employer_2'
+    assert form.answers['employer_1_employment_type'] == 'full_time'
+    assert form.current_step == 'reference_1'
 
 
-# ── "Same as present address" tick box ───────────────────────────────────
-def test_ticking_same_address_copies_present_to_permanent(verified):
-    """Server-side copy: the browser mirror is convenience, this is the truth."""
+def test_a_current_employer_needs_no_end_date_or_reason(verified):
     client, form = verified
-    data = dict(SECTION_A)
-    data['address_same'] = 'on'
-    data['present_address'] = 'House 42, Banani, Dhaka'
-    data['permanent_address'] = 'SOMETHING COMPLETELY DIFFERENT'
-    data['nid_copy'] = _pdf('n.pdf')
+    _reach_employment(client, form)
+    data = {**EMPLOYER_1, 'employer_1_separation': 'currently_employed'}
+    del data['employer_1_end_date']
+    del data['employer_1_reason_leaving']
+
+    response = _post(client, form, 'employment', data)
+
+    assert response.status_code == 302
+
+
+def test_a_past_employer_needs_an_end_date(verified):
+    client, form = verified
+    _reach_employment(client, form)
+    data = dict(EMPLOYER_1)
+    del data['employer_1_end_date']
+
+    _post(client, form, 'employment', data)
+
+    form.refresh_from_db()
+    assert form.current_step == 'employment'
+
+
+def test_another_employer_yes_requires_employer_two(verified):
+    client, form = verified
+    _reach_employment(client, form)
+
+    _post(client, form, 'employment', {**EMPLOYER_1, 'employer_1_another': 'yes'})
+
+    form.refresh_from_db()
+    assert form.current_step == 'employment'
+
+
+def test_employer_two_has_no_currently_employed_option():
+    second = dict(schema.QUESTIONS_BY_KEY['employer_2_separation']['choices'])
+    first = dict(schema.QUESTIONS_BY_KEY['employer_1_separation']['choices'])
+    assert 'currently_employed' not in second
+    assert 'currently_employed' in first
+
+
+def test_a_second_employer_is_stored_in_order(verified):
+    client, form = verified
+    _reach_employment(client, form)
+    second = {
+        'employer_2_name': 'Beta Ltd', 'employer_2_employment_type': 'contractual',
+        'employer_2_hr_contact': '+8801711000001', 'employer_2_hr_email': 'hr@beta.com',
+        'employer_2_position': 'Officer', 'employer_2_start_date': '2018-01-01',
+        'employer_2_end_date': '2020-12-31', 'employer_2_separation': 'contract_completion',
+        'employer_2_contact_permission': 'no', 'employer_2_another': 'no',
+    }
+
+    response = _post(client, form, 'employment',
+                     {**EMPLOYER_1, 'employer_1_another': 'yes', **second})
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert schema.declared_employer_indices(form.answers) == [1, 2]
+
+
+def test_answering_no_clears_the_hidden_employers(verified):
+    client, form = verified
+    _reach_employment(client, form)
+    _post(client, form, 'employment', {**EMPLOYER_1, 'employer_2_name': 'Stale Ltd'})
+
+    form.refresh_from_db()
+    assert not form.answers.get('employer_2_name')
+
+
+# ── Q10 / Q11: permanent address only when it differs ────────────────────
+def test_same_address_yes_stores_present_as_permanent(verified):
+    client, form = verified
+    data = dict(SECTION_A, address_same='yes', present_address='House 42, Banani, Dhaka',
+                permanent_address='SOMETHING COMPLETELY DIFFERENT', nid_copy=_pdf('n.pdf'))
 
     response = _post(client, form, 'section_a', data)
 
@@ -420,47 +488,33 @@ def test_ticking_same_address_copies_present_to_permanent(verified):
     form.refresh_from_db()
     assert form.answers['address_same'] == 'yes'
     assert form.answers['permanent_address'] == 'House 42, Banani, Dhaka'
-    assert 'DIFFERENT' not in form.answers['permanent_address']
 
 
-def test_ticking_same_address_does_not_need_the_permanent_field(verified):
-    """With the field mirrored and locked, the browser may post it empty."""
+def test_same_address_yes_does_not_need_the_permanent_field(verified):
     client, form = verified
-    data = dict(SECTION_A)
-    data['address_same'] = 'on'
-    data['present_address'] = 'House 42, Banani, Dhaka'
-    data['permanent_address'] = ''
-    data['nid_copy'] = _pdf('n.pdf')
+    data = dict(SECTION_A, address_same='yes', permanent_address='',
+                nid_copy=_pdf('n.pdf'))
 
     response = _post(client, form, 'section_a', data)
 
-    assert response.status_code == 302, 'a mirrored permanent address was rejected'
-    form.refresh_from_db()
-    assert form.answers['permanent_address'] == 'House 42, Banani, Dhaka'
+    assert response.status_code == 302
 
 
-def test_unticked_keeps_two_separate_addresses(verified):
+def test_same_address_no_keeps_two_separate_addresses(verified):
     client, form = verified
-    data = dict(SECTION_A)
-    data.pop('address_same', None)
-    data['present_address'] = 'House 42, Banani, Dhaka'
-    data['permanent_address'] = 'Village Shibpur, Narsingdi'
-    data['nid_copy'] = _pdf('n.pdf')
+    data = dict(SECTION_A, address_same='no', present_address='House 42, Banani, Dhaka',
+                permanent_address='Village Shibpur, Narsingdi', nid_copy=_pdf('n.pdf'))
 
     response = _post(client, form, 'section_a', data)
 
     assert response.status_code == 302
     form.refresh_from_db()
-    assert form.answers['address_same'] == 'no'
     assert form.answers['permanent_address'] == 'Village Shibpur, Narsingdi'
 
 
-def test_permanent_address_is_still_required_when_not_ticked(verified):
+def test_permanent_address_is_required_when_different(verified):
     client, form = verified
-    data = dict(SECTION_A)
-    data.pop('address_same', None)
-    data['permanent_address'] = ''
-    data['nid_copy'] = _pdf('n.pdf')
+    data = dict(SECTION_A, address_same='no', permanent_address='', nid_copy=_pdf('n.pdf'))
 
     _post(client, form, 'section_a', data)
 
@@ -468,25 +522,35 @@ def test_permanent_address_is_still_required_when_not_ticked(verified):
     assert form.current_step == 'section_a'
 
 
-def test_recruiter_view_still_reads_the_pdf_question(verified):
-    """The stored answer stays yes/no, so Q11 is answered for the review page."""
+def test_the_same_address_question_is_itself_required(verified):
     client, form = verified
-    data = dict(SECTION_A)
-    data['address_same'] = 'on'
-    data['nid_copy'] = _pdf('n.pdf')
+    data = dict(SECTION_A, nid_copy=_pdf('n.pdf'))
+    data.pop('address_same')
+
     _post(client, form, 'section_a', data)
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_a'
+
+
+def test_recruiter_view_reads_the_pdf_question(verified):
+    client, form = verified
+    _post(client, form, 'section_a', dict(SECTION_A, address_same='yes',
+                                          nid_copy=_pdf('n.pdf')))
 
     form.refresh_from_db()
     rows = {r['key']: r for s in form.answered_sections() for r in s['rows']}
     row = rows['address_same']
     assert row['label'] == 'Is your Present Address the same as your Permanent Address?'
     assert row['value'] == 'Yes'
+    assert 'permanent_address' not in rows
 
 
-# ── The Master's tick box actually gates its fields ──────────────────────
+# ── Q15 decides which education blocks apply ─────────────────────────────
 def _masters_payload():
     return {
         **SECTION_B,
+        'highest_degree': 'masters',
         'bachelors_certificate': _pdf('b.pdf'),
         'hsc_certificate': _pdf('h.pdf'),
         'ssc_certificate': _pdf('s.pdf'),
@@ -498,53 +562,137 @@ def _masters_payload():
     }
 
 
-def test_unticked_masters_clears_its_details(verified):
-    """"No Master's" must not be stored alongside a university name."""
+def test_masters_keeps_its_details(verified):
     client, form = verified
     _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
 
-    data = _masters_payload()
-    data.pop('has_masters', None)                 # tick box left unticked
-    response = _post(client, form, 'section_b', data)
+    response = _post(client, form, 'section_b', _masters_payload())
 
     assert response.status_code == 302
     form.refresh_from_db()
-    assert form.answers['has_masters'] == 'no'
-    assert not form.answers.get('masters_institution')
-    assert not form.answers.get('masters_degree_name')
-    assert not form.files.filter(question_key='masters_certificate').exists()
-
-
-def test_ticked_masters_keeps_its_details(verified):
-    client, form = verified
-    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
-
-    data = _masters_payload()
-    data['has_masters'] = 'on'
-    response = _post(client, form, 'section_b', data)
-
-    assert response.status_code == 302
-    form.refresh_from_db()
-    assert form.answers['has_masters'] == 'yes'
     assert form.answers['masters_institution'] == 'BUET'
     assert form.files.filter(question_key='masters_certificate').exists()
 
 
-def test_unticking_later_detaches_the_masters_certificate(verified):
-    """A certificate must not outlive the qualification it belongs to."""
+def test_masters_block_is_required_when_masters_is_chosen(verified):
     client, form = verified
     _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
-    _post(client, form, 'section_b', {**_masters_payload(), 'has_masters': 'on'})
+    data = _masters_payload()
+    del data['masters_institution']
+
+    _post(client, form, 'section_b', data)
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_b'
+
+
+def test_bachelors_clears_any_masters_details(verified):
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+    _post(client, form, 'section_b', _masters_payload())
     assert form.files.filter(question_key='masters_certificate').exists()
 
-    again = _masters_payload()
-    again.pop('has_masters', None)
-    again.pop('masters_certificate', None)
+    again = {**_masters_payload(), 'highest_degree': 'bachelors'}
+    again.pop('masters_certificate')
     _post(client, form, 'section_b', again)
 
     form.refresh_from_db()
+    assert not form.answers.get('masters_institution')
     assert not form.files.filter(question_key='masters_certificate').exists()
-    assert form.answers['has_masters'] == 'no'
+
+
+def test_other_asks_q36_and_skips_the_bachelors_block(verified):
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+    data = {
+        'highest_degree': 'other',
+        'other_qualification_details': 'Diploma in Engineering, DPI, 2016, CGPA 3.6',
+        'hsc_institution': 'H', 'hsc_board': 'D', 'hsc_passing_year': '2014',
+        'hsc_result': '5', 'hsc_certificate': _pdf('h.pdf'),
+        'ssc_institution': 'S', 'ssc_board': 'D', 'ssc_passing_year': '2012',
+        'ssc_result': '5', 'ssc_certificate': _pdf('s.pdf'),
+    }
+
+    response = _post(client, form, 'section_b', data)
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.answers['other_qualification_details'].startswith('Diploma')
+
+
+def test_other_requires_q36(verified):
+    client, form = verified
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
+
+    _post(client, form, 'section_b', {**_section_b(), 'highest_degree': 'other'})
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_b'
+
+
+# ── Q14 / Q129: the end and HR-review paths ──────────────────────────────
+def test_declining_consent_ends_the_form_for_hr_review(verified):
+    client, form = verified
+
+    response = _post(client, form, 'section_a', dict(
+        SECTION_A, verification_consent='no', nid_copy=_pdf('n.pdf')))
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.is_submitted is True
+    assert form.consent_declined is True
+    assert form.status_label == 'Consent declined'
+    assert form.path == ['section_a']
+
+
+def _at_declaration(form):
+    form.current_step = schema.FINAL_STEP
+    form.answers = {'verification_consent': 'yes'}
+    form.save(update_fields=['current_step', 'answers'])
+
+
+def test_not_agreeing_to_the_declaration_needs_no_signature(verified):
+    client, form = verified
+    _at_declaration(form)
+
+    response = _post(client, form, schema.FINAL_STEP, {
+        'total_experience_years': '3', 'availability_status': 'immediately_available',
+        'declaration_agreement': 'disagree',
+    })
+
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.is_submitted and form.declaration_declined
+    assert not form.files.filter(question_key='signature').exists()
+
+
+def test_agreeing_requires_the_signature(verified):
+    client, form = verified
+    _at_declaration(form)
+
+    _post(client, form, schema.FINAL_STEP, {
+        'total_experience_years': '3', 'availability_status': 'immediately_available',
+        'declaration_agreement': 'agree',
+    })
+
+    form.refresh_from_db()
+    assert form.is_submitted is False
+
+
+@pytest.mark.parametrize('status,needed', [
+    ('serving_notice', {'notice_period', 'remaining_notice_period', 'last_working_day'}),
+    ('not_yet_resigned', {'notice_period'}),
+    ('immediately_available', set()),
+    ('currently_unemployed', set()),
+])
+def test_availability_decides_the_notice_questions(status, needed):
+    from apps.core.form_logic import is_required
+    answers = {'availability_status': status}
+    required = {
+        key for key in ('notice_period', 'remaining_notice_period', 'last_working_day')
+        if is_required(schema.QUESTIONS_BY_KEY[key], answers)
+    }
+    assert required == needed
 
 
 # ── Section D renders its role questions on the same page ────────────────
@@ -632,17 +780,12 @@ def test_role_fields_fragment_rejects_a_step_with_no_role_section(verified):
     assert response.status_code == 404
 
 
-# ── PROBE 8: numeric questions must not accept free text ────────────────
+# ── Education: passing years are numbers, results are free text ─────────
 def _walk_to_section_b(client, form):
     _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
 
 
 def _section_b(**overrides):
-    """A section_b post that is complete apart from what the test changes.
-
-    The certificates matter: without them the step fails on the uploads alone,
-    and a test asserting "this was rejected" would pass for the wrong reason.
-    """
     return {
         **SECTION_B,
         'bachelors_certificate': _pdf('b.pdf'),
@@ -653,7 +796,6 @@ def _section_b(**overrides):
 
 
 def test_valid_section_b_advances(verified):
-    """Control for the rejection tests below: the baseline post must succeed."""
     client, form = verified
     _walk_to_section_b(client, form)
 
@@ -663,10 +805,8 @@ def test_valid_section_b_advances(verified):
     assert form.current_step != 'section_b'
 
 
-@pytest.mark.parametrize('key', ['hsc_passing_year', 'hsc_result',
-                                 'ssc_passing_year', 'ssc_result'])
-def test_education_numbers_reject_text(verified, key):
-    """A passing year or GPA is a number; 'asdfasdf' used to be stored verbatim."""
+@pytest.mark.parametrize('key', ['hsc_passing_year', 'ssc_passing_year'])
+def test_passing_years_reject_text(verified, key):
     client, form = verified
     _walk_to_section_b(client, form)
 
@@ -674,7 +814,28 @@ def test_education_numbers_reject_text(verified, key):
 
     form.refresh_from_db()
     assert form.current_step == 'section_b', f'{key} accepted free text'
-    assert (form.answers or {}).get(key) != 'asdfasdf'
+
+
+@pytest.mark.parametrize('key', ['hsc_result', 'ssc_result'])
+def test_results_are_required(verified, key):
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b', _section_b(**{key: ''}))
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_b'
+
+
+def test_a_letter_grade_result_is_accepted(verified):
+    client, form = verified
+    _walk_to_section_b(client, form)
+
+    _post(client, form, 'section_b', _section_b(ssc_result='A*A*A', hsc_result='4.50'))
+
+    form.refresh_from_db()
+    assert form.answers['ssc_result'] == 'A*A*A'
+    assert form.answers['hsc_passing_year'] == 2014
 
 
 def test_passing_year_cannot_be_in_the_future(verified):
@@ -687,30 +848,7 @@ def test_passing_year_cannot_be_in_the_future(verified):
     assert form.current_step == 'section_b', 'a future passing year was accepted'
 
 
-def test_gpa_above_the_scale_is_rejected(verified):
-    client, form = verified
-    _walk_to_section_b(client, form)
-
-    _post(client, form, 'section_b', _section_b(hsc_result='9.5'))
-
-    form.refresh_from_db()
-    assert form.current_step == 'section_b', 'a GPA above the 5.00 scale was accepted'
-
-
-def test_numeric_answers_are_stored_as_numbers(verified):
-    client, form = verified
-    _walk_to_section_b(client, form)
-
-    _post(client, form, 'section_b',
-          _section_b(hsc_passing_year='2014', hsc_result='4.5'))
-
-    form.refresh_from_db()
-    assert form.answers['hsc_passing_year'] == 2014
-    assert form.answers['hsc_result'] == 4.5
-
-
-def test_numeric_inputs_carry_their_bounds_to_the_browser(verified):
-    """min/max/step on the input is what stops a bad value before a round trip."""
+def test_year_inputs_carry_their_bounds_to_the_browser(verified):
     client, form = verified
     _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': _pdf('n.pdf')})
 
@@ -723,9 +861,16 @@ def test_numeric_inputs_carry_their_bounds_to_the_browser(verified):
     assert f'min="{schema.EARLIEST_PASSING_YEAR}"' in year
     assert 'step="1"' in year
 
-    gpa = re.search(r'<input[^>]*name="hsc_result"[^>]*>', body).group(0)
-    assert 'type="number"' in gpa
-    assert 'max="5"' in gpa
+
+def test_uploads_are_pdf_or_image_only(verified):
+    client, form = verified
+    doc = SimpleUploadedFile('nid.docx', b'PK\x03\x04 docx', content_type='application/vnd')
+
+    _post(client, form, 'section_a', {**SECTION_A, 'nid_copy': doc})
+
+    form.refresh_from_db()
+    assert form.current_step == 'section_a'
+    assert not form.files.filter(question_key='nid_copy').exists()
 
 
 def test_a_zero_answer_counts_as_answered(verified):
@@ -733,11 +878,11 @@ def test_a_zero_answer_counts_as_answered(verified):
     from apps.employee_form.review import narrative_sections
 
     client, form = verified
-    form.answers = {'notice_period_days': 0}
+    form.answers = {'total_experience_years': 0.0}
     form.save()
 
     rows = [r for section in narrative_sections(form)
-            for r in section['answered'] if r['key'] == 'notice_period_days']
+            for r in section['answered'] if r['key'] == 'total_experience_years']
     assert rows, '0 was filed as unanswered'
 
 
@@ -753,18 +898,3 @@ def test_a_fresher_still_shows_experience_in_the_header(verified):
     labels = [f['label'] for f in facts]
     assert 'Experience (years)' in labels, '0 years vanished from the header strip'
     assert 'total_experience_years' in shown
-
-
-# ── PROBE 9: nothing shows the candidate a bare section letter ───────────
-def test_the_candidate_never_sees_a_section_letter():
-    """"Section D7" is our filing, not something a candidate can act on."""
-    import re
-    visible = []
-    for step in schema.STEPS:
-        visible += [step['section'], step['title'], step.get('description', '')]
-        for question in step['questions']:
-            visible += [question['label'], question.get('help', '')]
-            visible += [label for _, label in question.get('choices', [])]
-
-    offenders = [t for t in visible if re.search(r'\bSections? [A-D]\d?\b', t)]
-    assert not offenders, offenders

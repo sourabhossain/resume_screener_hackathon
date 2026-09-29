@@ -235,13 +235,12 @@ def test_submitted_form_rejects_further_posts(client, candidate):
 def test_step_off_the_branch_redirects_back(client, candidate):
     """A hand-typed URL for a section the answers do not lead to is bounced.
 
-    Nothing says the candidate has previous employment yet, so the employer
-    sections are not on their path at all.
+    A role section is never a wizard step of its own.
     """
     client, form = _verified_client(client, candidate)
 
     response = client.get(reverse('employee_form:step', kwargs={
-        'token': form.token, 'step_key': 'employer_1',
+        'token': form.token, 'step_key': 'd4_technology',
     }))
     assert response.status_code == 302
     assert schema.FIRST_STEP in response.url
@@ -270,8 +269,6 @@ def test_cannot_submit_by_posting_the_final_step_early(client, candidate):
                 kwargs={'token': form.token, 'step_key': 'd7_declaration'}),
         {
             'total_experience_years': '5',
-            'current_responsibilities': 'Everything',
-            'measurable_achievements': 'Many',
             'availability_status': 'immediately_available',
             'declaration_agreement': 'agree',
             'signature_drawn': SIGNATURE_DATA_URL,
@@ -285,7 +282,7 @@ def test_cannot_submit_by_posting_the_final_step_early(client, candidate):
 
 def test_back_to_an_earlier_step_is_allowed(client, candidate, django_user_model):
     client, form = _verified_client(client, candidate)
-    form.current_step = 'employer_1'
+    form.current_step = 'employment'
     form.answers = {'candidate_full_name': 'Ayesha Rahman'}
     form.save(update_fields=['current_step', 'answers'])
 
@@ -304,22 +301,30 @@ def test_unknown_step_is_404(client, candidate):
 
 
 # ── Flow (PDF: linear Sections A-C, then Section D branches) ─────────────
-def test_section_c_is_linear_all_four_employers_then_references():
-    """The PDF has no employment gate and no "another employer?" branch."""
-    path = schema.step_path({})
-    expected = [
-        'section_a', 'section_b',
-        'employer_1', 'employer_2', 'employer_3', 'employer_4',
-        'reference_1', 'reference_2', 'department',
+def test_the_pdf_flow_order():
+    assert schema.step_path({}) == [
+        'section_a', 'section_b', 'employment', 'reference_1', 'reference_2',
+        'team_reporting', 'department', schema.FINAL_STEP,
     ]
-    assert path[:len(expected)] == expected
 
 
-def test_no_employer_block_is_hard_required():
-    """A fresher must be able to submit, so no employer field is required outright."""
-    for index in (1, 2, 3, 4):
-        for question in schema.STEPS_BY_KEY[f'employer_{index}']['questions']:
-            assert not question['required'], question['key']
+def test_every_employer_question_sits_behind_the_q39_gate():
+    from apps.core.form_logic import is_visible
+    fresher = {'has_employment': 'no'}
+    for question in schema.get_step('employment')['questions']:
+        if question['key'] == 'has_employment':
+            continue
+        assert not is_visible(question, fresher), question['key']
+
+
+def test_employers_repeat_up_to_the_cap():
+    from apps.core.form_logic import is_visible
+    answers = {'has_employment': 'yes'}
+    for index in range(1, schema.EMPLOYER_MAX):
+        answers[f'employer_{index}_another'] = 'yes'
+    last = schema.QUESTIONS_BY_KEY[f'employer_{schema.EMPLOYER_MAX}_name']
+    assert is_visible(last, answers)
+    assert f'employer_{schema.EMPLOYER_MAX}_another' not in schema.QUESTIONS_BY_KEY
 
 
 def test_banking_department_routes_to_d1_sales():
@@ -392,12 +397,25 @@ def test_every_step_key_referenced_exists():
         assert target in schema.STEPS_BY_KEY
 
 
-def test_numbering_is_sequential_with_no_gaps():
-    answers = {'department': 'banking_financial_services'}
-    numbers = []
-    for step_key in schema.review_path(answers):
-        numbers += [q['number'] for q in schema.numbered_questions(step_key, answers)]
-    assert numbers == list(range(1, len(numbers) + 1))
+def test_every_pdf_question_number_is_present_once():
+    numbers = [q['no'] for q in schema.QUESTIONS_BY_KEY.values() if q.get('no')]
+    assert sorted(numbers) == list(range(1, 131))
+
+
+@pytest.mark.parametrize('number,key', [
+    (1, 'requisition_id'), (10, 'address_same'), (14, 'verification_consent'),
+    (15, 'highest_degree'), (36, 'other_qualification_details'), (39, 'has_employment'),
+    (48, 'employer_1_separation'), (50, 'employer_1_another'), (61, 'employer_2_another'),
+    (62, 'reference_1_name'), (74, 'manages_team'), (82, 'reporting_types'),
+    (83, 'department'), (84, 'customer_facing'), (96, 'sales_largest_achievement'),
+    (124, 'availability_status'), (129, 'declaration_agreement'), (130, 'signature'),
+])
+def test_pdf_numbers_land_on_the_right_questions(number, key):
+    assert schema.QUESTIONS_BY_KEY[key]['no'] == number
+
+
+def test_e_commerce_services_routes_to_d5():
+    assert schema.DEPARTMENT_ROUTING['ecommerce_services'] == 'd5_operations'
 
 
 # ── Prefill ──────────────────────────────────────────────────────────────
@@ -416,6 +434,13 @@ def test_known_details_are_prefilled(client, candidate):
     assert 'value="ayesha@example.com"' in body
     assert f'value="{candidate.job.title}"' in body
     assert 'please check it matches your documents' in body
+
+
+def test_requisition_id_is_prefilled_from_the_job(candidate):
+    from apps.employee_form.prefill import prefill_answers
+    candidate.job.requisition_id = 'REQ-2026-014'
+    candidate.job.save(update_fields=['requisition_id'])
+    assert prefill_answers(candidate)['requisition_id'] == 'REQ-2026-014'
 
 
 def test_ai_extracted_fields_are_not_prefilled(client, db, sample_job):
@@ -468,6 +493,7 @@ def test_prefilled_values_are_stored_when_the_step_is_submitted(client, candidat
         reverse('employee_form:step',
                 kwargs={'token': form.token, 'step_key': 'section_a'}),
         {
+            'requisition_id': 'REQ-9',
             'candidate_full_name': 'Ayesha Rahman',
             'mobile_number': '+8801711123456',
             'personal_email': 'ayesha@example.com',
@@ -508,7 +534,7 @@ def test_short_labels_only_shorten_never_invent():
 def test_full_labels_survive_on_the_review_page(client, candidate):
     """The recruiter view has no group headings, so it keeps the source wording."""
     form = issue_invite(candidate)
-    form.answers = {'hsc_board': 'Dhaka'}
+    form.answers = {'highest_degree': 'bachelors', 'hsc_board': 'Dhaka'}
     form.save(update_fields=['answers'])
 
     rows = [r for s in form.answered_sections() for r in s['rows']]
@@ -557,7 +583,7 @@ def test_every_role_section_is_readable_back(candidate):
         # First free-text question: a checkbox answer is a list, not a string.
         first_key = next(
             q['key'] for q in schema.get_step(target)['questions']
-            if q['type'] not in schema.CHOICE_TYPES
+            if q['type'] not in schema.CHOICE_TYPES and not q.get('show_if')
         )
         form.answers = {'department': value, first_key: 'sample answer'}
         form.save(update_fields=['answers'])

@@ -7,7 +7,7 @@ same as the NID number.
 
 So the review page is assembled around what a recruiter actually checks:
   * the handful of identity facts, up front
-  * education as one comparison table across the four levels
+  * education as one comparison table across the levels
   * each employer and referee as its own card
   * everything else as a plain list, with unanswered optional fields folded away
 
@@ -30,7 +30,7 @@ EDUCATION_LEVELS = [
     },
     {
         'level': "Undergraduate / Bachelor's",
-        'optional': False,
+        'optional': True,
         'institution': 'bachelors_institution',
         'qualification': 'bachelors_degree_name',
         'major': 'bachelors_major',
@@ -58,6 +58,16 @@ EDUCATION_LEVELS = [
         'finished': 'ssc_passing_year',
         'certificate': 'ssc_certificate',
     },
+    {
+        'level': 'Other / Equivalent',
+        'optional': True,
+        'institution': 'other_qualification_details',
+        'qualification': None,
+        'major': None,
+        'result': None,
+        'finished': None,
+        'certificate': None,
+    },
 ]
 
 # Questions surfaced in the header strip. Everything here is something a
@@ -73,10 +83,7 @@ KEY_FACT_KEYS = [
 
 # Sections rendered by the purpose-built blocks above, so the generic list must
 # not repeat them.
-SPECIALISED_STEPS = frozenset(
-    {'section_b', 'reference_1', 'reference_2'}
-    | {f'employer_{i}' for i in range(1, 5)}
-)
+SPECIALISED_STEPS = frozenset({'section_b', 'employment', 'reference_1', 'reference_2'})
 
 # Always rendered in the page header, so repeating them lower down is noise.
 HEADER_KEYS = frozenset({'candidate_full_name', 'position_applied_for'})
@@ -132,16 +139,16 @@ def education_table(form):
     rows = []
     for level in EDUCATION_LEVELS:
         institution = _value(form, level['institution'])
-        certificate = files.get(level['certificate'], [])
+        certificate = files.get(level['certificate'], []) if level['certificate'] else []
         if level['optional'] and not institution and not certificate:
             continue
         rows.append({
             'level': level['level'],
             'institution': institution,
-            'qualification': _value(form, level['qualification']),
+            'qualification': _value(form, level['qualification']) if level['qualification'] else '',
             'major': _value(form, level['major']) if level['major'] else '',
             'result': _value(form, level['result']) if level['result'] else '',
-            'finished': _value(form, level['finished']),
+            'finished': _value(form, level['finished']) if level['finished'] else '',
             'files': certificate,
         })
     return rows
@@ -159,18 +166,18 @@ def training(form):
 def employers(form):
     """One card per employer the candidate actually declared.
 
-    Employers 2-4 are optional, so a candidate with one previous job produces one
-    card rather than three empty ones. `may_contact` matters to whoever runs the
-    background check: a "No" means that employer must not be approached.
+    `may_contact` matters to whoever runs the background check: a "No" means
+    that employer must not be approached.
     """
+    answers = form.answers or {}
     out = []
-    for index in range(1, 5):
+    for index in schema.declared_employer_indices(answers):
         name = _value(form, f'employer_{index}_name')
-        if not name:
-            continue
         out.append({
             'index': index,
             'name': name,
+            'employment_type': _value(form, f'employer_{index}_employment_type'),
+            'separation': _value(form, f'employer_{index}_separation'),
             'position': _value(form, f'employer_{index}_position'),
             'start': _value(form, f'employer_{index}_start_date'),
             'end': _value(form, f'employer_{index}_end_date'),
@@ -182,7 +189,8 @@ def employers(form):
         })
     return {
         'items': out,
-        'additional': _value(form, 'additional_employment_history'),
+        'fresher': answers.get('has_employment') == 'no',
+        'additional': (answers.get('additional_employment_history') or '').strip(),
     }
 
 

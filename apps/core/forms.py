@@ -84,7 +84,7 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
     class Meta:
         model = Job
         fields = [
-            'title', 'description', 'status',
+            'title', 'requisition_id', 'description', 'status',
             'employment_type', 'location_type', 'location',
             'posted_date', 'closing_date',
         ]
@@ -92,6 +92,10 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             'title': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'e.g. Senior Python Developer'
+            }),
+            'requisition_id': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'e.g. REQ-2026-014'
             }),
             'description': forms.Textarea(attrs={
                 'class': 'form-input',

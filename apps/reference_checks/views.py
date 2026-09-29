@@ -1,8 +1,8 @@
 """External verification requests: the HR side and the respondent's side.
 
 Two audiences in one app. HR (is_staff) decides who is asked and reads the
-replies. The respondent is a stranger to this system -- a former employer's HR,
-a referee, a professor -- who arrives on an emailed link, proves it is them with
+replies. The respondent is a stranger to this system -- a former employer's HR
+or a referee -- who arrives on an emailed link, proves it is them with
 a one-time code, and never sees anything but their own form.
 """
 import logging
@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
+from apps.core.form_logic import context_answers, missing_required, page_rules
 from apps.core.form_utils import form_errors_to_messages
 from apps.core.models import Resume
 
@@ -55,14 +56,19 @@ def manage(request, uuid):
     """Who can be asked, who has been asked, and what came back."""
     resume = _get_resume(uuid)
     refused = services.verification_refused(resume)
+    contacts = services.candidate_contacts(resume)
+    for row in contacts:
+        kind = row['check'].kind if row['check'] else ''
+        row['selected_kind'] = kind if kind in schema.SENDABLE_KINDS else row['default_kind']
     return render(request, 'reference_checks/manage.html', {
         'resume': resume,
-        'contacts': services.candidate_contacts(resume),
+        'contacts': contacts,
         'verification_refused': refused,
         'can_send': resume.recruiter_status in STATUSES_ALLOWING_SEND and not refused,
         'is_fresher': services.is_fresher(resume),
         'kind_labels': schema.KIND_LABELS,
-        'kind_choices': ReferenceCheck.KIND_CHOICES,
+        'kind_choices': [(value, label) for value, label in ReferenceCheck.KIND_CHOICES
+                         if value in schema.SENDABLE_KINDS],
     })
 
 
@@ -78,7 +84,7 @@ def send(request, uuid, source_key):
         return redirect('reference_checks:manage', uuid=uuid)
 
     kind = request.POST.get('kind', '')
-    if kind not in dict(ReferenceCheck.KIND_CHOICES):
+    if kind not in schema.SENDABLE_KINDS:
         messages.error(request, 'Unknown form type.')
         return redirect('reference_checks:manage', uuid=uuid)
 
@@ -108,7 +114,7 @@ def response(request, uuid, pk):
         'resume': resume,
         'check': check,
         'sections': check.answered_sections(),
-        'form_title': schema.KIND_LABELS[check.kind],
+        'form_title': schema.FORM_TITLES[check.kind],
     })
 
 
@@ -160,7 +166,12 @@ def _closed_response(request, check):
 
 
 def _candidate_panel(check) -> dict:
-    """The read-only facts the paper form has SSL fill in for the respondent."""
+    """Legacy academic form only: the facts SSL fills in, shown read-only.
+
+    The final PDFs ask these as Section A questions instead.
+    """
+    if check.kind != schema.ACADEMIC:
+        return {}
     resume = check.resume
     answers = getattr(resume, 'employee_form', None)
     answers = dict(answers.answers or {}) if answers else {}
@@ -168,17 +179,22 @@ def _candidate_panel(check) -> dict:
         'Candidate': resume.candidate_name,
         'Position applied for': resume.job.title,
     }
-    if check.kind == schema.ACADEMIC:
-        for label, key in (
-            ('University / institution', 'bachelors_institution'),
-            ('Degree / programme', 'bachelors_degree_name'),
-            ('Major / subject', 'bachelors_major'),
-        ):
-            if answers.get(key):
-                panel[label] = answers[key]
-    elif check.kind == schema.EMPLOYER and check.recipient_organisation:
-        panel['Organisation'] = check.recipient_organisation
+    for label, key in (
+        ('University / institution', 'bachelors_institution'),
+        ('Degree / programme', 'bachelors_degree_name'),
+        ('Major / subject', 'bachelors_major'),
+    ):
+        if answers.get(key):
+            panel[label] = answers[key]
     return panel
+
+
+def _first_incomplete_step(kind, answers):
+    """An earlier section still missing a required answer, if any."""
+    for step_key in schema.step_keys(kind)[:-1]:
+        if missing_required(schema.questions(kind, step_key), answers):
+            return step_key
+    return None
 
 
 @_respondent_page
@@ -189,7 +205,7 @@ def entry(request, token):
         return closed
     if _is_verified(request, check):
         return redirect('reference_checks:step', token=token,
-                        step_key=check.current_step)
+                        step_key=check.resume_step)
     return redirect('reference_checks:verify', token=token)
 
 
@@ -212,7 +228,7 @@ def verify(request, token):
         elif check.check_otp(code):
             request.session[_session_key(check)] = True
             return redirect('reference_checks:step', token=token,
-                            step_key=check.current_step)
+                            step_key=check.resume_step)
         else:
             error = (f'That code is not right. '
                      f'{check.otp_attempts_left} attempt(s) left.')
@@ -256,36 +272,39 @@ def step(request, token, step_key):
         raise Http404('Unknown section.')
 
     keys = schema.step_keys(check.kind)
-    reached = keys.index(check.current_step) if check.current_step in keys else 0
+    reached = keys.index(check.resume_step)
     if keys.index(step_key) > reached:
-        # No skipping ahead: the last section carries the recommendation, and it
-        # must not be submittable without the questions it rests on.
+        # No skipping ahead: the last section must not stand alone.
         return redirect('reference_checks:step', token=token,
                         step_key=keys[reached])
 
-    # Anything already saved wins: the prefill is a starting point, and the
-    # moment the respondent corrects a field their version is the answer.
+    # Anything already saved wins over the prefill, except the Section A facts,
+    # which are fixed and re-applied on every render and save.
     prefilled = services.prefill_answers(check)
-    answers = {**prefilled, **(check.answers or {})}
-    shows_prefill = bool(prefilled) and any(
-        question['key'] in prefilled
-        for question in schema.questions(check.kind, step_key)
-    )
+    fixed = services.fixed_answers(check)
+    answers = {**prefilled, **(check.answers or {}), **fixed}
+    page_questions = schema.questions(check.kind, step_key)
+    shows_prefill = any(question['key'] in prefilled for question in page_questions)
+    form_kwargs = {'kind': check.kind, 'step_key': step_key, 'initial': answers,
+                   'fixed': fixed, 'context': answers}
 
     if request.method == 'POST':
-        form = StepForm(request.POST, kind=check.kind, step_key=step_key,
-                        initial=answers)
+        form = StepForm(request.POST, **form_kwargs)
         if form.is_valid():
+            next_key = schema.next_step_key(check.kind, step_key)
             with transaction.atomic():
                 locked = ReferenceCheck.objects.select_for_update().get(pk=check.pk)
-                locked.answers = {**(locked.answers or {}), **form.storable_answers()}
-                next_key = schema.next_step_key(check.kind, step_key)
+                merged = {**(locked.answers or {}), **form.storable_answers()}
+                locked.answers = merged
+                incomplete = None
                 if next_key is None:
+                    incomplete = _first_incomplete_step(check.kind, {**merged, **fixed})
+                if next_key is None and incomplete is None:
                     locked.current_step = step_key
                     locked.is_submitted = True
                     locked.submitted_at = timezone.now()
                 else:
-                    locked.current_step = next_key
+                    locked.current_step = incomplete or next_key
                 # Only this view's own columns: HR may be resending a code on
                 # the same row, and a full write would undo the new one.
                 locked.save(update_fields=[
@@ -298,26 +317,34 @@ def step(request, token, step_key):
                 logger.info('reference_checks.submitted check=%s resume=%s',
                             check.pk, check.resume_id)
                 return redirect('reference_checks:done', token=token)
+            if incomplete:
+                messages.error(request, 'Please complete this section before sending.')
             return redirect('reference_checks:step', token=token,
                             step_key=check.current_step)
         form_errors_to_messages(request, form)
     else:
-        form = StepForm(kind=check.kind, step_key=step_key, initial=answers)
+        form = StepForm(**form_kwargs)
 
+    step = schema.get_step(check.kind, step_key)
     return render(request, 'reference_checks/step.html', {
         'check': check,
         'form': form,
         'rows': form.field_rows(),
-        'step': schema.get_step(check.kind, step_key),
+        'step': step,
+        'step_heading': schema.step_heading(step),
         'step_key': step_key,
         'step_number': schema.step_number(check.kind, step_key),
         'total_steps': schema.total_steps(check.kind),
         'previous_step': schema.previous_step_key(check.kind, step_key),
         'is_final': schema.next_step_key(check.kind, step_key) is None,
-        'form_title': schema.KIND_LABELS[check.kind],
+        'form_title': schema.FORM_TITLES[check.kind],
+        'form_header': schema.HEADERS.get(check.kind, ''),
+        'form_intro': schema.INTROS.get(check.kind, ''),
+        'candidate_name': services.candidate_name(check.resume),
         'candidate_panel': _candidate_panel(check),
         'shows_prefill': shows_prefill,
-        'conditional_rules': schema.conditional_rules(check.kind, step_key),
+        'logic_rules': page_rules(form.questions),
+        'logic_context': context_answers(form.questions, answers),
     })
 
 
@@ -333,4 +360,5 @@ def done(request, token):
     return render(request, 'reference_checks/done.html', {
         'check': check,
         'form_title': schema.KIND_LABELS[check.kind],
+        'candidate_name': services.candidate_name(check.resume),
     })

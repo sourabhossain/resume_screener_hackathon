@@ -1,135 +1,117 @@
-"""Declarative definition of the HR Background Verification & Joining Clearance Form.
+"""HR Background Verification & Joining Form, declared as data.
 
-Same approach as the candidate-facing Employee Information Form: the whole form
-is data, `forms.py` builds a Django form per section from these dicts, and one
-template renders any section.
-
-Source of truth is SSL_Wireless_HR_Verification_Form_Aligned_QuickImport.pdf --
-201 questions across Sections A-F, in the order and with the required marks that
-document gives.
-
-Unlike the candidate form this one does not branch: HR sees every section, in
-order, and may jump between them freely (see `views.step`). It is filled by
-staff over days rather than in one sitting, so every section saves on its own.
-
-Two deliberate departures from the PDF, both mirroring the Employee Information
-Form:
-  * The PDF's Q1 Requisition ID is dropped, so this form has 200 questions.
-    Item numbers are not shown at all: with unanswered rows hidden on the review
-    page they read as a broken sequence (8, then 14), and every question here is
-    self-describing without one.
-  * The PDF marks Employer 1-4 required, which would make the form
-    unsubmittable for a candidate with fewer than four previous jobs -- or any
-    at all. Here each employer block is optional until its name is given, at
-    which point the rest of that block becomes required. Employer names are
-    prefilled from what the candidate declared, so a block the candidate filled
-    in *is* required of HR without HR having to be told.
+Source: "SSL Wireless – HR Background Verification & Joining Form" (PDF), Q1-Q99
+in seven sections, same wording, types, required marks and option order.
+Short→TEXT, Paragraph→TEXTAREA, Dropdown→SELECT, Multiple choice→RADIO,
+Checkboxes→CHECKBOX, File→FILE (PDF or image). Branching is `show_if` /
+`required_if` from apps.core.form_logic; grids become one field per row × column.
 """
-# The question vocabulary is shared with the Employee Information Form rather
-# than redeclared: `forms.build_field` there is what turns these dicts into
-# Django fields, and it compares against these very constants. Importing them
-# means a rename breaks loudly instead of silently building the wrong widget.
+from apps.core.form_logic import all_of, any_of, filled, negate, when
 from apps.employee_form.schema import (  # noqa: F401
     BOOLEAN,
     CHECKBOX,
     CHOICE_TYPES,
     DATE,
-    DECIMAL,
-    DEGREE_CHOICES,
     DEPARTMENT_CHOICES,
-    EMAIL,
+    EMPLOYER_MAX,
     FILE,
     FILE_TYPES,
-    FILES,
-    INTEGER,
-    MAX_FILES_PER_QUESTION,
     MAX_UPLOAD_MB,
-    NUMERIC_TYPES,
-    PHONE,
+    PDF_IMAGE,
     RADIO,
     RELATIONSHIP_CHOICES,
     SELECT,
     TEXT,
     TEXTAREA,
-    YEAR,
 )
 
-_UPLOAD_HELP = f'PDF, document or image. Max {MAX_UPLOAD_MB} MB.'
-
-EMPLOYER_COUNT = 4
 REFERENCE_COUNT = 2
 
 
-def _q(key, label, qtype=TEXT, required=False, help='', choices=None, max_files=None,
-       min_value=None, max_value=None, decimals=2):
-    """One question. Shape matches what `employee_form.forms.build_field` reads."""
+def _q(key, label, qtype=TEXT, required=False, help='', choices=None, no=None,
+       show_if=None, required_if=None):
     q = {'key': key, 'label': label, 'type': qtype, 'required': required, 'help': help}
     if choices is not None:
         q['choices'] = choices
-    if qtype == FILES:
-        q['max_files'] = max_files or MAX_FILES_PER_QUESTION
-    if qtype in NUMERIC_TYPES:
-        q['min_value'] = min_value
-        q['max_value'] = max_value
-        if qtype == DECIMAL:
-            q['decimals'] = decimals
+    if no is not None:
+        q['no'] = no
+    if show_if:
+        q['show_if'] = show_if
+    if required_if:
+        q['required_if'] = required_if
+    if qtype in FILE_TYPES:
+        q['formats'] = PDF_IMAGE
     return q
 
 
-# ── Choice sets ──────────────────────────────────────────────────────────
+# ── Choice sets (PDF order) ──────────────────────────────────────────────
 YES_NO = [('yes', 'Yes'), ('no', 'No')]
 YES_NO_NA = [('yes', 'Yes'), ('no', 'No'), ('na', 'Not Applicable')]
+
+_DEPARTMENT_ORDER = [
+    'banking_financial_services', 'business_development', 'data',
+    'digital_communications', 'documentation_external_audit', 'ecommerce_operations',
+    'ecommerce_services', 'engineering', 'finance_accounts', 'government_project',
+    'human_resources', 'infrastructure_security', 'innovation_coe',
+    'internal_control_compliance', 'legal_affairs', 'enterprise_risk_management',
+    'management', 'partnership_management', 'procurement',
+    'project_management_office', 'revenue_assurance', 'risk_compliance',
+    'service_assurance_call_center', 'service_assurance_quality_assurance',
+    'service_assurance_technical_operations',
+]
+HR_DEPARTMENT_CHOICES = [(v, dict(DEPARTMENT_CHOICES)[v]) for v in _DEPARTMENT_ORDER]
 
 VERIFICATION_ROUTE = [
     ('internal_hr', 'Internal HR'),
     ('agency', 'Background Check Agency'),
     ('both', 'Both Internal HR and Background Check Agency'),
 ]
-AGENCY_REQUIRED = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('tbd', 'To Be Decided'),
+IDENTITY_STATUS = [('yes', 'Verified'), ('no', 'Not Verified'), ('na', 'N/A')]
+IDENTITY_DOC_METHOD = [
+    ('document', 'Document'), ('official_source', 'Official Source'),
+    ('agency', 'Agency'), ('other', 'Other'),
 ]
-IDENTITY_METHOD = [
-    ('document_review', 'Document Review'),
-    ('official_source', 'Direct / Official Source Check'),
-    ('field_verification', 'Field Verification'),
-    ('agency', 'Background Check Agency'),
-    ('other', 'Other'),
+ADDRESS_METHOD = [
+    ('document', 'Document'), ('field', 'Field'), ('agency', 'Agency'), ('other', 'Other'),
 ]
 POLICE_ROUTE = [
     ('direct_internal', 'Direct / Internal'),
     ('agency', 'Background Check Agency'),
     ('other', 'Other'),
-    ('not_required', 'Not Required'),
 ]
 POLICE_STATUS = [
     ('not_started', 'Not Started'),
     ('in_progress', 'In Progress'),
     ('clear', 'Clear / Satisfactory'),
     ('concern', 'Concern / Adverse Finding'),
-    ('not_required', 'Not Required'),
 ]
 
-# DEGREE_CHOICES already ends in Other -- appending another produced a dropdown
-# that offered "Other" twice.
-HIGHEST_DEGREE_CHOICES = list(DEGREE_CHOICES)
-CONSISTENCY_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('further_review', 'Further Review Required'),
-]
-EDUCATION_METHOD = [
-    ('document_review', 'Document Review'),
-    ('institution_confirmation', 'Institution / Board / University Confirmation'),
-    ('online', 'Online Verification'),
-    ('agency', 'Background Check Agency'),
+HIGHEST_DEGREE_CHOICES = [
+    ('masters', "Master's / Postgraduate Degree"),
+    ('bachelors', "Undergraduate / Bachelor's Degree"),
+    ('hsc', 'HSC / A Level / Equivalent'),
+    ('ssc', 'SSC / O Level / Equivalent'),
     ('other', 'Other'),
 ]
-TRAINING_VERIFIED = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('partially', 'Partially Verified'),
+CONSISTENCY_CHOICES = [('yes', 'Yes'), ('no', 'No'),
+                       ('further_review', 'Further Review Required')]
+CERTIFICATE_RECEIVED = [('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')]
+EDUCATION_STATUS = [
+    ('verified', 'Verified'), ('partially', 'Partially'),
+    ('unable', 'Unable'), ('na', 'N/A'),
+]
+UNIVERSITY_METHOD = [
+    ('document_review', 'Document'), ('institution_confirmation', 'Institution'),
+    ('online', 'Online'), ('agency', 'Agency'), ('other', 'Other'),
+]
+BOARD_METHOD = [
+    ('document_review', 'Document'), ('institution_confirmation', 'Board'),
+    ('online', 'Online'), ('agency', 'Agency'), ('other', 'Other'),
+]
+TRAINING_STATUS = [
+    ('verified', 'Verified'),
+    ('partially_verified', 'Partially Verified'),
+    ('unable', 'Unable to Verify'),
     ('na', 'Not Applicable'),
 ]
 TRAINING_METHOD = [
@@ -140,6 +122,7 @@ TRAINING_METHOD = [
     ('other', 'Other'),
 ]
 
+HAS_EMPLOYMENT = [('yes', 'Yes'), ('no', 'No — Fresher / no applicable employment history')]
 EMPLOYER_STATUS = [
     ('verified', 'Verified'),
     ('partially_verified', 'Partially Verified'),
@@ -153,35 +136,40 @@ EMPLOYER_METHOD = [
     ('agency', 'Background Check Agency'),
     ('other', 'Other'),
 ]
-DISCLOSE_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('not_disclosed', 'Employer Would Not Disclose'),
+REASON_CONSISTENT = [
+    ('yes', 'Yes'), ('no', 'No'),
+    ('not_disclosed', 'Employer Would Not Disclose'), ('na', 'Not Applicable'),
 ]
 REHIRE_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('not_disclosed', 'Not Disclosed'),
-    ('na', 'Not Applicable'),
+    ('yes', 'Yes'), ('no', 'No'), ('not_disclosed', 'Not Disclosed'), ('na', 'Not Applicable'),
 ]
 
+REFERENCE_STATUS = [
+    ('verified', 'Verified'), ('unable', 'Unable to Verify'),
+    ('not_attempted', 'Not Yet Attempted'),
+]
 REFERENCE_METHOD = [
-    ('direct_call', 'Direct Call'),
-    ('official_email', 'Official Email'),
-    ('agency', 'Background Check Agency'),
-    ('other', 'Other'),
+    ('direct_call', 'Direct Call'), ('official_email', 'Official Email'),
+    ('agency', 'Agency'), ('other', 'Other'),
 ]
 REFERENCE_RECOMMEND = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
+    ('yes', 'Yes'), ('no', 'No'),
     ('conditional', 'Conditional / With Reservations'),
     ('not_asked', 'Not Asked / Not Disclosed'),
 ]
-ROLE_CONSISTENCY = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('partially', 'Partially'),
-    ('na', 'Not Applicable'),
+ROLE_CONSISTENCY = [('yes', 'Yes'), ('no', 'No'), ('partially', 'Partially'),
+                    ('na', 'Not Applicable')]
+
+FINDING_CATEGORIES = [
+    ('performance', 'Performance'),
+    ('disciplinary', 'Disciplinary'),
+    ('integrity', 'Integrity / Conduct'),
+    ('legal_police', 'Legal / Police'),
+    ('involuntary_separation', 'Involuntary Separation'),
+    ('employment_discrepancy', 'Employment Discrepancy'),
+    ('education_document', 'Education / Document Discrepancy'),
+    ('reference_concern', 'Reference Concern'),
+    ('other', 'Other'),
 ]
 FINDING_SOURCE = [
     ('former_employer_hr', 'Former Employer HR'),
@@ -198,11 +186,7 @@ SOURCE_RELIABILITY = [
     ('single_source', 'Single Source, Plausible'),
     ('unverified', 'Unverified / Rumour'),
 ]
-CLARIFY_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('not_required', 'Not Required'),
-]
+CLARIFY_CHOICES = [('yes', 'Yes'), ('no', 'No'), ('not_required', 'Not Required')]
 RISK_RATING = [
     ('green', 'Green – No Material Concern'),
     ('amber', 'Amber – Minor / Explainable Concern'),
@@ -215,27 +199,19 @@ RECOMMENDATION_CHOICES = [
     ('further_review', 'Further Review Required'),
     ('not_cleared', 'Not Cleared'),
 ]
+
 FINAL_STATUS_CHOICES = [
     ('cleared', 'Cleared'),
     ('conditionally_cleared', 'Conditionally Cleared'),
     ('pending_exception', 'Pending Approved Exception'),
     ('not_cleared', 'Not Cleared'),
 ]
-OFFER_ACCEPTED_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
+OFFER_ACCEPTED_CHOICES = [('yes', 'Yes'), ('no', 'No'), ('pending', 'Pending')]
+CHECKLIST_STATUS = [
+    ('complete', 'Complete'),
     ('pending', 'Pending'),
-]
-CHECKED_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
     ('not_required', 'Not Required'),
-]
-RECEIVED_CHOICES = [
-    ('yes', 'Yes'),
-    ('no', 'No'),
-    ('na', 'Not Applicable'),
-    ('pending', 'Pending'),
+    ('not_available', 'Not Available / Concern'),
 ]
 JOINING_CLEARANCE = [
     ('cleared_to_join', 'Cleared to Join / Joined'),
@@ -245,493 +221,448 @@ JOINING_CLEARANCE = [
 ]
 
 
-# ── Repeated blocks ──────────────────────────────────────────────────────
-def _degree_block(prefix, title, *, passing_year=False):
-    """One education level's verification questions.
-
-    HSC and SSC record a passing year where the university-level degrees record
-    a degree/major and a completion date -- the PDF asks for exactly that, and
-    it matches what the candidate was asked for.
-    """
-    if passing_year:
-        identity = [
-            _q(f'{prefix}_institution', f'{title} — Institution / Board / University'),
-            _q(f'{prefix}_passing_year', f'{title} — Passing Year', YEAR),
-        ]
-    else:
-        identity = [
-            _q(f'{prefix}_institution', f'{title} — Institution / Board / University'),
-            _q(f'{prefix}_degree_major', f'{title} — Degree / Major (as applicable)'),
-            _q(f'{prefix}_completion_date',
-               f'{title} — Graduation / Completion Date', DATE),
-        ]
-    return identity + [
-        _q(f'{prefix}_certificate_received', f'{title} — Certificate Received?',
-           RADIO, choices=YES_NO_NA),
-        _q(f'{prefix}_verified', f'{title} — Verified?', RADIO, choices=YES_NO_NA),
-        _q(f'{prefix}_verification_method', f'{title} — Verification Method',
-           RADIO, choices=EDUCATION_METHOD),
-        _q(f'{prefix}_discrepancy', f'{title} — Discrepancy Found?',
-           RADIO, choices=YES_NO_NA),
-        _q(f'{prefix}_remarks', f'{title} — Verification Remarks / Discrepancy Details',
-           TEXTAREA),
-    ]
+# ── Grids: one field per row × column ────────────────────────────────────
+def _grid(title, no, rows, columns):
+    """rows: (prefix, row label, extra); columns: (suffix, label, type, choices|callable)."""
+    return {'title': title, 'no': no, 'rows': rows, 'columns': columns}
 
 
-# Everything in an employer block that becomes required once the employer is
-# named. The PDF marks these *Required; naming is what switches them on.
-#
-# The employer's *confirmed* dates are deliberately not here, even though the PDF
-# requires them. They are the employer's answer, not HR's: this same section
-# offers "Unable to Verify" and "Employer Would Not Disclose", and requiring the
-# confirmed dates would make both of those unrecordable -- Section D could never
-# be saved, and because sign-off needs every section, the whole verification
-# would deadlock with no way out but erasing the employer's name.
-EMPLOYER_REQUIRED_ONCE_NAMED = (
-    'hr_contact', 'hr_email', 'position',
-    'claimed_start_date', 'claimed_end_date',
-    'reference_check_verified', 'verification_status', 'verification_method',
-    'tenure_discrepancy',
+def _grid_questions(grid, show_if_for=None, required_suffixes=()):
+    out = []
+    for prefix, row_label, extra in grid['rows']:
+        show = show_if_for(prefix) if show_if_for else None
+        for suffix, col_label, qtype, choices in grid['columns']:
+            if callable(choices):
+                choices = choices(prefix, extra)
+            if callable(qtype):
+                qtype = qtype(prefix, extra)
+            out.append(_q(f'{prefix}_{suffix}', f'{row_label} — {col_label}', qtype,
+                          required=suffix in required_suffixes, choices=choices,
+                          no=grid['no'], show_if=show))
+    return out
+
+
+def _grid_keys(grid, prefix):
+    return [f'{prefix}_{suffix}' for suffix, *_ in grid['columns']]
+
+
+IDENTITY_GRID = _grid(
+    'Identity & Address Verification Record', 19,
+    rows=[
+        ('nid', 'NID', 'document'),
+        ('birth_certificate', 'Birth Certificate', 'document'),
+        ('dob', 'Date of Birth', 'document'),
+        ('present_address', 'Present Address', 'address'),
+        ('permanent_address', 'Permanent Address', 'address'),
+    ],
+    columns=[
+        ('submitted_value', 'Candidate-submitted value',
+         lambda p, kind: TEXTAREA if kind == 'address' else TEXT, None),
+        ('verified', 'Verification status', SELECT, IDENTITY_STATUS),
+        ('method', 'Method / Source', SELECT,
+         lambda p, kind: ADDRESS_METHOD if kind == 'address' else IDENTITY_DOC_METHOD),
+        ('remarks', 'Discrepancy / Remarks', TEXT, None),
+    ],
+)
+
+EDUCATION_GRID = _grid(
+    'Qualification Verification Record', 29,
+    rows=[
+        ('masters', "Master's / Postgraduate", 'university'),
+        ('bachelors', "Undergraduate / Bachelor's", 'university'),
+        ('hsc', 'HSC / A Level / Equivalent', 'board'),
+        ('ssc', 'SSC / O Level / Equivalent', 'board'),
+        ('other', 'Other', 'university'),
+    ],
+    columns=[
+        ('details', 'Candidate details / institution / degree / date', TEXTAREA, None),
+        ('certificate_received', 'Certificate received?', SELECT, CERTIFICATE_RECEIVED),
+        ('verification_status', 'Verification status', SELECT, EDUCATION_STATUS),
+        ('verification_method', 'Verification method', SELECT,
+         lambda p, kind: BOARD_METHOD if kind == 'board' else UNIVERSITY_METHOD),
+        ('remarks', 'Discrepancy / Remarks', TEXT, None),
+    ],
+)
+
+JOINING_GRID = _grid(
+    'Joining Document Verification Checklist', 90,
+    rows=[
+        ('joining_certificates', 'Original / required educational certificates', None),
+        ('joining_nid', 'Original NID / identity document', None),
+        ('joining_employment_documents', 'Employment / release / experience documents', None),
+        ('joining_police_report', 'Police / background check report', None),
+    ],
+    columns=[
+        ('status', 'Status', SELECT, CHECKLIST_STATUS),
+        ('notes', 'Notes', TEXT, None),
+    ],
+)
+
+# Q27 decides which Q29 rows apply: only qualifications the candidate declared.
+EDUCATION_ROWS_FOR_DEGREE = {
+    'masters': ('masters', 'bachelors', 'hsc', 'ssc'),
+    'bachelors': ('bachelors', 'hsc', 'ssc'),
+    'hsc': ('hsc', 'ssc'),
+    'ssc': ('ssc',),
+    'other': ('other', 'hsc', 'ssc'),
+}
+
+
+def education_row_shown(prefix):
+    degrees = [d for d, rows in EDUCATION_ROWS_FOR_DEGREE.items() if prefix in rows]
+    return when('highest_degree', *degrees)
+
+
+# ── Rules reused across questions ────────────────────────────────────────
+_AGENCY = when('verification_route', 'agency', 'both')
+_POLICE = when('police_verification_required', 'yes')
+_TRAINING = filled('training_certification_names')
+_ADVERSE = when('adverse_concern_raised', 'yes')
+
+IDENTITY_ROWS = [p for p, _, _ in IDENTITY_GRID['rows']]
+EDUCATION_ROWS = [p for p, _, _ in EDUCATION_GRID['rows']]
+JOINING_ROWS = [p for p, _, _ in JOINING_GRID['rows']]
+
+Q99_TRIGGER = any_of(
+    when('risk_rating', 'red', 'critical'),
+    when('verification_recommendation', 'further_review', 'not_cleared'),
+    when('exception_required', 'yes'),
+    when('adverse_concern_raised', 'yes'),
+    when('police_verification_status', 'concern'),
 )
 
 
+# ── Employment: Q36 gate, then a chain of employer blocks (Q37-Q52) ──────
+def employer_shown(index):
+    rule = when('has_employment', 'yes')
+    if index == 1:
+        return rule
+    return all_of(employer_shown(index - 1), when(f'employer_{index - 1}_another', 'yes'))
+
+
 def _employer_block(index):
-    """Employer `index`'s verification questions (19 of them, per the PDF)."""
     p = f'employer_{index}'
-    n = index
-    return [
-        _q(f'{p}_name', f'Employer {n} Name',
-           help='Prefilled from what the candidate declared. Leave blank to skip '
-                'this employer; fill it in and the rest of the block is required.'),
-        _q(f'{p}_hr_contact', f'Employer {n} HR / Official Contact Number', PHONE),
-        _q(f'{p}_hr_email', f'Employer {n} HR / Official Email Address', EMAIL),
-        _q(f'{p}_position', f'Candidate Position / Designation at Employer {n}'),
-        _q(f'{p}_claimed_start_date',
-           f"Candidate's Claimed Start Date at Employer {n}", DATE),
-        _q(f'{p}_claimed_end_date',
-           f"Candidate's Claimed End Date at Employer {n}", DATE),
-        _q(f'{p}_confirmed_start_date',
-           f"Employer's Confirmed Start Date at Employer {n}", DATE),
-        _q(f'{p}_confirmed_end_date',
-           f"Employer's Confirmed End Date at Employer {n}", DATE),
-        _q(f'{p}_reference_check_verified',
-           f'Employment / HR Reference Check Verified for Employer {n}?',
-           RADIO, choices=YES_NO),
-        _q(f'{p}_verification_status', f'Employer {n} Verification Status',
-           RADIO, choices=EMPLOYER_STATUS),
-        _q(f'{p}_verification_method', f'Employer {n} Verification Method',
-           RADIO, choices=EMPLOYER_METHOD),
-        _q(f'{p}_verifier_name', f'Employer {n} Verifier Name & Designation'),
-        _q(f'{p}_position_verified',
-           f'Candidate Position / Designation Verified for Employer {n}?',
-           RADIO, choices=DISCLOSE_CHOICES),
-        _q(f'{p}_claimed_reason_leaving',
-           f"Candidate's Stated Reason for Leaving Employer {n}", TEXTAREA),
-        _q(f'{p}_confirmed_reason_leaving',
-           f"Employer {n}'s Confirmed Reason for Leaving", TEXTAREA),
+    e = f'Employer {index} — '
+    shown = employer_shown(index)
+    status = f'{p}_verification_status'
+    questions = [
+        _q(f'{p}_name', f'{e}Employer Name', required=True, no=37, show_if=shown),
+        _q(f'{p}_hr_contact', f'{e}Employer HR / Official Verification Contact', TEXTAREA,
+           required=True, no=38, show_if=shown,
+           help='Official contact number and official email.'),
+        _q(f'{p}_position', f'{e}Candidate-claimed Position / Designation',
+           required=True, no=39, show_if=shown),
+        _q(f'{p}_claimed_start_date', f'{e}Candidate-claimed Employment Period — Start',
+           DATE, required=True, no=40, show_if=shown),
+        _q(f'{p}_claimed_current', f'{e}Candidate-claimed Employment Period — Current',
+           BOOLEAN, no=40, show_if=shown),
+        _q(f'{p}_claimed_end_date', f'{e}Candidate-claimed Employment Period — End',
+           DATE, required=True, no=40,
+           show_if=all_of(shown, negate(when(f'{p}_claimed_current', 'yes')))),
+        _q(f'{p}_confirmed_position', f'{e}Employer-confirmed Position / Designation',
+           no=41, show_if=shown, help='Enter "Not Disclosed" if the employer refuses.'),
+        _q(f'{p}_confirmed_start_date', f'{e}Employer-confirmed Employment Period — Start',
+           DATE, no=42, show_if=shown),
+        _q(f'{p}_confirmed_current', f'{e}Employer-confirmed Employment Period — Current',
+           BOOLEAN, no=42, show_if=shown),
+        _q(f'{p}_confirmed_end_date', f'{e}Employer-confirmed Employment Period — End',
+           DATE, no=42,
+           show_if=all_of(shown, negate(when(f'{p}_confirmed_current', 'yes')))),
+        _q(status, f'{e}Employment Verification Status', SELECT, required=True,
+           choices=EMPLOYER_STATUS, no=43, show_if=shown),
+        _q(f'{p}_verification_method', f'{e}Employment Verification Method', SELECT,
+           choices=EMPLOYER_METHOD, no=44, show_if=shown,
+           required_if=when(status, 'verified', 'partially_verified', 'unable'),
+           help='Required once verification has been attempted.'),
+        _q(f'{p}_verifier_name', f'{e}Verifier Name & Designation', no=45, show_if=shown),
+        _q(f'{p}_claimed_reason_leaving', f"{e}Candidate's Stated Reason for Leaving",
+           TEXTAREA, no=46, show_if=shown),
+        _q(f'{p}_confirmed_reason_leaving', f"{e}Employer's Confirmed Reason for Leaving",
+           TEXTAREA, no=47, show_if=shown, help='Or "Not Disclosed".'),
         _q(f'{p}_reason_consistent',
-           f'Reason for Leaving Consistent with Candidate Statement for Employer {n}?',
-           RADIO, choices=DISCLOSE_CHOICES),
-        _q(f'{p}_rehire_eligible', f'Eligible for Rehire at Employer {n}?',
-           RADIO, choices=REHIRE_CHOICES),
-        _q(f'{p}_tenure_discrepancy',
-           f'Tenure / Employment Discrepancy Found for Employer {n}?',
-           RADIO, choices=YES_NO),
-        _q(f'{p}_remarks', f'Employer {n} Verification Remarks / Discrepancy Details',
-           TEXTAREA),
+           f'{e}Reason for Leaving Consistent with Candidate Statement?', RADIO,
+           choices=REASON_CONSISTENT, no=48, show_if=shown),
+        _q(f'{p}_rehire_eligible', f'{e}Eligible for Rehire?', RADIO,
+           choices=REHIRE_CHOICES, no=49, show_if=shown),
+        _q(f'{p}_tenure_discrepancy', f'{e}Employment Discrepancy Found?', RADIO,
+           required=True, choices=YES_NO, no=50, show_if=shown),
+        _q(f'{p}_remarks', f'{e}Employer Verification Remarks / Discrepancy Details',
+           TEXTAREA, no=51, show_if=shown,
+           required_if=any_of(when(f'{p}_tenure_discrepancy', 'yes'),
+                              when(f'{p}_reason_consistent', 'no')),
+           help='Required when a discrepancy is found or the reason for leaving is '
+                'inconsistent.'),
     ]
+    if index < EMPLOYER_MAX:
+        questions.append(
+            _q(f'{p}_another', f'{e}Is there another employer to verify?', RADIO,
+               required=True, choices=YES_NO, no=52, show_if=shown))
+    return questions
 
 
 def _reference_block(index):
-    """Professional reference `index`'s verification questions."""
     p = f'reference_{index}'
-    n = index
+    r = f'Reference {index}'
+    base = 53 if index == 1 else 60
     return [
-        _q(f'{p}_name', f'Reference {n} Name', required=True),
-        _q(f'{p}_designation', f'Reference {n} Designation & Company', required=True),
-        _q(f'{p}_relationship', f'Reference {n} Relationship to Candidate',
-           SELECT, choices=RELATIONSHIP_CHOICES),
-        _q(f'{p}_contact', f'Reference {n} Contact Number', PHONE),
-        _q(f'{p}_email', f'Reference {n} Official / Work Email Address', EMAIL),
-        _q(f'{p}_check_verified', f'HR Reference Check Verified for Reference {n}?',
-           RADIO, required=True, choices=YES_NO),
-        _q(f'{p}_verification_method', f'Reference {n} Verification Method',
-           RADIO, choices=REFERENCE_METHOD),
-        _q(f'{p}_feedback', f'Reference {n} Feedback Summary', TEXTAREA),
-        _q(f'{p}_recommend',
-           f'Would Reference {n} Rehire / Recommend the Candidate?',
-           RADIO, choices=REFERENCE_RECOMMEND),
+        _q(f'{p}_name', f'{r} Name', required=True, no=base),
+        _q(f'{p}_designation', f'{r} Designation & Company / Institution', required=True,
+           no=base + 1),
+        _q(f'{p}_relationship', f'{r} Relationship to Candidate', SELECT,
+           choices=RELATIONSHIP_CHOICES, no=base + 2),
+        _q(f'{p}_contact', f'{r} Contact Details', TEXTAREA, no=base + 3,
+           help='Phone and official / work email.'),
+        _q(f'{p}_verification_status', f'{r} Verification Status', SELECT, required=True,
+           choices=REFERENCE_STATUS, no=base + 4),
+        _q(f'{p}_verification_method', f'{r} Verification Method', SELECT, required=True,
+           choices=REFERENCE_METHOD, no=base + 4),
+        _q(f'{p}_feedback', f'{r} Feedback Summary', TEXTAREA, no=base + 5),
+        _q(f'{p}_recommend', f'Would {r} Rehire / Recommend the Candidate?', RADIO,
+           choices=REFERENCE_RECOMMEND, no=base + 6),
     ]
 
 
-# ── Sections A-F ─────────────────────────────────────────────────────────
+# ── Sections 1-7 ─────────────────────────────────────────────────────────
 STEPS = [
     {
         'key': 'hr_review',
-        'section': 'Candidate Link & HR Review Details',
-        'title': 'Candidate Link & HR Review',
-        'description': 'Who is being verified, by whom, and through which route.',
+        'section': 'Candidate Link, HR Review & Verification Route',
+        'title': 'HR Review & Verification Route',
+        'description': 'Use the same Requisition ID, Candidate Full Name and Department '
+                       'as the Employee Information Form.',
         'next': 'identity',
         'questions': [
-            _q('candidate_full_name', 'Candidate Full Name', required=True),
-            _q('position_applied_for', 'Position Applied For', required=True),
+            _q('requisition_id', 'Requisition ID', required=True, no=1,
+               help='Must match the Employee Information Form.'),
+            _q('candidate_full_name', 'Candidate Full Name', required=True, no=2,
+               help='Must match the Employee Information Form.'),
+            _q('position_applied_for', 'Position Applied For', required=True, no=3),
             _q('department', 'Department', SELECT, required=True,
-               choices=DEPARTMENT_CHOICES),
-            _q('hr_reviewer_name', 'HR Reviewer Name', required=True),
-            _q('hr_reviewer_designation', 'HR Reviewer Designation', required=True),
-            _q('verification_start_date', 'Verification Start Date', DATE,
-               required=True),
-            _q('verification_route', 'Overall Verification Route', RADIO,
-               required=True, choices=VERIFICATION_ROUTE),
-            _q('agency_required', 'Background Check Agency Required?', RADIO,
-               required=True, choices=AGENCY_REQUIRED),
-            _q('agency_name', 'Background Check Agency Name (if used)'),
-            _q('agency_contact', 'Agency Contact Person / Contact Details'),
-            _q('agency_report_reference', 'Agency Report Reference Number'),
-            _q('agency_report_date', 'Agency Report Date', DATE),
-            _q('agency_report_file', 'Agency Report / Supporting Evidence', FILE,
-               help=_UPLOAD_HELP),
+               choices=HR_DEPARTMENT_CHOICES, no=4,
+               help='Must match the candidate form.'),
+            _q('hr_reviewer_name', 'HR Reviewer Name', required=True, no=5),
+            _q('hr_reviewer_designation', 'HR Reviewer Designation', required=True, no=6),
+            _q('verification_start_date', 'Verification Start Date', DATE, required=True,
+               no=7),
+            _q('verification_route', 'Verification Route', SELECT, required=True,
+               choices=VERIFICATION_ROUTE, no=8),
+            _q('agency_name', 'Background Check Agency Name', required=True, no=9,
+               show_if=_AGENCY),
+            _q('agency_contact', 'Agency Contact Person / Contact Details', TEXTAREA,
+               required=True, no=10, show_if=_AGENCY, help='Name, phone, email.'),
+            _q('agency_report_reference', 'Agency Report Reference Number', no=11,
+               show_if=_AGENCY, help='When the agency report is available.'),
+            _q('agency_report_date', 'Agency Report Date', DATE, no=12, show_if=_AGENCY,
+               help='When the agency report is available.'),
+            _q('agency_report_file', 'Agency Report / Supporting Evidence', FILE, no=13,
+               show_if=_AGENCY,
+               help=f'PDF or image. Optional until received. Max {MAX_UPLOAD_MB} MB.'),
         ],
     },
     {
         'key': 'identity',
         'section': 'Identity, Address & Police Verification',
         'title': 'Identity, Address & Police',
-        'description': 'Prefilled from the candidate\'s own Employee '
-                       'Information Form. Check each against their documents.',
+        'description': 'Copied from the Employee Information Form. Cross-check each '
+                       'against the candidate\'s documents.',
         'next': 'education',
         'questions': [
-            _q('candidate_nid_number', 'Candidate NID Number', required=True),
+            _q('candidate_nid_number', 'Candidate NID Number', required=True, no=14),
             _q('candidate_birth_certificate_number',
-               'Candidate Birth Certificate Number (if applicable)'),
-            _q('candidate_date_of_birth', 'Candidate Date of Birth', DATE,
-               required=True),
+               'Candidate Birth Certificate Number (if applicable)', no=15),
+            _q('candidate_date_of_birth', 'Candidate Date of Birth', DATE, required=True,
+               no=16),
             _q('candidate_present_address', 'Candidate Present Address', TEXTAREA,
-               required=True),
+               required=True, no=17),
             _q('candidate_permanent_address', 'Candidate Permanent Address', TEXTAREA,
-               required=True),
-            _q('nid_verified', 'NID Verified?', RADIO, required=True,
-               choices=YES_NO_NA),
-            _q('birth_certificate_verified', 'Birth Certificate Verified?', RADIO,
-               choices=YES_NO_NA),
-            _q('dob_verified', 'Date of Birth Verified?', RADIO, required=True,
-               choices=YES_NO_NA),
-            _q('present_address_verified', 'Present Address Verified?', RADIO,
-               required=True, choices=YES_NO_NA),
-            _q('permanent_address_verified', 'Permanent Address Verified?', RADIO,
-               required=True, choices=YES_NO_NA),
-            _q('identity_verification_method',
-               'Identity / Address Verification Method', RADIO,
-               choices=IDENTITY_METHOD),
+               no=18, help='Only if different from the present address.'),
+            *_grid_questions(IDENTITY_GRID, required_suffixes=('verified',)),
+            _q('identity_remarks', 'Overall Identity / Address Verification Remarks',
+               TEXTAREA, no=20,
+               required_if=any_of(*(when(f'{p}_verified', 'no') for p in IDENTITY_ROWS)),
+               help='Complete if any item is Not Verified.'),
             _q('police_verification_required', 'Police Verification Required?', RADIO,
-               required=True, choices=YES_NO),
-            _q('police_verification_route', 'Police Verification Route', RADIO,
-               choices=POLICE_ROUTE),
-            _q('police_verification_status', 'Police Verification Status', RADIO,
-               choices=POLICE_STATUS),
+               required=True, choices=YES_NO, no=21),
+            _q('police_verification_route', 'Police Verification Route', SELECT,
+               required=True, choices=POLICE_ROUTE, no=22, show_if=_POLICE),
+            _q('police_verification_status', 'Police Verification Status', SELECT,
+               required=True, choices=POLICE_STATUS, no=23, show_if=_POLICE),
             _q('police_verification_reference',
-               'Police Verification Reference / Report Number'),
-            _q('police_verification_date', 'Police Verification Date', DATE),
-            _q('identity_police_remarks',
-               'Identity / Address / Police Verification Remarks', TEXTAREA),
+               'Police Verification Reference / Report Number', no=24, show_if=_POLICE),
+            _q('police_verification_date', 'Police Verification Date', DATE, no=25,
+               show_if=_POLICE),
+            _q('police_verification_remarks', 'Police Verification Remarks', TEXTAREA,
+               no=26, show_if=_POLICE,
+               required_if=when('police_verification_status', 'concern'),
+               help='Required if the status is Concern / Adverse Finding; carry it to '
+                    'Adverse Findings.'),
         ],
     },
     {
         'key': 'education',
         'section': 'Educational Qualification & Training Verification',
         'title': 'Education & Training',
-        'description': 'Highest to secondary, the same order the candidate filled in.',
+        'description': 'Verify only qualifications actually declared by the candidate.',
         'next': 'employment',
         'questions': [
-            _q('highest_degree', 'Candidate Highest / Last Completed Degree', RADIO,
-               required=True, choices=HIGHEST_DEGREE_CHOICES),
+            _q('highest_degree', 'Candidate Highest / Last Completed Degree', SELECT,
+               required=True, choices=HIGHEST_DEGREE_CHOICES, no=27,
+               help='Determines which qualification rows apply.'),
             _q('highest_degree_consistent',
                'Highest / Last Completed Degree Consistent with Submitted Documents?',
-               RADIO, required=True, choices=CONSISTENCY_CHOICES),
-            *_degree_block('masters', "Master's / Postgraduate Degree"),
-            *_degree_block('bachelors', "Undergraduate / Bachelor's Degree"),
-            *_degree_block('hsc', 'HSC / A Level / Equivalent', passing_year=True),
-            *_degree_block('ssc', 'SSC / O Level / Equivalent', passing_year=True),
+               RADIO, required=True, choices=CONSISTENCY_CHOICES, no=28),
+            *_grid_questions(EDUCATION_GRID, show_if_for=education_row_shown,
+                             required_suffixes=('verification_status',)),
+            _q('education_remarks',
+               'Overall Education Verification Remarks / Discrepancy Details', TEXTAREA,
+               no=30,
+               required_if=any_of(
+                   when('highest_degree_consistent', 'no', 'further_review'),
+                   *(when(f'{p}_verification_status', 'partially', 'unable')
+                     for p in EDUCATION_ROWS)),
+               help='Complete when the degree is not consistent / needs further review, '
+                    'or any row is not fully verified.'),
             _q('training_certification_names',
-               'Relevant Training / Professional Certification Name(s) — as provided '
-               'by candidate', TEXTAREA),
+               'Relevant Training / Professional Certification Name(s) — as provided by '
+               'candidate', TEXTAREA, no=31),
             _q('training_certificates_received',
                'Training / Professional Certification Certificates Received?', RADIO,
-               choices=YES_NO_NA),
-            _q('training_verified', 'Training / Professional Certifications Verified?',
-               RADIO, choices=TRAINING_VERIFIED),
+               required=True, choices=YES_NO_NA, no=32, show_if=_TRAINING),
+            _q('training_verification_status',
+               'Training / Professional Certification Verification Status', SELECT,
+               required=True, choices=TRAINING_STATUS, no=33, show_if=_TRAINING),
             _q('training_verification_method',
-               'Training / Certification Verification Method', RADIO,
-               choices=TRAINING_METHOD),
-            _q('training_discrepancy',
-               'Training / Certification Discrepancy Found?', RADIO,
-               choices=YES_NO_NA),
-            _q('training_remarks', 'Training / Certification Verification Remarks',
-               TEXTAREA),
+               'Training / Certification Verification Method', SELECT, required=True,
+               choices=TRAINING_METHOD, no=34,
+               show_if=all_of(_TRAINING, when('training_verification_status', 'verified',
+                                              'partially_verified', 'unable'))),
+            _q('training_remarks',
+               'Training / Certification Verification Remarks / Discrepancy Details',
+               TEXTAREA, no=35, show_if=_TRAINING,
+               required_if=when('training_verification_status', 'partially_verified',
+                                'unable', 'na')),
         ],
     },
     {
         'key': 'employment',
         'section': 'Employment Verification',
-        'title': 'Employment Verification',
-        'description': 'Employer numbers match the candidate\'s form. Compare the '
-                       'dates they claimed with the ones the employer confirmed.',
+        'title': 'Employment',
+        'description': 'Verify every employer in the same order as the candidate form.',
         'next': 'references',
         'questions': [
-            *[q for i in range(1, EMPLOYER_COUNT + 1) for q in _employer_block(i)],
-            _q('additional_employer_notes',
-               'Additional Employer Verification Notes (for employment history '
-               'beyond Employer 4)', TEXTAREA),
+            _q('has_employment',
+               'Does the candidate have previous full-time / contractual employment '
+               'experience to verify?', RADIO, required=True, choices=HAS_EMPLOYMENT,
+               no=36),
+            *[q for i in range(1, EMPLOYER_MAX + 1) for q in _employer_block(i)],
         ],
     },
     {
         'key': 'references',
-        'section': 'Professional Reference, Role Profile & Adverse '
-                   'Finding Review',
-        'title': 'References & Findings',
-        'description': '',
-        'next': 'clearance',
+        'section': 'Professional Reference Verification & Role Profile Review',
+        'title': 'References & Role Profile',
+        'description': 'Reference numbering matches the Employee Information Form.',
+        'next': 'findings',
         'questions': [
             *[q for i in range(1, REFERENCE_COUNT + 1) for q in _reference_block(i)],
             _q('role_profile_reviewed',
                'Candidate Department / Role Profile Information Reviewed?', RADIO,
-               required=True, choices=YES_NO_NA),
+               required=True, choices=YES_NO_NA, no=67),
             _q('role_claims_consistent',
                'Role-Specific Claims Reasonably Consistent with CV / Interview / '
-               'Available Evidence?', RADIO, choices=ROLE_CONSISTENCY),
+               'Available Evidence?', RADIO, choices=ROLE_CONSISTENCY, no=68),
             _q('role_further_validation',
-               'Role-Specific Information Requiring Further Validation (if any)',
-               TEXTAREA),
+               'Role-Specific Information Requiring Further Validation', TEXTAREA,
+               required=True, no=69,
+               show_if=when('role_claims_consistent', 'no', 'partially')),
+        ],
+    },
+    {
+        'key': 'findings',
+        'section': 'Adverse Findings, Discrepancy & BGV Outcome',
+        'title': 'Adverse Findings & BGV Outcome',
+        'description': '',
+        'next': 'clearance',
+        'questions': [
             _q('adverse_concern_raised',
-               'Any performance, disciplinary, integrity, legal or other adverse '
-               'concern raised?', RADIO, required=True, choices=YES_NO),
-            _q('finding_source', 'Source of Finding', RADIO, choices=FINDING_SOURCE),
-            _q('source_reliability', 'Reliability of Source', RADIO,
-               choices=SOURCE_RELIABILITY),
-            _q('finding_details', 'Evidence / Finding Details', TEXTAREA),
+               'Any performance, disciplinary, integrity, legal, employment-separation or '
+               'other material concern raised?', RADIO, required=True, choices=YES_NO,
+               no=70),
+            _q('finding_categories', 'Finding Category', CHECKBOX, required=True,
+               choices=FINDING_CATEGORIES, no=71, show_if=_ADVERSE),
+            _q('finding_source', 'Source of Finding', SELECT, required=True,
+               choices=FINDING_SOURCE, no=72, show_if=_ADVERSE),
+            _q('source_reliability', 'Reliability of Source', SELECT, required=True,
+               choices=SOURCE_RELIABILITY, no=73, show_if=_ADVERSE),
+            _q('finding_details', 'Evidence / Finding Details', TEXTAREA, required=True,
+               no=74, show_if=_ADVERSE),
             _q('candidate_clarification_opportunity',
-               'Was the Candidate Given an Opportunity to Clarify?', RADIO,
-               choices=CLARIFY_CHOICES),
+               'Was the Candidate Given an Opportunity to Clarify?', RADIO, required=True,
+               choices=CLARIFY_CHOICES, no=75, show_if=_ADVERSE),
             _q('candidate_clarification', "Candidate's Clarification (as recorded)",
-               TEXTAREA),
-            _q('reviewer_assessment', "Reviewer's Assessment of the Finding", TEXTAREA),
-            _q('discrepancy_summary', 'Overall Discrepancy Summary', TEXTAREA),
-            _q('risk_rating', 'Overall Risk Rating', RADIO, required=True,
-               choices=RISK_RATING),
+               TEXTAREA, required=True, no=76,
+               show_if=all_of(_ADVERSE,
+                              when('candidate_clarification_opportunity', 'yes'))),
+            _q('reviewer_assessment', "Reviewer's Assessment of the Finding", TEXTAREA,
+               required=True, no=77, show_if=_ADVERSE),
+            _q('discrepancy_summary', 'Overall Discrepancy Summary', TEXTAREA, no=78),
+            _q('risk_rating', 'Overall Risk Rating', SELECT, required=True,
+               choices=RISK_RATING, no=79),
             _q('verification_recommendation', 'Background Verification Recommendation',
-               RADIO, required=True, choices=RECOMMENDATION_CHOICES),
-            _q('involuntary_separation_wording',
-               'Does the Case Involve Involuntary Separation Wording (termination / '
-               'dismissal / forced resignation)?', RADIO, choices=YES_NO),
+               SELECT, required=True, choices=RECOMMENDATION_CHOICES, no=80),
             _q('hr_verification_summary', 'HR Verification Summary / Justification',
-               TEXTAREA, required=True),
-            _q('verification_completion_date', 'Verification Completion Date', DATE,
-               required=True),
+               TEXTAREA, required=True, no=81),
+            _q('verification_completion_date', 'Background Verification Completion Date',
+               DATE, required=True, no=82),
         ],
     },
     {
         'key': 'clearance',
         'section': 'Offer Acceptance & Position Joining Clearance',
-        'title': 'Offer & Joining Clearance',
-        'description': 'Completed during offer acceptance and joining, after the '
-                       'verification outcome above.',
+        'title': 'Offer Acceptance & Joining Clearance',
+        'description': '',
         'next': None,
         'questions': [
             _q('final_verification_status',
-               'Final Background Verification Status at Offer / Joining Stage', RADIO,
-               required=True, choices=FINAL_STATUS_CHOICES),
+               'Final Background Verification Status at Offer / Joining Stage', SELECT,
+               required=True, choices=FINAL_STATUS_CHOICES, no=83,
+               help='Not Cleared normally leads to Final HR Clearance: Do Not Proceed.'),
             _q('offer_letter_issued', 'Offer / Appointment Letter Issued?', RADIO,
-               required=True, choices=YES_NO),
-            _q('offer_letter_issue_date', 'Offer / Appointment Letter Issue Date', DATE),
+               required=True, choices=YES_NO, no=84),
+            _q('offer_letter_issue_date', 'Offer / Appointment Letter Issue Date', DATE,
+               required=True, no=85, show_if=when('offer_letter_issued', 'yes')),
             _q('offer_accepted', 'Offer Accepted by Candidate?', RADIO, required=True,
-               choices=OFFER_ACCEPTED_CHOICES),
-            _q('offer_acceptance_date', 'Offer Acceptance Date', DATE),
-            _q('confirmed_joining_date', 'Confirmed Joining Date', DATE, required=True),
-            _q('actual_joining_date', 'Actual Joining Date', DATE),
-            _q('original_certificates_checked',
-               'Original / Required Educational Certificates Checked at Joining?',
-               RADIO, choices=CHECKED_CHOICES),
-            _q('original_nid_checked',
-               'Original NID / Identity Document Checked at Joining?', RADIO,
-               choices=YES_NO),
-            _q('employment_documents_received',
-               'Required Employment / Release / Experience Documents Received?', RADIO,
-               choices=RECEIVED_CHOICES),
-            _q('police_report_received',
-               'Police / Background Check Report Received (if required)?', RADIO,
-               choices=RECEIVED_CHOICES),
-            _q('pending_document_at_joining',
-               'Any Pending Document / Verification at Joining?', RADIO,
-               choices=YES_NO),
-            _q('pending_items', 'Pending Item(s), Owner & Due Date', TEXTAREA),
+               choices=OFFER_ACCEPTED_CHOICES, no=86),
+            _q('offer_acceptance_date', 'Offer Acceptance Date', DATE, required=True,
+               no=87, show_if=when('offer_accepted', 'yes')),
+            _q('confirmed_joining_date', 'Confirmed Joining Date', DATE, required=True,
+               no=88),
+            _q('actual_joining_date', 'Actual Joining Date', DATE, no=89),
+            *_grid_questions(JOINING_GRID, required_suffixes=('status',)),
+            _q('pending_items', 'Pending Item(s), Owner & Due Date', TEXTAREA,
+               required=True, no=91,
+               show_if=any_of(*(when(f'{p}_status', 'pending') for p in JOINING_ROWS)),
+               help='Item | Owner | Due date | Follow-up status'),
             _q('exception_required', 'Any Exception / Conditional Approval Required?',
-               RADIO, choices=YES_NO),
-            _q('exception_details', 'Exception / Conditional Approval Details',
-               TEXTAREA),
-            _q('final_joining_clearance', 'Final HR Joining Clearance', RADIO,
-               required=True, choices=JOINING_CLEARANCE),
-            _q('final_hr_remarks', 'Final HR Remarks', TEXTAREA),
-            _q('hr_approver_name', 'HR Reviewer / Approver Name', required=True),
+               RADIO, required=True, choices=YES_NO, no=92),
+            _q('exception_details', 'Exception / Conditional Approval Details', TEXTAREA,
+               required=True, no=93, show_if=when('exception_required', 'yes'),
+               help='Condition, approver, follow-up, deadline.'),
+            _q('final_joining_clearance', 'Final HR Joining Clearance', SELECT,
+               required=True, choices=JOINING_CLEARANCE, no=94),
+            _q('final_hr_remarks', 'Final HR Remarks', TEXTAREA, no=95),
+            _q('hr_approver_name', 'HR Reviewer / Approver Name', required=True, no=96),
             _q('hr_approver_designation', 'HR Reviewer / Approver Designation',
-               required=True),
-            _q('final_signoff_date', 'Final Sign-off Date', DATE, required=True),
+               required=True, no=97),
+            _q('final_signoff_date', 'Final Sign-off Date', DATE, required=True, no=98),
             _q('hr_legal_review_completed', 'HR / Legal Review Completed (if flagged)?',
-               RADIO, required=True, choices=YES_NO_NA),
+               RADIO, required=True, choices=YES_NO_NA, no=99, show_if=Q99_TRIGGER,
+               help='Asked when the risk is Red / Critical, the recommendation is Further '
+                    'Review / Not Cleared, an exception is required, or a material '
+                    'concern was raised.'),
         ],
     },
 ]
-
-
-# ── Rendering hints ──────────────────────────────────────────────────────
-# Fields short enough to share a row. Anything unlisted spans the form.
-HALF_WIDTH_KEYS = frozenset({
-    'position_applied_for', 'department',
-    'hr_reviewer_name', 'hr_reviewer_designation', 'verification_start_date',
-    'agency_name', 'agency_contact', 'agency_report_reference', 'agency_report_date',
-    'candidate_nid_number', 'candidate_birth_certificate_number',
-    'candidate_date_of_birth',
-    'police_verification_reference', 'police_verification_date',
-    'masters_institution', 'masters_degree_major', 'masters_completion_date',
-    'bachelors_institution', 'bachelors_degree_major', 'bachelors_completion_date',
-    'hsc_institution', 'hsc_passing_year',
-    'ssc_institution', 'ssc_passing_year',
-    'verification_completion_date',
-    'offer_letter_issue_date', 'offer_acceptance_date',
-    'confirmed_joining_date', 'actual_joining_date',
-    'hr_approver_name', 'hr_approver_designation', 'final_signoff_date',
-    *(f'employer_{i}_hr_contact' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_hr_email' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_position' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_claimed_start_date' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_claimed_end_date' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_confirmed_start_date' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_confirmed_end_date' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'employer_{i}_verifier_name' for i in range(1, EMPLOYER_COUNT + 1)),
-    *(f'reference_{i}_name' for i in range(1, REFERENCE_COUNT + 1)),
-    *(f'reference_{i}_designation' for i in range(1, REFERENCE_COUNT + 1)),
-    *(f'reference_{i}_contact' for i in range(1, REFERENCE_COUNT + 1)),
-    *(f'reference_{i}_email' for i in range(1, REFERENCE_COUNT + 1)),
-    *(f'reference_{i}_relationship' for i in range(1, REFERENCE_COUNT + 1)),
-})
-
-
-def _degree_group(prefix, title, *, passing_year=False):
-    keys = [f'{prefix}_institution']
-    keys += ([f'{prefix}_passing_year'] if passing_year
-             else [f'{prefix}_degree_major', f'{prefix}_completion_date'])
-    keys += [f'{prefix}_certificate_received', f'{prefix}_verified',
-             f'{prefix}_verification_method', f'{prefix}_discrepancy',
-             f'{prefix}_remarks']
-    return (title, keys)
-
-
-def _employer_group(index):
-    p = f'employer_{index}'
-    return (f'Employer {index}', [f'{p}_{suffix}' for suffix in (
-        'name', 'hr_contact', 'hr_email', 'position',
-        'claimed_start_date', 'claimed_end_date',
-        'confirmed_start_date', 'confirmed_end_date',
-        'reference_check_verified', 'verification_status', 'verification_method',
-        'verifier_name', 'position_verified',
-        'claimed_reason_leaving', 'confirmed_reason_leaving', 'reason_consistent',
-        'rehire_eligible', 'tenure_discrepancy', 'remarks',
-    )])
-
-
-def _reference_group(index):
-    p = f'reference_{index}'
-    return (f'Professional Reference {index}', [f'{p}_{suffix}' for suffix in (
-        'name', 'designation', 'relationship', 'contact', 'email',
-        'check_verified', 'verification_method', 'feedback', 'recommend',
-    )])
-
-
-# Long sections render as a few short titled blocks instead of one wall.
-STEP_GROUPS = {
-    'hr_review': [
-        ('Candidate', ['candidate_full_name', 'position_applied_for',
-                       'department']),
-        ('HR reviewer', ['hr_reviewer_name', 'hr_reviewer_designation',
-                         'verification_start_date']),
-        ('Verification route', ['verification_route', 'agency_required']),
-        ('Background check agency', ['agency_name', 'agency_contact',
-                                     'agency_report_reference', 'agency_report_date',
-                                     'agency_report_file']),
-    ],
-    'identity': [
-        ('Candidate details on record', [
-            'candidate_nid_number', 'candidate_birth_certificate_number',
-            'candidate_date_of_birth', 'candidate_present_address',
-            'candidate_permanent_address']),
-        ('Identity & address checks', [
-            'nid_verified', 'birth_certificate_verified', 'dob_verified',
-            'present_address_verified', 'permanent_address_verified',
-            'identity_verification_method']),
-        ('Police verification', [
-            'police_verification_required', 'police_verification_route',
-            'police_verification_status', 'police_verification_reference',
-            'police_verification_date']),
-        ('Remarks', ['identity_police_remarks']),
-    ],
-    'education': [
-        ('Highest qualification', ['highest_degree', 'highest_degree_consistent']),
-        _degree_group('masters', "Master's / Postgraduate Degree"),
-        _degree_group('bachelors', "Undergraduate / Bachelor's Degree"),
-        _degree_group('hsc', 'HSC / A Level / Equivalent', passing_year=True),
-        _degree_group('ssc', 'SSC / O Level / Equivalent', passing_year=True),
-        ('Training & professional certifications', [
-            'training_certification_names', 'training_certificates_received',
-            'training_verified', 'training_verification_method',
-            'training_discrepancy', 'training_remarks']),
-    ],
-    'employment': [
-        *[_employer_group(i) for i in range(1, EMPLOYER_COUNT + 1)],
-        ('Beyond Employer 4', ['additional_employer_notes']),
-    ],
-    'references': [
-        *[_reference_group(i) for i in range(1, REFERENCE_COUNT + 1)],
-        ('Role profile review', ['role_profile_reviewed', 'role_claims_consistent',
-                                 'role_further_validation']),
-        ('Adverse finding', ['adverse_concern_raised', 'finding_source',
-                             'source_reliability', 'finding_details',
-                             'candidate_clarification_opportunity',
-                             'candidate_clarification', 'reviewer_assessment']),
-        ('Outcome', ['discrepancy_summary', 'risk_rating',
-                     'verification_recommendation',
-                     'involuntary_separation_wording', 'hr_verification_summary',
-                     'verification_completion_date']),
-    ],
-    'clearance': [
-        ('Verification outcome at offer', ['final_verification_status']),
-        ('Offer', ['offer_letter_issued', 'offer_letter_issue_date',
-                   'offer_accepted', 'offer_acceptance_date']),
-        ('Joining', ['confirmed_joining_date', 'actual_joining_date',
-                     'original_certificates_checked', 'original_nid_checked',
-                     'employment_documents_received', 'police_report_received']),
-        ('Pending items & exceptions', ['pending_document_at_joining',
-                                        'pending_items', 'exception_required',
-                                        'exception_details']),
-        ('Sign-off', ['final_joining_clearance', 'final_hr_remarks',
-                      'hr_approver_name', 'hr_approver_designation',
-                      'final_signoff_date', 'hr_legal_review_completed']),
-    ],
-}
-
-
-# ── Single-choice questions are dropdowns ────────────────────────────────
-# Declared above as RADIO for readability, then flipped here rather than written
-# out 90 times. The source Google Form used dropdowns, and on a 200-question
-# internal form they are the only workable shape: as radio lists these sections
-# ran to several screens of options nobody reads, and the answer HR had picked
-# was no longer visible once they scrolled past it.
-#
-# Multi-select (CHECKBOX) and single tick boxes (BOOLEAN) are left alone -- a
-# dropdown cannot express either.
-for _step in STEPS:
-    for _question in _step['questions']:
-        if _question['type'] == RADIO:
-            _question['type'] = SELECT
-del _step, _question
 
 
 # ── Lookups ──────────────────────────────────────────────────────────────
@@ -742,6 +673,7 @@ FINAL_STEP = STEP_KEYS[-1]
 TOTAL_STEPS = len(STEP_KEYS)
 
 QUESTIONS_BY_KEY = {q['key']: q for step in STEPS for q in step['questions']}
+ALL_QUESTIONS = [q for step in STEPS for q in step['questions']]
 
 FILE_QUESTION_KEYS = frozenset(
     q['key'] for q in QUESTIONS_BY_KEY.values() if q['type'] in FILE_TYPES
@@ -753,7 +685,6 @@ def get_step(step_key):
 
 
 def step_number(step_key) -> int:
-    """1-based position, for "Section 3 of 6"."""
     return STEP_KEYS.index(step_key) + 1 if step_key in STEP_KEYS else 0
 
 
@@ -772,150 +703,143 @@ def questions(step_key):
     return list(step['questions']) if step else []
 
 
-# An adverse finding recorded with no explanation is the one outcome this form
-# must not allow. "There is a discrepancy in the Master's degree", "do not
-# proceed", "an exception was granted" -- each is a decision someone will have
-# to defend later, and the sentence saying why is the whole value of recording
-# it. Every trigger below has a neutral answer ("No", "Not required", "Clear"),
-# so none of these can make a section unsaveable.
-_DEGREE_BLOCKS = ('masters', 'bachelors', 'hsc', 'ssc', 'training')
-
-CONDITIONAL_RULES = [
-    # Identity
-    {'trigger': 'police_verification_status', 'when': ['concern'],
-     'keys': ['identity_police_remarks']},
-    {'trigger': 'agency_required', 'when': ['yes'], 'keys': ['agency_name']},
-
-    # Education -- a discrepancy against submitted documents
-    *[{'trigger': f'{block}_discrepancy', 'when': ['yes'],
-       'keys': [f'{block}_remarks']} for block in _DEGREE_BLOCKS],
-
-    # Employment -- a tenure discrepancy, or an employer who would not rehire
-    *[{'trigger': f'employer_{i}_tenure_discrepancy', 'when': ['yes'],
-       'keys': [f'employer_{i}_remarks']} for i in range(1, EMPLOYER_COUNT + 1)],
-    *[{'trigger': f'employer_{i}_rehire_eligible', 'when': ['no'],
-       'keys': [f'employer_{i}_remarks']} for i in range(1, EMPLOYER_COUNT + 1)],
-
-    # Findings resting on thin sourcing
-    {'trigger': 'source_reliability', 'when': ['single_source', 'unverified'],
-     'keys': ['finding_details']},
-
-    # Clearance -- dates that must exist once the event is recorded, and any
-    # outcome short of a clean pass
-    {'trigger': 'offer_letter_issued', 'when': ['yes'],
-     'keys': ['offer_letter_issue_date']},
-    {'trigger': 'offer_accepted', 'when': ['yes'],
-     'keys': ['offer_acceptance_date']},
-    {'trigger': 'pending_document_at_joining', 'when': ['yes'],
-     'keys': ['pending_items']},
-    {'trigger': 'exception_required', 'when': ['yes'],
-     'keys': ['exception_details']},
-    {'trigger': 'final_verification_status',
-     'when': ['conditionally_cleared', 'pending_exception', 'not_cleared'],
-     'keys': ['final_hr_remarks']},
-    {'trigger': 'final_joining_clearance',
-     'when': ['cleared_followup', 'hold', 'do_not_proceed'],
-     'keys': ['final_hr_remarks']},
-]
+def step_of(question_key):
+    for step in STEPS:
+        if any(q['key'] == question_key for q in step['questions']):
+            return step['key']
+    return None
 
 
-def conditional_rules(step_key):
-    """The rules whose trigger and targets both live on this step."""
-    keys = {q['key'] for q in questions(step_key)}
-    return [
-        rule for rule in CONDITIONAL_RULES
-        if rule['trigger'] in keys and any(k in keys for k in rule['keys'])
-    ]
+# ── Rendering groups ─────────────────────────────────────────────────────
+def _group(title, keys, grid=None, row=None):
+    return {'title': title, 'keys': keys, 'grid': grid, 'row': row}
 
 
+def _grid_groups(grid):
+    return [_group(f"{grid['title']} — {label}", _grid_keys(grid, prefix), grid, prefix)
+            for prefix, label, _ in grid['rows']]
+
+
+def _employer_group(index):
+    return _group(f'Employer {index}', [q['key'] for q in _employer_block(index)])
+
+
+def _reference_group(index):
+    return _group(f'Reference {index}', [q['key'] for q in _reference_block(index)])
+
+
+STEP_GROUPS = {
+    'hr_review': [
+        _group('HR review details', [
+            'requisition_id', 'candidate_full_name', 'position_applied_for', 'department',
+            'hr_reviewer_name', 'hr_reviewer_designation', 'verification_start_date']),
+        _group('Verification route', ['verification_route']),
+        _group('Background check agency', [
+            'agency_name', 'agency_contact', 'agency_report_reference',
+            'agency_report_date', 'agency_report_file']),
+    ],
+    'identity': [
+        _group('Candidate identity & address', [
+            'candidate_nid_number', 'candidate_birth_certificate_number',
+            'candidate_date_of_birth', 'candidate_present_address',
+            'candidate_permanent_address']),
+        *_grid_groups(IDENTITY_GRID),
+        _group('Identity / address remarks', ['identity_remarks']),
+        _group('Police verification', [
+            'police_verification_required', 'police_verification_route',
+            'police_verification_status', 'police_verification_reference',
+            'police_verification_date', 'police_verification_remarks']),
+    ],
+    'education': [
+        _group('Highest / last completed degree', [
+            'highest_degree', 'highest_degree_consistent']),
+        *_grid_groups(EDUCATION_GRID),
+        _group('Education remarks', ['education_remarks']),
+        _group('Training & professional certifications', [
+            'training_certification_names', 'training_certificates_received',
+            'training_verification_status', 'training_verification_method',
+            'training_remarks']),
+    ],
+    'employment': [
+        _group('Employment history', ['has_employment']),
+        *[_employer_group(i) for i in range(1, EMPLOYER_MAX + 1)],
+    ],
+    'references': [
+        *[_reference_group(i) for i in range(1, REFERENCE_COUNT + 1)],
+        _group('Role profile information review', [
+            'role_profile_reviewed', 'role_claims_consistent', 'role_further_validation']),
+    ],
+    'findings': [
+        _group('Adverse finding', [
+            'adverse_concern_raised', 'finding_categories', 'finding_source',
+            'source_reliability', 'finding_details',
+            'candidate_clarification_opportunity', 'candidate_clarification',
+            'reviewer_assessment']),
+        _group('BGV outcome', [
+            'discrepancy_summary', 'risk_rating', 'verification_recommendation',
+            'hr_verification_summary', 'verification_completion_date']),
+    ],
+    'clearance': [
+        _group('Final background verification status', ['final_verification_status']),
+        _group('Offer', [
+            'offer_letter_issued', 'offer_letter_issue_date', 'offer_accepted',
+            'offer_acceptance_date']),
+        _group('Joining', ['confirmed_joining_date', 'actual_joining_date']),
+        *_grid_groups(JOINING_GRID),
+        _group('Pending items & exceptions', [
+            'pending_items', 'exception_required', 'exception_details']),
+        _group('Final HR joining clearance & sign-off', [
+            'final_joining_clearance', 'final_hr_remarks', 'hr_approver_name',
+            'hr_approver_designation', 'final_signoff_date',
+            'hr_legal_review_completed']),
+    ],
+}
 
 
 def question_groups(step_key):
-    """The step's questions arranged into its titled blocks.
-
-    Anything not named in STEP_GROUPS still renders, in a trailing untitled
-    block, so adding a question cannot make it silently disappear.
-    """
-    numbered = {q['key']: q for q in questions(step_key)}
+    """The step's questions in titled blocks; unplaced ones trail untitled."""
+    by_key = {q['key']: q for q in questions(step_key)}
     blocks, placed = [], set()
-    for title, keys in STEP_GROUPS.get(step_key, []):
-        chosen = [numbered[k] for k in keys if k in numbered]
+    for group in STEP_GROUPS.get(step_key, []):
+        chosen = [by_key[k] for k in group['keys'] if k in by_key]
         if not chosen:
             continue
         placed.update(q['key'] for q in chosen)
-        blocks.append({'title': title, 'questions': chosen})
-    leftover = [q for q in numbered.values() if q['key'] not in placed]
+        blocks.append({'title': group['title'], 'questions': chosen,
+                       'grid': group['grid'], 'row': group['row']})
+    leftover = [q for q in by_key.values() if q['key'] not in placed]
     if leftover:
-        blocks.append({'title': '', 'questions': leftover})
+        blocks.append({'title': '', 'questions': leftover, 'grid': None, 'row': None})
     return blocks
 
 
-#  A dropdown is one line tall whatever its options, so short-labelled ones pair
-#  up two to a row instead of leaving half the form empty. Long questions ("Any
-#  performance, disciplinary, integrity, legal or other adverse concern
-#  raised?") keep the full width, where they read as a sentence rather than
-#  wrapping four times in a narrow column.
-_SHORT_LABEL_CHARS = 58
+_FULL_WIDTH_TYPES = frozenset({TEXTAREA, RADIO, CHECKBOX, FILE})
 
 
 def is_half_width(question) -> bool:
-    if question['key'] in HALF_WIDTH_KEYS:
-        return True
-    return (question['type'] == SELECT
-            and len(wizard_label(question)) <= _SHORT_LABEL_CHARS)
+    if question['type'] in _FULL_WIDTH_TYPES:
+        return False
+    return len(wizard_label(question)) <= 70
 
 
-def conditional_blocks(step_key):
-    """Groups whose fields become required once a trigger field is filled.
+_LABEL_PREFIXES = tuple(
+    [f'Employer {i} — ' for i in range(1, EMPLOYER_MAX + 1)]
+    + [f'{label} — ' for grid in (IDENTITY_GRID, EDUCATION_GRID, JOINING_GRID)
+       for _, label, _ in grid['rows']]
+)
 
-    `[{'trigger': 'employer_1_name', 'keys': [...]}, ...]`, for the page to mirror
-    `forms.StepForm._validate_employer_blocks` in the browser. The rule is
-    enforced server-side either way; this is so HR can see it coming.
-    """
-    keys = {q['key'] for q in questions(step_key)}
-    out = []
-    for index in range(1, EMPLOYER_COUNT + 1):
-        trigger = f'employer_{index}_name'
-        if trigger not in keys:
-            continue
-        out.append({
-            'trigger': trigger,
-            'keys': [f'employer_{index}_{suffix}'
-                     for suffix in EMPLOYER_REQUIRED_ONCE_NAMED
-                     if f'employer_{index}_{suffix}' in keys],
-        })
-    return out
+
+def wizard_label(question) -> str:
+    """Label without the row / employer prefix its block title already carries."""
+    label = question['label']
+    for prefix in _LABEL_PREFIXES:
+        if label.startswith(prefix):
+            return label[len(prefix):]
+    return label
 
 
 def choice_label(question_key, value):
     question = QUESTIONS_BY_KEY.get(question_key)
     if not question or 'choices' not in question:
         return value
-    for choice_value, label in question['choices']:
-        if choice_value == value:
-            return label
-    return value
-
-
-def wizard_label(question) -> str:
-    """Label with a repeated education-level prefix stripped.
-
-    The four degree blocks put "HSC / A Level / Equivalent — " in front of every
-    question, which the block title already says. Employer and reference labels
-    are left alone: they carry the number inside the sentence ("Claimed Start
-    Date at Employer 2"), where cutting it out reads worse than repeating it.
-    """
-    label = question['label']
-    for separator in (' — ', ' - '):
-        head, _, tail = label.partition(separator)
-        if tail and head in _BLOCK_PREFIXES:
-            return tail
-    return label
-
-
-_BLOCK_PREFIXES = frozenset({
-    "Master's / Postgraduate Degree",
-    "Undergraduate / Bachelor's Degree",
-    'HSC / A Level / Equivalent',
-    'SSC / O Level / Equivalent',
-})
+    return dict(question['choices']).get(value, value)

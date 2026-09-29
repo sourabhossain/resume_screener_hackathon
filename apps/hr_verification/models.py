@@ -4,18 +4,17 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from apps.core.documents import StoredDocumentMixin, display_date
+from apps.core import form_logic
+from apps.core.documents import StoredDocumentMixin
 
-from . import schema
-
+from . import review, schema
 
 
 class HRVerification(models.Model):
-    """One HR Background Verification & Joining Clearance record per candidate.
+    """One HR Background Verification & Joining Form record per candidate.
 
-    Answers live in a JSONField keyed by `schema.QUESTIONS_BY_KEY` for the same
-    reason the Employee Information Form does it: 201 questions would be 201
-    mostly-null columns, and a migration per wording change.
+    Answers live in a JSONField keyed by `schema.QUESTIONS_BY_KEY`, like the
+    Employee Information Form.
 
     Unlike that form this one is internal -- no token, no OTP. Access is a
     logged-in HR user (see `views._hr_admin_required`), so the record carries who
@@ -105,7 +104,7 @@ class HRVerification(models.Model):
 
     @property
     def can_submit(self) -> bool:
-        """Every section saved at least once, so sign-off cannot skip a section."""
+        """Every section saved at least once; `missing_required` is checked too."""
         return self.completed_count >= schema.TOTAL_STEPS
 
     def submit(self, user=None):
@@ -116,58 +115,29 @@ class HRVerification(models.Model):
     # ── Reading answers back ─────────────────────────────────────────────
     def display_value(self, question):
         """Stored answer rendered for display: choice labels, not raw values."""
-        if question['type'] in schema.FILE_TYPES:
-            return ''
-        raw = (self.answers or {}).get(question['key'])
-        if raw in (None, '', []):
-            return ''
-        if question['type'] == schema.CHECKBOX:
-            return ', '.join(schema.choice_label(question['key'], v) for v in raw)
-        if question['type'] in schema.CHOICE_TYPES:
-            return schema.choice_label(question['key'], raw)
-        if question['type'] == schema.DATE:
-            return display_date(raw)
-        return raw
+        return review.display_value(self.answers, question)
 
     def _is_answered(self, question, files_by_key) -> bool:
-        """Whether a question carries an answer, a stored file counting as one.
-
-        Not a truth test on the displayed value: a numeric 0 -- no direct
-        reports, a notice period of none -- is an answer, and truthiness would
-        drop the row off the review page entirely.
-        """
         if files_by_key.get(question['key']):
             return True
         return self.display_value(question) != ''
 
+    def uploaded_keys(self):
+        return set(self.files.values_list('question_key', flat=True))
+
+    def missing_required(self):
+        """(step_key, question) pairs still required by the saved answers."""
+        missing = set(form_logic.missing_required(
+            schema.ALL_QUESTIONS, self.answers or {}, self.uploaded_keys()))
+        return [(step_key, q) for step_key in schema.STEP_KEYS
+                for q in schema.questions(step_key) if q['key'] in missing]
+
     def answered_sections(self):
-        """Every section with its answers, for the read-only review page."""
+        """Every section's visible, answered questions, for the review page."""
         files_by_key = {}
         for upload in self.files.all():
             files_by_key.setdefault(upload.question_key, []).append(upload)
-
-        out = []
-        for step_key in schema.STEP_KEYS:
-            step = schema.get_step(step_key)
-            rows = [
-                {
-                    'key': question['key'],
-                    'label': question['label'],
-                    'type': question['type'],
-                    'value': self.display_value(question),
-                    'files': files_by_key.get(question['key'], []),
-                    'answered': self._is_answered(question, files_by_key),
-                }
-                for question in schema.questions(step_key)
-            ]
-            out.append({
-                'key': step_key,
-                'section': step['section'],
-                'title': step['title'],
-                'complete': self.is_step_complete(step_key),
-                'rows': rows,
-            })
-        return out
+        return review.build_sections(self.answers, files_by_key, self.is_step_complete)
 
     # ── Headline outcomes, for the recruiter-facing card ──────────────────
     def _label(self, key):

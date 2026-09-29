@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.core.documents import StoredDocumentMixin, display_date
+from apps.core.form_logic import is_visible
 
 from . import schema
 
@@ -215,7 +216,10 @@ class EmployeeForm(models.Model):
             if not step:
                 continue
             rows = []
-            for question in schema.numbered_questions(step_key, self.answers or {}):
+            answers = self.answers or {}
+            for question in schema.numbered_questions(step_key, answers):
+                if not is_visible(question, answers):
+                    continue
                 rows.append({
                     'key': question['key'],
                     'number': question['number'],
@@ -261,6 +265,14 @@ class EmployeeForm(models.Model):
         return schema.choice_label('declaration_agreement', value)
 
     @property
+    def consent_declined(self) -> bool:
+        return (self.answers or {}).get('verification_consent') == 'no'
+
+    @property
+    def declaration_declined(self) -> bool:
+        return (self.answers or {}).get('declaration_agreement') == 'disagree'
+
+    @property
     def status_label(self) -> str:
         """Plain-text status, for logs, the admin and CSV.
 
@@ -269,6 +281,10 @@ class EmployeeForm(models.Model):
         here: Tailwind only scans templates, so a class string assembled in
         Python would be purged from the stylesheet.
         """
+        if self.is_submitted and self.consent_declined:
+            return 'Consent declined'
+        if self.is_submitted and self.declaration_declined:
+            return 'Declaration not agreed'
         if self.is_submitted:
             return 'Submitted'
         if self.last_error:

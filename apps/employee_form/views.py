@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
+from apps.core.form_logic import context_answers, page_rules
 from apps.core.form_utils import form_errors_to_messages
 from apps.core.models import Resume
 
@@ -49,6 +50,14 @@ def _stale_branch_keys(step_key, saved_answers, cleaned):
         if was and was != now:
             stale += [q['key'] for q in schema.get_step(was)['questions']]
     return stale
+
+
+def _logic_questions(step_key, answers):
+    questions = schema.wizard_questions(step_key, answers)
+    if step_key in schema.INLINE_BRANCHES:
+        for target in sorted(schema.INLINE_TARGETS):
+            questions += schema.get_step(target)['questions']
+    return questions
 
 
 def _session_key(form) -> str:
@@ -239,7 +248,7 @@ def step(request, token, step_key):
         step_form = StepForm(
             request.POST, request.FILES,
             step_key=step_key, already_uploaded=uploaded_keys,
-            initial={**prefill, **answers},
+            initial={**prefill, **answers}, context=answers,
         )
         valid = step_form.is_valid()
 
@@ -273,8 +282,7 @@ def step(request, token, step_key):
             answers = {**answers, **step_form.storable_answers()}
             form.answers = answers
 
-            # Unticking "I have a Master's" also detaches its certificate, so a
-            # document cannot outlive the qualification it belongs to.
+            # A document whose question is now hidden goes with it.
             for question_key in step_form.gated_off_file_keys():
                 for upload in form.files.filter(question_key=question_key):
                     upload.delete()
@@ -297,7 +305,7 @@ def step(request, token, step_key):
     else:
         step_form = StepForm(
             step_key=step_key, already_uploaded=uploaded_keys,
-            initial={**prefill, **answers},
+            initial={**prefill, **answers}, context=answers,
         )
 
     # Recomputed: a failed POST may still have stored some uploads above, and the
@@ -347,6 +355,8 @@ def step(request, token, step_key):
         # not as something already confirmed by the candidate.
         'prefilled_keys': set(prefill),
         'is_final': schema.next_step_key(step_key, answers) is None,
+        'logic_rules': page_rules(_logic_questions(step_key, answers)),
+        'logic_context': context_answers(_logic_questions(step_key, answers), answers),
     })
 
 

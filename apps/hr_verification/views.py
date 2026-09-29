@@ -1,9 +1,7 @@
-"""HR-only Background Verification & Joining Clearance form.
+"""HR-only Background Verification & Joining Form.
 
-Not a wizard: HR fills this over days, in whatever order the information arrives
-(an agency report lands before a reference call is returned), so every section is
-reachable at any time and saves on its own. Sign-off is the one gated step -- it
-needs every section saved at least once.
+Not a wizard: every section is reachable at any time and saves on its own.
+Sign-off needs every section saved and re-checks every visible required answer.
 """
 import logging
 from functools import wraps
@@ -15,6 +13,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.core.form_logic import context_answers, page_rules
 from apps.core.form_utils import form_errors_to_messages
 from apps.core.models import Resume
 
@@ -59,6 +58,17 @@ def _get_resume(uuid):
 
 def _existing(resume):
     return getattr(resume, 'hr_verification', None)
+
+
+def _missing_summary(missing):
+    """[(step_key, question)] grouped per section for display."""
+    out = []
+    for step_key, question in missing:
+        if not out or out[-1]['key'] != step_key:
+            out.append({'key': step_key, 'title': schema.get_step(step_key)['title'],
+                        'labels': []})
+        out[-1]['labels'].append(question['label'])
+    return out
 
 
 def _may_start(resume) -> bool:
@@ -115,11 +125,13 @@ def detail(request, uuid):
     resume = _get_resume(uuid)
     verification = _require_record(resume)
 
+    missing = [] if verification.is_submitted else verification.missing_required()
     return render(request, 'hr_verification/detail.html', {
         'resume': resume,
         'verification': verification,
         'sections': verification.answered_sections(),
         'documents': list(verification.files.all()),
+        'missing': _missing_summary(missing),
     })
 
 
@@ -149,7 +161,7 @@ def step(request, uuid, step_key):
         step_form = StepForm(
             request.POST, request.FILES,
             step_key=step_key, already_uploaded=uploaded_keys,
-            initial={**prefill, **answers},
+            initial={**prefill, **answers}, context=answers,
         )
         valid = step_form.is_valid()
 
@@ -186,6 +198,8 @@ def step(request, uuid, step_key):
                 locked.mark_step_complete(step_key)
                 locked.last_saved_by = request.user
                 locked.save()
+                verification.files.filter(
+                    question_key__in=step_form.hidden_file_keys()).delete()
             verification = locked
             logger.info(
                 'hr_verification.section_saved verification=%s section=%s by=%s',
@@ -204,8 +218,14 @@ def step(request, uuid, step_key):
     else:
         step_form = StepForm(
             step_key=step_key, already_uploaded=uploaded_keys,
-            initial={**prefill, **answers},
+            initial={**prefill, **answers}, context=answers,
         )
+
+    uploaded_keys = set(
+        verification.files.filter(question_key__in=schema.FILE_QUESTION_KEYS)
+        .values_list('question_key', flat=True)
+    )
+    page_questions = schema.questions(step_key)
 
     return render(request, 'hr_verification/step.html', {
         'resume': resume,
@@ -219,17 +239,9 @@ def step(request, uuid, step_key):
         'is_final': schema.next_step_key(step_key) is None,
         'groups': step_form.field_groups(),
         'uploaded_keys': uploaded_keys,
-        # Employer blocks turn required the moment they are named. Handed to the
-        # page so the asterisks appear as HR types, instead of the rule only
-        # showing itself as an error after a round trip.
-        'conditional_blocks': schema.conditional_blocks(step_key),
-        # And the value-based rules: an adverse answer makes its explanation
-        # required. Same reason as above -- shown as HR picks the answer.
-        'conditional_rules': schema.conditional_rules(step_key),
-        # The shared field template's prefill badge is candidate-facing copy
-        # ("check it matches your documents"), and it cannot tell a value HR
-        # deliberately cleared from one they never filled. The section banner
-        # says where these values come from instead.
+        'logic_rules': page_rules(page_questions),
+        'logic_context': context_answers(page_questions, verification.answers or {}),
+        # The shared prefill badge is candidate-facing copy.
         'prefilled_keys': set(),
         'sections': [
             {
@@ -266,6 +278,14 @@ def submit(request, uuid):
         )
         return redirect('hr_verification:step', uuid=uuid,
                         step_key=verification.next_unfinished_step)
+
+    missing = verification.missing_required()
+    if missing:
+        summary = _missing_summary(missing)
+        listed = '; '.join(f"{item['title']}: {', '.join(item['labels'])}"
+                           for item in summary)
+        messages.error(request, 'Cannot sign off yet. Still required — ' + listed + '.')
+        return redirect('hr_verification:step', uuid=uuid, step_key=missing[0][0])
 
     verification.submit(user=request.user)
     # Only the sign-off columns: a bare save() would write back the `answers`

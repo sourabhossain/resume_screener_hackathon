@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ step.title }} · {{ form_title }} · SSL Wireless{% endblock %}
+{% block title %}{{ step_heading }} · {{ form_title }} · SSL Wireless{% endblock %}
 
 {% block recruiter_nav %}{% endblock %}
 {% block recruiter_logout %}{% endblock %}
@@ -10,15 +10,24 @@
 {% block content %}
 <div class="mx-auto max-w-3xl pb-28">
 
+    {% if form_header %}
+    <div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <p class="text-xs font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">{{ form_header }}</p>
+        {% if form_intro %}
+        <p class="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-300">{{ form_intro }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="mb-6">
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-400">
             {{ form_title }}
         </p>
         <h1 class="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">
-            {{ step.title }}
+            {{ step_heading }}
         </h1>
         <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-            About {{ check.resume.candidate_name|title }}
+            About {{ candidate_name|title }}
             <span class="text-zinc-300 dark:text-zinc-600">&middot;</span>
             Part {{ step_number }} of {{ total_steps }}
         </p>
@@ -35,6 +44,7 @@
         </span>
     </div>
 
+    {% if candidate_panel %}
     <div class="mb-5 overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
         <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
             <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
@@ -50,6 +60,7 @@
             {% endfor %}
         </dl>
     </div>
+    {% endif %}
 
     {% if step.description %}
     <div class="mb-5 flex gap-3 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
@@ -62,19 +73,24 @@
     <div class="mb-5 flex gap-3 rounded-xl border border-zinc-200/90 bg-white p-4 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
         <svg class="mt-0.5 h-5 w-5 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
         <p class="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-            We have filled in your details from what {{ check.resume.candidate_name|title }}
+            We have filled in your details from what {{ candidate_name|title }}
             gave us. Please correct anything that is out of date.
         </p>
     </div>
     {% endif %}
 
-    <form method="post" hx-boost="false" x-data="{ submitting: false }" @submit="submitting = true">
+    <form method="post" hx-boost="false" data-rc-form x-data="{ submitting: false }" @submit="submitting = true">
         {% csrf_token %}
 
-        <fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-            <legend class="sr-only">{{ step.title }}</legend>
+        <fieldset data-logic-group class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+            <legend class="sr-only">{{ step_heading }}</legend>
             <div class="grid gap-x-5 gap-y-5 p-5 sm:grid-cols-2">
                 {% for item in rows %}
+                {% if item.question.type == 'boolean' %}
+                <p class="sm:col-span-2 text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">
+                    {{ item.question.label }}{% if item.question.required %}<span class="ml-0.5 text-rose-500">*</span>{% endif %}
+                </p>
+                {% endif %}
                 {% include 'employee_form/partials/field.html' with question=item.question field=item.field item=item %}
                 {% endfor %}
             </div>
@@ -111,50 +127,8 @@
     </p>
 </div>
 
-{{ conditional_rules|json_script:"rc-conditional-rules" }}
-<script>
-    // "If Yes, please provide details" only asks for the detail when that is the
-    // answer -- the same rule StepForm enforces on POST. Mirrored here so the
-    // asterisk appears as the answer is picked, rather than the rule showing
-    // itself as an error after a save.
-    (function () {
-        const source = document.getElementById('rc-conditional-rules');
-        if (!source) return;
-        let rules = [];
-        try { rules = JSON.parse(source.textContent); } catch (_) { return; }
-
-        rules.forEach(function (rule) {
-            const trigger = document.querySelector('[name="' + rule.trigger + '"]');
-            if (!trigger) return;
-            const targets = rule.keys
-                .map(function (key) { return document.querySelector('[name="' + key + '"]'); })
-                .filter(Boolean);
-            if (!targets.length) return;
-
-            function apply() {
-                const on = rule.when.includes(trigger.value);
-                targets.forEach(function (el) {
-                    el.required = on;
-                    const block = el.closest('[data-question]');
-                    const label = block && block.querySelector('label');
-                    if (!label) return;
-                    let star = label.querySelector('[data-conditional-star]');
-                    if (on && !star) {
-                        star = document.createElement('span');
-                        star.setAttribute('data-conditional-star', '');
-                        star.className = 'ml-0.5 text-rose-500';
-                        star.textContent = '*';
-                        label.appendChild(star);
-                    } else if (!on && star) {
-                        star.remove();
-                    }
-                });
-            }
-
-            trigger.addEventListener('change', apply);
-            trigger.addEventListener('input', apply);
-            apply();
-        });
-    })();
-</script>
+<style>
+    [data-rc-form] input[readonly] { cursor: not-allowed; background-color: rgba(113, 113, 122, 0.08); }
+</style>
+{% include 'shared/form_logic.html' %}
 {% endblock %}

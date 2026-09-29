@@ -85,6 +85,9 @@ class Job(SoftDeleteModel):
         db_index=True,
     )
     title = models.CharField(max_length=255)
+    requisition_id = models.CharField(
+        max_length=64, blank=True,
+        help_text="Carried into the candidate and HR verification forms")
     # Public, URL-safe identifier for the careers pages (avoids exposing the numeric id).
     slug = models.SlugField(max_length=255, unique=True, blank=True, null=True)
     description = models.TextField(blank=True)

@@ -8,13 +8,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.links import absolute_url
+from apps.employee_form.schema import declared_employer_indices
 
 from . import schema
 from .models import ReferenceCheck
 
 logger = logging.getLogger(__name__)
 
-EMPLOYER_SLOTS = 4
 REFERENCE_SLOTS = 2
 
 
@@ -25,20 +25,21 @@ class SendError(Exception):
 def is_fresher(resume) -> bool:
     """Whether the candidate declared no previous employment.
 
-    Employers are optional on the Employee Information Form precisely so a
-    fresher can submit it, which makes "named no employer" the honest signal.
-    It only picks which form is *offered*: HR can switch it before sending.
+    Only informational now: a fresher's referees get the professional form too,
+    whose relationship question offers Academic Supervisor / Faculty.
     """
-    answers = _candidate_answers(resume)
-    return not any(
-        (answers.get(f'employer_{i}_name') or '').strip()
-        for i in range(1, EMPLOYER_SLOTS + 1)
-    )
+    return not declared_employer_indices(_candidate_answers(resume))
 
 
 def _candidate_answers(resume) -> dict:
     form = getattr(resume, 'employee_form', None)
     return dict(form.answers or {}) if form else {}
+
+
+def candidate_name(resume) -> str:
+    """The name the candidate gave on their own form, else the one on the CV."""
+    declared = (_candidate_answers(resume).get('candidate_full_name') or '').strip()
+    return declared or resume.candidate_name
 
 
 def verification_refused(resume) -> bool:
@@ -72,15 +73,12 @@ def candidate_contacts(resume) -> list:
     candidate agreed to it, and the request if one already exists.
     """
     answers = _candidate_answers(resume)
-    fresher = is_fresher(resume)
     existing = {c.source_key: c for c in resume.reference_checks.all()}
     rows = []
 
-    for i in range(1, EMPLOYER_SLOTS + 1):
+    for i in declared_employer_indices(answers):
         source_key = f'employer_{i}'
         name = (answers.get(f'{source_key}_name') or '').strip()
-        if not name:
-            continue          # the candidate did not list this employer
         rows.append({
             'source_key': source_key,
             'default_kind': schema.EMPLOYER,
@@ -104,18 +102,15 @@ def candidate_contacts(resume) -> list:
             continue
         rows.append({
             'source_key': source_key,
-            # A fresher's referees are their teachers, so they get the academic
-            # form. Only a default -- HR picks the form when sending.
-            'default_kind': schema.ACADEMIC if fresher else schema.PROFESSIONAL,
+            'default_kind': schema.PROFESSIONAL,
             'title': f'Reference {i}',
             'recipient_name': name,
             'recipient_email': (answers.get(f'{source_key}_email') or '').strip(),
             'recipient_phone': (answers.get(f'{source_key}_contact') or '').strip(),
-            # The candidate gives the referee's job title, never their
-            # employer, so this column holds a designation for referee rows.
+            # One combined "Designation & Company / Institution" answer.
             'recipient_organisation': (
                 answers.get(f'{source_key}_designation') or '').strip(),
-            'organisation_label': 'Designation',
+            'organisation_label': 'Designation & Company / Institution',
             'permitted': _permission_given(answers, source_key),
             'check': existing.get(source_key),
         })
@@ -123,23 +118,19 @@ def candidate_contacts(resume) -> list:
     return rows
 
 
-# The first section of every form asks the respondent for their own details --
-# name, email, designation -- and we already hold all of it: the candidate gave
-# it, and HR confirmed it before sending. Retyping it is pure friction on a
-# favour we are asking of a stranger, and friction is how a reply is lost.
-#
-# Prefilled, not fixed: the candidate may have an old designation, or HR may
-# have written to the wrong person. The respondent stays the authority on their
-# own details, so every one of these remains editable.
+# Respondents' own details come prefilled from what the candidate declared and
+# HR confirmed, but stay editable: the respondent is the authority on them.
 SELF_DETAILS = {
     schema.EMPLOYER: {
         'contact_name': 'verifier_name',
-        'organisation': 'verifier_organisation',
+        'email': 'verifier_email',
+        'phone': 'verifier_contact',
     },
     schema.PROFESSIONAL: {
         'contact_name': 'referee_name',
         'email': 'referee_email',
         'designation': 'referee_designation',
+        'organisation': 'referee_organisation',
         'phone': 'referee_contact',
         'relationship': 'referee_relationship',
     },
@@ -148,20 +139,76 @@ SELF_DETAILS = {
         'email': 'referee_email',
         'designation': 'referee_designation',
         'phone': 'referee_contact',
-        # No institution: the candidate names their own university, not the
-        # referee's, and the two are only usually the same.
     },
 }
 
-# Both forms ask about the relationship, from different option lists. Only these
-# three carry the same meaning in both; the candidate's 'direct_report' and
-# 'hr_other' have no honest equivalent, so those are left for the referee to
-# answer. The academic list shares nothing at all with the candidate's.
+# Section A facts: prefilled and read-only, forced server-side on every save.
+FIXED_DETAILS = {
+    schema.EMPLOYER: {
+        'candidate_name': 'candidate_full_name',
+        'organisation': 'verifier_organisation',
+        'reference_id': 'verification_reference_id',
+    },
+    schema.PROFESSIONAL: {
+        'candidate_name': 'candidate_full_name',
+        'position': 'position_applied_for',
+        'reference_id': 'verification_reference_id',
+    },
+    schema.ACADEMIC: {},
+}
+
+# The candidate's relationship values that mean the same on the referee form.
+# 'other' and the legacy 'hr_other' are ambiguous, so the referee answers those.
 RELATIONSHIP_EQUIVALENTS = {
     'direct_manager': 'direct_manager',
     'skip_level_manager': 'skip_level_manager',
     'peer': 'peer',
+    'direct_report': 'direct_report',
+    'hr': 'hr',
+    'academic': 'academic',
 }
+
+_LEADING_SEPARATORS = (' at ', ' @ ')
+_TRAILING_SEPARATORS = (' | ', ' — ', ' – ', ' - ', ',')
+
+
+def split_designation(text):
+    """Split "Designation & Company / Institution" into its two halves, if clear."""
+    text = (text or '').strip()
+    for separator in _LEADING_SEPARATORS + _TRAILING_SEPARATORS:
+        if separator not in text:
+            continue
+        if separator in _LEADING_SEPARATORS:
+            left, _, right = text.partition(separator)
+        else:
+            left, _, right = text.rpartition(separator)
+        left, right = left.strip(), right.strip()
+        if left and right:
+            return left, right
+    return text, ''
+
+
+def fixed_answers(check) -> dict:
+    """Section A facts, keyed by question; the respondent cannot change these."""
+    resume = check.resume
+    known = {
+        'candidate_name': candidate_name(resume),
+        'position': resume.job.title if resume.job_id else '',
+        'reference_id': check.verification_reference_id,
+        'organisation': _employer_name(check),
+    }
+    return {
+        question_key: known[source]
+        for source, question_key in FIXED_DETAILS.get(check.kind, {}).items()
+        if known.get(source)
+    }
+
+
+def _employer_name(check) -> str:
+    if not check.source_key.startswith('employer_'):
+        return ''
+    declared = _candidate_answers(check.resume).get(f'{check.source_key}_name') or ''
+    return (check.recipient_organisation or declared).strip()
 
 
 def prefill_answers(check) -> dict:
@@ -169,12 +216,10 @@ def prefill_answers(check) -> dict:
     row = contact_for(check.resume, check.source_key) or {}
     answers = _candidate_answers(check.resume)
 
-    # The check row wins over the candidate's form: HR may have corrected it on
-    # the way out, and that correction is the more recent knowledge.
+    # The check row wins over the candidate's form: HR may have corrected it.
     contact_name = (check.recipient_name or row.get('recipient_name') or '').strip()
-    if contact_name == f"{check.recipient_organisation} — HR".strip():
-        # The stand-in used when nobody at the employer is named. It is a
-        # department, not a person, so it is not this respondent's name.
+    if contact_name.endswith(' — HR'):
+        # The stand-in used when nobody at the employer is named: a department.
         contact_name = ''
 
     known = {
@@ -183,17 +228,16 @@ def prefill_answers(check) -> dict:
         'phone': row.get('recipient_phone', ''),
     }
 
-    if check.source_key.startswith('employer_'):
-        known['organisation'] = (check.recipient_organisation or '').strip()
-    else:
-        # For a referee the candidate gives a designation, never an employer.
-        known['designation'] = (check.recipient_organisation or '').strip()
+    if not check.source_key.startswith('employer_'):
+        designation, organisation = split_designation(check.recipient_organisation)
+        known['designation'] = designation
+        known['organisation'] = organisation
         declared = answers.get(f'{check.source_key}_relationship')
         known['relationship'] = RELATIONSHIP_EQUIVALENTS.get(declared, '')
 
     return {
         question_key: known[source]
-        for source, question_key in SELF_DETAILS[check.kind].items()
+        for source, question_key in SELF_DETAILS.get(check.kind, {}).items()
         if known.get(source)
     }
 
@@ -226,7 +270,8 @@ def send_request(check, *, otp: str) -> None:
 
     context = {
         'check': check,
-        'candidate_name': check.resume.candidate_name,
+        'candidate_name': candidate_name(check.resume),
+        'reference_id': check.verification_reference_id,
         'job_title': check.resume.job.title,
         'recipient_name': check.recipient_name,
         'form_title': schema.KIND_LABELS[check.kind],
@@ -236,7 +281,7 @@ def send_request(check, *, otp: str) -> None:
         'link_days': ReferenceCheck.TOKEN_VALIDITY_DAYS,
     }
     subject = (f'{schema.KIND_LABELS[check.kind]} request — '
-               f'{check.resume.candidate_name}')
+               f'{candidate_name(check.resume)} ({check.verification_reference_id})')
     message = EmailMultiAlternatives(
         subject=subject,
         body=render_to_string('reference_checks/email/request.txt', context),
@@ -267,6 +312,9 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
     the click. The email itself goes to Celery: SMTP can take tens of seconds.
     """
     from .tasks import send_reference_check_request
+
+    if kind not in schema.SENDABLE_KINDS:
+        raise SendError('That form is no longer in use.')
 
     contact = contact_for(resume, source_key)
     if contact is None:

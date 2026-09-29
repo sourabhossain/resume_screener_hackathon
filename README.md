@@ -61,13 +61,16 @@ Styling is built with the Tailwind CLI (no in-browser CDN). The source is
 
 ## Employee Information Form
 
-Shortlisting a candidate emails them a link plus a one-time code; they fill in a
-130-question form (Sections A–D7 of
-`SSL_Wireless_Employee_Information_Form_FINAL_UPDATED.pdf`) and the recruiter
-reads it back under **Information Form** on the candidate page.
+Shortlisting a candidate emails them a link plus a one-time code; they fill in
+the form (Q1–Q130, Sections A–D7 of `SSL_Employee_Information_Form_FINAL.pdf`) and
+the recruiter reads it back under **Information Form** on the candidate page.
 
-The whole form is defined as data in `apps/employee_form/schema.py` — add or
-change a question there and nothing else needs touching.
+The whole form is defined as data in `apps/employee_form/schema.py`, with the PDF's
+own question numbers and branching expressed as `show_if` / `required_if` rules
+(`apps/core/form_logic.py`, mirrored in the browser by
+`templates/shared/form_logic.html`). A hidden question is never required and is
+cleared on save. The HR Background Verification form and the two referee forms use
+the same engine.
 
 ### Going live
 
@@ -108,18 +111,16 @@ Also required:
 A failed send is recorded on the form and shown to the recruiter as
 **Invite failed** with the reason, next to a Resend button — it never fails silently.
 
-### Two deliberate differences from the PDF
+### How the PDF's open points were resolved
 
-- **Q1 Requisition ID is dropped** (a candidate cannot know it), so this form has
-  130 questions and our Q1 is the PDF's Q2.
-- **No employer block is hard-required.** The PDF marks Employers 1–4 required,
-  which would make the form unsubmittable for a fresher. Instead an employer is
-  optional until its name is filled in, at which point the rest of that block
-  becomes required.
-
-### Still to confirm
-
-`DEPARTMENT_ROUTING` in `schema.py` maps all 25 departments to Sections D1–D6.
-Only `Banking and Financial Services → D1` is confirmed; the other 24 are inferred
-from the section titles and should be checked against the form's Branching Setup
-Guide. A wrong entry asks a candidate the wrong department's questions.
+- **Q1 Requisition ID** is set on the Job (job form) and prefilled for the candidate.
+- **Q15** offers Master's, Bachelor's and Other (Q36 depends on "Other"). Master's
+  shows Q16–Q35, Bachelor's Q21–Q35, Other shows Q36 plus the HSC/SSC blocks.
+- **"Conditional"** questions are required while shown, unless the PDF's wording
+  makes them optional ("if applicable", "when available").
+- **Q14 "No"** and **Q129 "I Do Not Agree"** end the form and flag it for HR review
+  (shown as *Consent declined* / *Declaration not agreed*). No signature is asked
+  after "I Do Not Agree".
+- **Employers** repeat via Q50/Q61 up to 10; Q46/Q47 are required unless Q48 is
+  "Currently Employed".
+- **Department routing (Q83)** follows the PDF's table for all 25 departments.

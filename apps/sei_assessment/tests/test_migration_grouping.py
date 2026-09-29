@@ -13,7 +13,8 @@ def _state(target):
     executor = MigrationExecutor(connection)
     executor.migrate(target)
     executor.loader.build_graph()
-    return executor.loader.project_state(target).apps
+    others = [n for n in executor.loader.graph.leaf_nodes() if n[0] != target[0][0]]
+    return executor.loader.project_state(target + others).apps
 
 
 @pytest.mark.django_db(transaction=True)
@@ -52,8 +53,5 @@ def test_sittings_are_grouped_with_the_latest_code_and_the_first_token():
     assert single.token == solo.token and single.otp_hash == 'solo'
     assert not NewSitting.objects.filter(invitation__isnull=True).exists()
 
-    _state(executor_latest())
-
-
-def executor_latest():
-    return MigrationExecutor(connection).loader.graph.leaf_nodes()
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes())

@@ -31,6 +31,7 @@ def prefill_answers(resume) -> dict:
         'personal_email': (resume.email or '').strip(),
         # From the Job record.
         'position_applied_for': (resume.job.title or '').strip(),
+        'requisition_id': (resume.job.requisition_id or '').strip(),
         # The signature is never prefilled or suggested — that would defeat the
         # point of it. The declaration's date comes from submitted_at, not from
         # anything the candidate can set.

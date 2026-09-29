@@ -220,9 +220,9 @@
                     <span class="shrink-0 text-[11px] font-bold uppercase tracking-wide text-zinc-400">#{{ job.index }}</span>
                     {% endif %}
                 </div>
-                <p class="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{{ job.position }}</p>
+                <p class="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{{ job.position }}{% if job.employment_type %} &middot; {{ job.employment_type }}{% endif %}</p>
                 <p class="mt-1 text-xs tabular-nums text-zinc-500 dark:text-zinc-500">
-                    {{ job.start|default:"—" }} &rarr; {{ job.end|default:"—" }}
+                    {{ job.start|default:"—" }} &rarr; {{ job.end|default:"—" }}{% if job.separation %} &middot; {{ job.separation }}{% endif %}
                 </p>
 
                 {% if job.reason %}
@@ -247,14 +247,14 @@
         </div>
         {% else %}
         <div class="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-            <p class="text-sm text-zinc-600 dark:text-zinc-400">No employment history declared.</p>
+            <p class="text-sm text-zinc-600 dark:text-zinc-400">{% if review.employers.fresher %}Fresher — no previous full-time or contractual employment.{% else %}No employment history declared.{% endif %}</p>
         </div>
         {% endif %}
 
         {% if review.employers.additional %}
         <div class="ef-card mt-3 rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
             <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-400">
-                Additional employment beyond four employers
+                Additional employment history (earlier form version)
             </p>
             <p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ review.employers.additional }}</p>
         </div>

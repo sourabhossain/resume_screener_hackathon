@@ -50,6 +50,7 @@ def _verify(client, form):
 
 
 SECTION_A = {
+    'requisition_id': 'REQ-1',
     'candidate_full_name': 'Probe Two', 'mobile_number': '+8801711123456',
     'personal_email': 'two@example.com', 'position_applied_for': 'KAM',
     'nid_number': '123', 'date_of_birth': '1996-04-12',
@@ -200,6 +201,7 @@ def test_declining_consent_is_stored_as_declined(client, candidate):
 
     form.refresh_from_db()
     assert form.answers.get('verification_consent') == 'no'
+    assert form.is_submitted and form.consent_declined
 
 
 # ── PROBE 21: OTP must not be guessable from the stored row ──────────────

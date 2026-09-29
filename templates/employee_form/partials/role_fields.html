@@ -6,7 +6,7 @@
 {% endif %}
 
 {% for group in groups %}
-<fieldset class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+<fieldset data-logic-group class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
     {% if group.title %}
     <legend class="sr-only">{{ group.title }}</legend>
     <div class="border-b border-zinc-100 bg-zinc-50/70 px-5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
