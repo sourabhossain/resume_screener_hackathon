@@ -66,7 +66,6 @@ def _form(step_key, data, context=None, files=None, uploaded=()):
 
 # ── Minimal valid answers per section ────────────────────────────────────
 HR_REVIEW = {
-    'requisition_id': 'REQ-2026-014',
     'candidate_full_name': 'Ayesha Rahman',
     'position_applied_for': 'Senior Python Developer',
     'department': 'engineering',
@@ -177,15 +176,13 @@ def test_seven_sections_in_pdf_order():
 
 def test_every_pdf_question_1_to_99_is_present():
     numbers = {q['no'] for q in schema.ALL_QUESTIONS}
-    assert numbers == set(range(1, 100))
+    assert numbers == set(range(2, 100))
     keys = [q['key'] for q in schema.ALL_QUESTIONS]
     assert len(keys) == len(set(keys))
 
 
-def test_q1_requisition_id_is_required():
-    q = schema.QUESTIONS_BY_KEY['requisition_id']
-    assert q['no'] == 1 and q['required'] and q['type'] == schema.TEXT
-    assert q['label'] == 'Requisition ID'
+def test_requisition_id_is_not_asked():
+    assert 'requisition_id' not in schema.QUESTIONS_BY_KEY
 
 
 REMOVED_KEYS = [
@@ -207,7 +204,6 @@ def test_questions_not_in_the_pdf_are_gone(key):
 
 
 TYPES = {
-    'requisition_id': schema.TEXT,
     'department': schema.SELECT,
     'verification_start_date': schema.DATE,
     'verification_route': schema.SELECT,
@@ -756,7 +752,6 @@ def test_step_page_ships_the_rules_to_the_browser(hr_client, candidate):
 
 # ── Prefill from the Employee Information Form ───────────────────────────
 EIF_ANSWERS = {
-    'requisition_id': 'REQ-2026-014',
     'candidate_full_name': 'Ayesha Rahman',
     'position_applied_for': 'Senior Python Developer',
     'department': 'engineering',
@@ -817,7 +812,6 @@ def employee_form(candidate):
 def test_prefill_maps_every_eif_key(employee_form, candidate):
     values = prefill_answers(candidate)
 
-    assert values['requisition_id'] == 'REQ-2026-014'
     assert values['candidate_full_name'] == 'Ayesha Rahman'
     assert values['position_applied_for'] == 'Senior Python Developer'
     assert values['department'] == 'engineering'
@@ -912,11 +906,9 @@ def test_hr_judgements_are_never_prefilled(employee_form, candidate):
         assert key not in values, key
 
 
-def test_requisition_id_falls_back_to_the_job(candidate):
-    candidate.job.requisition_id = 'JOB-REQ-9'
-    candidate.job.save()
+def test_name_and_position_fall_back_to_the_application(candidate):
     values = prefill_answers(candidate)
-    assert values['requisition_id'] == 'JOB-REQ-9'
+    assert 'requisition_id' not in values
     assert values['candidate_full_name'] == 'Ayesha Rahman'
     assert values['position_applied_for'] == 'Senior Python Developer'
 
@@ -1219,14 +1211,14 @@ def test_a_section_saves_on_its_own(hr_client, candidate):
     hr_client.post(_url('step', candidate, step_key='hr_review'), HR_REVIEW)
     verification.refresh_from_db()
     assert verification.completed_steps == ['hr_review']
-    assert verification.answers['requisition_id'] == 'REQ-2026-014'
+    assert verification.answers['candidate_full_name']
     assert verification.last_saved_by.username == 'hradmin'
 
 
 def test_an_incomplete_section_is_not_marked_complete(hr_client, candidate):
     verification = _start(hr_client, candidate)
     hr_client.post(_url('step', candidate, step_key='hr_review'),
-                   {**HR_REVIEW, 'requisition_id': ''})
+                   {**HR_REVIEW, 'candidate_full_name': ''})
     verification.refresh_from_db()
     assert not verification.is_step_complete('hr_review')
 

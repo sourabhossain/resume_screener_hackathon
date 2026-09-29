@@ -251,7 +251,6 @@ def _after_section_a(answers):
 _ADDRESS_HELP = 'Full address for police verification.'
 
 SECTION_A = [
-    _q('requisition_id', 'Requisition ID', TEXT, required=True, no=1),
     _q('candidate_full_name', 'Candidate Full Name', TEXT, required=True, no=2),
     _q('mobile_number', 'Mobile Number', PHONE, required=True, no=3),
     _q('personal_email', 'Personal Email Address', EMAIL, required=True, no=4),
@@ -783,7 +782,7 @@ def legacy_view(answers):
 
 # ── Presentation hints ───────────────────────────────────────────────────
 HALF_WIDTH_KEYS = frozenset({
-    'requisition_id', 'mobile_number', 'personal_email', 'nid_number',
+    'mobile_number', 'personal_email', 'nid_number',
     'birth_certificate_number', 'date_of_birth', 'position_applied_for',
     'masters_completion_date', 'bachelors_completion_date',
     'hsc_board', 'hsc_passing_year', 'hsc_result',
@@ -814,7 +813,7 @@ def _reference_group(index):
 STEP_GROUPS = {
     'section_a': [
         ('Your details', [
-            'requisition_id', 'candidate_full_name', 'mobile_number', 'personal_email',
+            'candidate_full_name', 'mobile_number', 'personal_email',
             'position_applied_for', 'nid_number', 'birth_certificate_number',
             'date_of_birth',
         ]),

@@ -113,7 +113,7 @@ A failed send is recorded on the form and shown to the recruiter as
 
 ### How the PDF's open points were resolved
 
-- **Q1 Requisition ID** is set on the Job (job form) and prefilled for the candidate.
+- **Q1 Requisition ID** is not used in this system, so it is left out of both the candidate and HR forms (numbering starts at Q2).
 - **Q15** offers Master's, Bachelor's and Other (Q36 depends on "Other"). Master's
   shows Q16–Q35, Bachelor's Q21–Q35, Other shows Q36 plus the HSC/SSC blocks.
 - **"Conditional"** questions are required while shown, unless the PDF's wording

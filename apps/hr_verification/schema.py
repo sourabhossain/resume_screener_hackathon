@@ -429,12 +429,10 @@ STEPS = [
         'key': 'hr_review',
         'section': 'Candidate Link, HR Review & Verification Route',
         'title': 'HR Review & Verification Route',
-        'description': 'Use the same Requisition ID, Candidate Full Name and Department '
-                       'as the Employee Information Form.',
+        'description': 'Use the same Candidate Full Name and Department as the Employee '
+                       'Information Form.',
         'next': 'identity',
         'questions': [
-            _q('requisition_id', 'Requisition ID', required=True, no=1,
-               help='Must match the Employee Information Form.'),
             _q('candidate_full_name', 'Candidate Full Name', required=True, no=2,
                help='Must match the Employee Information Form.'),
             _q('position_applied_for', 'Position Applied For', required=True, no=3),
@@ -734,7 +732,7 @@ def _reference_group(index):
 STEP_GROUPS = {
     'hr_review': [
         _group('HR review details', [
-            'requisition_id', 'candidate_full_name', 'position_applied_for', 'department',
+            'candidate_full_name', 'position_applied_for', 'department',
             'hr_reviewer_name', 'hr_reviewer_designation', 'verification_start_date']),
         _group('Verification route', ['verification_route']),
         _group('Background check agency', [

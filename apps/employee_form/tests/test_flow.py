@@ -399,11 +399,11 @@ def test_every_step_key_referenced_exists():
 
 def test_every_pdf_question_number_is_present_once():
     numbers = [q['no'] for q in schema.QUESTIONS_BY_KEY.values() if q.get('no')]
-    assert sorted(numbers) == list(range(1, 131))
+    assert sorted(numbers) == list(range(2, 131))
 
 
 @pytest.mark.parametrize('number,key', [
-    (1, 'requisition_id'), (10, 'address_same'), (14, 'verification_consent'),
+    (2, 'candidate_full_name'), (10, 'address_same'), (14, 'verification_consent'),
     (15, 'highest_degree'), (36, 'other_qualification_details'), (39, 'has_employment'),
     (48, 'employer_1_separation'), (50, 'employer_1_another'), (61, 'employer_2_another'),
     (62, 'reference_1_name'), (74, 'manages_team'), (82, 'reporting_types'),
@@ -436,11 +436,10 @@ def test_known_details_are_prefilled(client, candidate):
     assert 'please check it matches your documents' in body
 
 
-def test_requisition_id_is_prefilled_from_the_job(candidate):
+def test_requisition_id_is_not_asked(candidate):
     from apps.employee_form.prefill import prefill_answers
-    candidate.job.requisition_id = 'REQ-2026-014'
-    candidate.job.save(update_fields=['requisition_id'])
-    assert prefill_answers(candidate)['requisition_id'] == 'REQ-2026-014'
+    assert 'requisition_id' not in schema.QUESTIONS_BY_KEY
+    assert 'requisition_id' not in prefill_answers(candidate)
 
 
 def test_ai_extracted_fields_are_not_prefilled(client, db, sample_job):
@@ -493,7 +492,6 @@ def test_prefilled_values_are_stored_when_the_step_is_submitted(client, candidat
         reverse('employee_form:step',
                 kwargs={'token': form.token, 'step_key': 'section_a'}),
         {
-            'requisition_id': 'REQ-9',
             'candidate_full_name': 'Ayesha Rahman',
             'mobile_number': '+8801711123456',
             'personal_email': 'ayesha@example.com',

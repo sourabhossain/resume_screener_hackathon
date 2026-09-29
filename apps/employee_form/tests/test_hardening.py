@@ -42,7 +42,6 @@ def verified(client, candidate):
 
 
 SECTION_A = {
-    'requisition_id': 'REQ-1',
     'candidate_full_name': 'Probe Candidate',
     'mobile_number': '+8801711123456',
     'personal_email': 'probe@example.com',

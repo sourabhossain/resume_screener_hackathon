@@ -27,7 +27,6 @@ def _png(name='scan.png'):
 # Answers per step for a Banking candidate with one previous employer.
 STEP_DATA = {
     'section_a': lambda: {
-        'requisition_id': 'REQ-2026-014',
         'candidate_full_name': 'Ayesha Rahman',
         'mobile_number': '+8801711123456',
         'personal_email': 'ayesha@example.com',
@@ -180,7 +179,7 @@ def test_full_submission(verified):
     assert form.answers['ssc_result'] == 'A+'
     assert form.answers['total_experience_years'] == 5.0
     assert form.answers['notice_period'] == '2 months'
-    assert form.answers['requisition_id'] == 'REQ-2026-014'
+    assert 'requisition_id' not in form.answers
     assert form.answers['customer_segments'] == ['corporate', 'bank_fi']
 
     # Answers stored under their schema keys, with choices kept as values.

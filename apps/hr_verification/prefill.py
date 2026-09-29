@@ -12,7 +12,6 @@ from .schema import EMPLOYER_MAX, REFERENCE_COUNT
 
 # HR key <- EIF key, same fact in the same words.
 DIRECT_MAP = {
-    'requisition_id': 'requisition_id',
     'candidate_full_name': 'candidate_full_name',
     'position_applied_for': 'position_applied_for',
     'department': 'department',
@@ -134,8 +133,6 @@ def prefill_answers(resume, user=None) -> dict:
         values['candidate_full_name'] = _text(resume.candidate_name)
     if not _text(values.get('position_applied_for')):
         values['position_applied_for'] = _text(resume.job.title)
-    if not _text(values.get('requisition_id')):
-        values['requisition_id'] = _text(getattr(resume.job, 'requisition_id', ''))
 
     values['verification_start_date'] = timezone.localdate().isoformat()
     if user is not None:

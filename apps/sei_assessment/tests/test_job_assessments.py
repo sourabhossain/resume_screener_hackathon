@@ -159,7 +159,7 @@ def test_resending_reuses_the_sitting_rather_than_opening_another(
 @pytest.mark.django_db
 def test_the_form_saves_the_boxes_that_were_ticked(sample_job):
     form = JobForm(instance=sample_job, data={
-        'title': 'Head of Data', 'requisition_id': 'REQ-7', 'description': 'Lead the data team.',
+        'title': 'Head of Data', 'description': 'Lead the data team.',
         'status': 'draft', 'assessments': [instruments.PE, instruments.SEI],
     })
 
@@ -177,7 +177,7 @@ def test_the_form_accepts_no_boxes_at_all(sample_job):
     sample_job.save(update_fields=['assessments'])
 
     form = JobForm(instance=sample_job, data={
-        'title': 'Head of Data', 'requisition_id': 'REQ-7', 'description': 'Lead the data team.',
+        'title': 'Head of Data', 'description': 'Lead the data team.',
         'status': 'draft',
     })
 
@@ -188,7 +188,7 @@ def test_the_form_accepts_no_boxes_at_all(sample_job):
 @pytest.mark.django_db
 def test_the_form_drops_a_key_that_is_not_an_instrument(sample_job):
     form = JobForm(instance=sample_job, data={
-        'title': 'Head of Data', 'requisition_id': 'REQ-7', 'description': 'Lead the data team.',
+        'title': 'Head of Data', 'description': 'Lead the data team.',
         'status': 'draft', 'assessments': ['nonsense'],
     })
 
