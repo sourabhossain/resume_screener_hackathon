@@ -1,7 +1,7 @@
 """Numbers and chart geometry for the recruiter dashboard."""
 import math
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.db.models import Avg, Count, Q
 from django.urls import reverse
@@ -17,7 +17,7 @@ RANGES = [
     ('all', 'All time', None),
 ]
 RANGE_DAYS = {key: days for key, _, days in RANGES}
-DEFAULT_RANGE = 'all'
+DEFAULT_RANGE = '90d'
 
 FUNNEL_STAGES = [
     ('applied', 'Applications'),
@@ -31,7 +31,7 @@ STAGE_RANK = {key: rank for rank, (key, _) in enumerate(FUNNEL_STAGES)}
 STAGE_RANK['new'] = 0
 
 CHART_W, CHART_H = 640, 200
-PAD_L, PAD_R, PAD_T, PAD_B = 36, 12, 12, 28
+PAD_L, PAD_R, PAD_T, PAD_B = 36, 12, 24, 28
 
 
 def _pct(part, whole):
@@ -56,49 +56,68 @@ def _ticks(maximum, count=4):
     return [maximum * i // count for i in range(count + 1)]
 
 
-# ── Filters ──────────────────────────────────────────────────────────────
+# ── Filters and the time window ──────────────────────────────────────────
 def parse_filters(params):
     range_key = params.get('range') if params.get('range') in RANGE_DAYS else DEFAULT_RANGE
     job = None
     slug = params.get('job') or ''
     if slug:
-        job = Job.objects.filter(slug=slug).first()
+        job = job_options().filter(slug=slug).first()
     return range_key, job
 
 
-def scoped_resumes(range_key, job, *, offset_days=0):
+def job_options():
+    return Job.objects.order_by('title', '-created_at')
+
+
+def window(range_key, now=None):
+    """(unit, buckets, start) shared by every number on the page; start is None for all time."""
+    now = now or timezone.now()
+    unit, buckets = _buckets(range_key, now)
+    if not RANGE_DAYS[range_key]:
+        return unit, buckets, None
+    return unit, buckets, timezone.make_aware(datetime.combine(buckets[0], time.min))
+
+
+def scoped_resumes(range_key, job, *, previous=False, now=None):
+    now = now or timezone.now()
     qs = Resume.objects.filter(job__is_deleted=False)
     if job:
         qs = qs.filter(job=job)
-    days = RANGE_DAYS[range_key]
-    if days:
-        end = timezone.now() - timedelta(days=offset_days)
-        qs = qs.filter(created_at__gt=end - timedelta(days=days), created_at__lte=end)
-    return qs
+    _, _, start = window(range_key, now)
+    if start is None:
+        return qs
+    if previous:
+        return qs.filter(created_at__gte=start - (now - start), created_at__lt=start)
+    return qs.filter(created_at__gte=start, created_at__lte=now)
+
+
+def hr_answers(resumes):
+    """{resume_id: HR verification answers} for the candidates in view, read once."""
+    from apps.hr_verification.models import HRVerification
+
+    return dict(HRVerification.objects.filter(resume__in=resumes)
+                .values_list('resume_id', 'answers'))
 
 
 # ── Funnel: furthest stage each candidate reached ────────────────────────
-def furthest_stages(resumes):
+def furthest_stages(resumes, hr=None):
     """{resume_id: stage rank}, from the current status plus what has happened since.
 
     A rejected candidate keeps the furthest stage their records prove: an
-    information form means they were shortlisted, an interview means they were
-    interviewed, an issued offer letter means an offer went out.
+    information form means shortlisted, a held interview means interviewing,
+    and (HR view only) an issued offer letter means an offer went out.
     """
-    from apps.hr_verification.models import HRVerification
+    from apps.employee_form.models import EmployeeForm
     from apps.interviews.models import Interview
 
-    rows = list(resumes.values_list('id', 'recruiter_status'))
-    ids = [pk for pk, _ in rows]
-    shortlisted = set(Resume.objects.filter(id__in=ids, employee_form__isnull=False)
-                      .values_list('id', flat=True))
-    interviewed = set(Interview.objects.filter(resume_id__in=ids).values_list('resume_id', flat=True))
-    offered = {
-        v.resume_id for v in HRVerification.objects.filter(resume_id__in=ids).only('resume_id', 'answers')
-        if (v.answers or {}).get('offer_letter_issued') == 'yes'
-    }
+    shortlisted = set(EmployeeForm.objects.filter(resume__in=resumes)
+                      .values_list('resume_id', flat=True))
+    interviewed = set(Interview.objects.filter(resume__in=resumes).exclude(status='cancelled')
+                      .values_list('resume_id', flat=True))
+    offered = {pk for pk, a in (hr or {}).items() if (a or {}).get('offer_letter_issued') == 'yes'}
     ranks = {}
-    for pk, status in rows:
+    for pk, status in resumes.values_list('id', 'recruiter_status'):
         rank = STAGE_RANK.get(status, 0)
         if pk in shortlisted:
             rank = max(rank, STAGE_RANK['shortlisted'])
@@ -162,10 +181,12 @@ def _bucket_label(unit, day):
     return day.strftime('%d %b')
 
 
-def trend(range_key, job):
-    now = timezone.now()
-    unit, buckets = _buckets(range_key, now)
-    qs = Resume.objects.filter(job__is_deleted=False, created_at__date__gte=buckets[0])
+def trend(range_key, job, now=None):
+    now = now or timezone.now()
+    unit, buckets, _ = window(range_key, now)
+    # Datetime bound: created_at__date needs MySQL tz tables and silently matches nothing without them.
+    start = timezone.make_aware(datetime.combine(buckets[0], time.min))
+    qs = Resume.objects.filter(job__is_deleted=False, created_at__gte=start, created_at__lte=now)
     if job:
         qs = qs.filter(job=job)
     counts = Counter(_bucket_of(unit, timezone.localtime(ts).date())
@@ -193,7 +214,7 @@ def trend(range_key, job):
     return {
         'unit': unit, 'points': points, 'line': line, 'area': area, 'grid': grid,
         'last': last, 'total': sum(values), 'width': CHART_W, 'height': CHART_H,
-        'pad_l': PAD_L, 'pad_r': CHART_W - PAD_R, 'base_y': base_y,
+        'pad_l': PAD_L, 'pad_r': CHART_W - PAD_R, 'base_y': base_y, 'top_y': PAD_T,
         'spark': _sparkline(values),
     }
 
@@ -250,33 +271,41 @@ def pipeline_progress(resumes, *, hr_view):
     from apps.employee_form.models import EmployeeForm
     from apps.hr_verification.models import HRVerification
     from apps.reference_checks.models import ReferenceCheck
-    from apps.sei_assessment.models import AssessmentInvitation, SEIAssessment
+    from apps.sei_assessment import instruments
+    from apps.sei_assessment.models import AssessmentInvitation
 
-    ids = resumes.values('id')
-    forms = EmployeeForm.objects.filter(resume_id__in=ids)
-    form_stats = forms.aggregate(
+    form_stats = EmployeeForm.objects.filter(resume__in=resumes).aggregate(
         sent=Count('id', filter=Q(invited_at__isnull=False)),
         done=Count('id', filter=Q(is_submitted=True)),
         failed=Count('id', filter=~Q(last_error='') & Q(is_submitted=False)),
     )
-    invitations = AssessmentInvitation.objects.filter(resume_id__in=ids, invited_at__isnull=False)
-    sittings = list(SEIAssessment.objects.filter(invitation__in=invitations))
-    refs = list(ReferenceCheck.objects.filter(resume_id__in=ids, invited_at__isnull=False))
-    rows = [
-        _meter('Information form', form_stats['done'], form_stats['sent'], 'submitted',
-               note=f"{form_stats['failed']} invite failed" if form_stats['failed'] else ''),
-        _meter('Assessments', sum(1 for s in sittings if s.is_valid_result), len(sittings),
-               'completed',
-               note=_plural(sum(1 for s in sittings if s.needs_retaking), 'needs a retake',
-                            'need a retake')),
+    rows = [_meter('Information form', form_stats['done'], form_stats['sent'], 'submitted',
+                   note=f"{form_stats['failed']} invite failed" if form_stats['failed'] else '')]
+    if not hr_view:
+        return rows
+
+    done = retake = sent = 0
+    invitations = (AssessmentInvitation.objects.filter(resume__in=resumes, invited_at__isnull=False)
+                   .prefetch_related('sittings'))
+    for invitation in invitations:
+        sittings = [s for s in invitation.sittings.all() if s.instrument in instruments.REGISTRY]
+        if not sittings:
+            continue
+        sent += 1
+        done += all(s.is_valid_result for s in sittings)
+        retake += any(s.needs_retaking for s in sittings)
+    refs = list(ReferenceCheck.objects.filter(resume__in=resumes, invited_at__isnull=False)
+                .only('kind', 'answers', 'is_submitted'))
+    bgv = HRVerification.objects.filter(resume__in=resumes).aggregate(
+        started=Count('id'), done=Count('id', filter=Q(is_submitted=True)))
+    rows += [
+        _meter('Assessments', done, sent, 'completed',
+               note=_plural(retake, 'candidate needs a retake', 'candidates need a retake')),
         _meter('Reference checks', sum(1 for r in refs if r.is_submitted), len(refs), 'replied',
                note=_plural(sum(1 for r in refs if r.is_submitted and r.flagged),
                             'reply flagged', 'replies flagged')),
+        _meter('Background verification', bgv['done'], bgv['started'], 'signed off'),
     ]
-    if hr_view:
-        bgv = HRVerification.objects.filter(resume_id__in=ids).aggregate(
-            started=Count('id'), done=Count('id', filter=Q(is_submitted=True)))
-        rows.append(_meter('Background verification', bgv['done'], bgv['started'], 'signed off'))
     return rows
 
 
@@ -295,13 +324,13 @@ def interview_summary(resumes):
     from apps.interviews.models import Interview, InterviewEvaluation
 
     today = timezone.localdate()
-    interviews = Interview.objects.filter(resume_id__in=resumes.values('id'))
+    interviews = Interview.objects.filter(resume__in=resumes)
     stats = interviews.aggregate(
         upcoming=Count('id', filter=Q(status='scheduled', scheduled_date__gte=today)),
         overdue=Count('id', filter=Q(status='scheduled', scheduled_date__lt=today)),
         completed=Count('id', filter=Q(status='completed')),
     )
-    evals = InterviewEvaluation.objects.filter(interview__in=interviews)
+    evals = InterviewEvaluation.objects.filter(interview__in=interviews.exclude(status='cancelled'))
     verdicts = evals.filter(is_submitted=True).aggregate(
         yes=Count('id', filter=Q(recommendation='yes')),
         maybe=Count('id', filter=Q(recommendation='maybe')),
@@ -310,7 +339,8 @@ def interview_summary(resumes):
     submitted = sum(verdicts.values())
     return {
         **stats,
-        'evaluations_pending': evals.filter(is_submitted=False).count(),
+        'evaluations_pending': evals.filter(is_submitted=False).filter(
+            Q(token_expires_at__isnull=True) | Q(token_expires_at__gte=timezone.now())).count(),
         'evaluations_submitted': submitted,
         'verdicts': [
             {'key': key, 'label': label, 'count': verdicts[key],
@@ -321,12 +351,10 @@ def interview_summary(resumes):
     }
 
 
-def bgv_outcomes(resumes):
-    from apps.hr_verification.models import HRVerification
+def bgv_outcomes(hr):
     from apps.hr_verification.schema import JOINING_CLEARANCE, RISK_RATING
 
-    answers = [v.answers or {} for v in HRVerification.objects.filter(
-        resume_id__in=resumes.values('id')).only('answers')]
+    answers = [a or {} for a in hr.values()]
     risk = Counter(a.get('risk_rating') for a in answers if a.get('risk_rating'))
     clearance = Counter(a.get('final_joining_clearance') for a in answers
                         if a.get('final_joining_clearance'))
@@ -366,7 +394,7 @@ def recruiter_table(resumes, ranks):
     for pk, owner_id, first, last, username, job_id in resumes.values_list(
             'id', 'job__owner_id', 'job__owner__first_name', 'job__owner__last_name',
             'job__owner__username', 'job_id'):
-        name = f'{first} {last}'.strip() or username or 'Unassigned'
+        name = f"{first or ''} {last or ''}".strip() or username or 'Unassigned'
         row = rows.setdefault(owner_id, {'name': name, 'jobs': set(), 'candidates': 0,
                                          'shortlisted': 0, 'hired': 0})
         row['jobs'].add(job_id)
@@ -398,18 +426,20 @@ def attention_items(*, hr_view):
         unseen=Count('id', filter=Q(seen_status='unseen')),
         pool=Count('id', filter=Q(recommendation='talent_pool')),
     )
-    invite_failures = (
-        EmployeeForm.objects.filter(is_submitted=False).exclude(last_error='').count()
-        + AssessmentInvitation.objects.exclude(last_error='').count()
-        + ReferenceCheck.objects.filter(is_submitted=False).exclude(last_error='').count()
-    )
+    on_live = {'resume__in': live}
+    invite_failures = EmployeeForm.objects.filter(is_submitted=False, **on_live).exclude(
+        last_error='').count()
+    if hr_view:
+        invite_failures += (
+            AssessmentInvitation.objects.filter(**on_live).exclude(last_error='').count()
+            + ReferenceCheck.objects.filter(is_submitted=False, **on_live).exclude(
+                last_error='').count())
     stalled_forms = EmployeeForm.objects.filter(
-        is_submitted=False, invited_at__lt=now - timedelta(days=3), token_expires_at__gt=now).count()
+        is_submitted=False, invited_at__lt=now - timedelta(days=3), token_expires_at__gt=now,
+        **on_live).count()
     expiring = InterviewEvaluation.objects.filter(
-        is_submitted=False, token_expires_at__gte=now,
-        token_expires_at__lte=now + timedelta(days=3)).count()
-    flagged = sum(1 for r in ReferenceCheck.objects.filter(is_submitted=True).only(
-        'kind', 'answers') if r.flagged)
+        is_submitted=False, token_expires_at__gte=now, token_expires_at__lte=now + timedelta(days=3),
+        interview__resume__in=live).exclude(interview__status='cancelled').count()
 
     items = [
         ('critical', stats['failed'], 'Screening failed', reverse('core:screening_failed')),
@@ -421,8 +451,10 @@ def attention_items(*, hr_view):
         ('info', stats['pool'], 'Talent pool candidates', reverse('core:talent_pool')),
     ]
     if hr_view:
+        flagged = sum(1 for r in ReferenceCheck.objects.filter(is_submitted=True, **on_live).only(
+            'kind', 'answers') if r.flagged)
         items.insert(3, ('warning', flagged, 'Reference replies flagged', None))
-        awaiting = HRVerification.objects.filter(is_submitted=False).count()
+        awaiting = HRVerification.objects.filter(is_submitted=False, **on_live).count()
         items.append(('info', awaiting, 'Background checks awaiting sign-off', None))
     return [{'tone': tone, 'count': count, 'label': label, 'url': url}
             for tone, count, label, url in items if count]
@@ -432,22 +464,27 @@ def attention_items(*, hr_view):
 def build(user, params):
     range_key, job = parse_filters(params)
     hr_view = bool(user.is_staff or user.is_superuser)
-    resumes = scoped_resumes(range_key, job)
-    ranks = furthest_stages(resumes)
+    now = timezone.now()
+    resumes = scoped_resumes(range_key, job, now=now)
+    hr = hr_answers(resumes) if hr_view else {}
+    ranks = furthest_stages(resumes, hr)
     total = len(ranks)
     shortlisted = sum(1 for r in ranks.values() if r >= STAGE_RANK['shortlisted'])
     hired = sum(1 for r in ranks.values() if r >= STAGE_RANK['hired'])
-    rejected = resumes.filter(recruiter_status='rejected').count()
-    avg_score = resumes.filter(screening_status='completed', final_score__isnull=False).aggregate(
-        v=Avg('final_score'))['v']
-
+    status_counts = resumes.aggregate(
+        rejected=Count('id', filter=Q(recruiter_status='rejected')),
+        withdrawn=Count('id', filter=Q(recruiter_status='withdrawn')),
+        pending=Count('id', filter=Q(screening_status='pending')),
+        processing=Count('id', filter=Q(screening_status='processing')),
+        avg=Avg('final_score', filter=Q(screening_status='completed', final_score__isnull=False)),
+    )
     previous = None
     if RANGE_DAYS[range_key]:
-        previous = scoped_resumes(range_key, job, offset_days=RANGE_DAYS[range_key]).count()
+        previous = scoped_resumes(range_key, job, previous=True, now=now).count()
 
-    offers = _offer_stats(resumes)
-    series = trend(range_key, job)
+    series = trend(range_key, job, now=now)
     range_label = dict((k, label) for k, label, _ in RANGES)[range_key]
+    rejected, withdrawn = status_counts['rejected'], status_counts['withdrawn']
 
     kpis = [
         {'key': 'candidates', 'label': 'Candidates', 'value': total, 'format': 'int',
@@ -458,14 +495,23 @@ def build(user, params):
          'caption': f'{_fmt_pct(_pct(shortlisted, total))} of candidates'},
         {'key': 'hire_conversion', 'label': 'Hire conversion', 'value': _pct(hired, shortlisted),
          'format': 'pct', 'caption': f'{hired} hired of {shortlisted} shortlisted'},
-        {'key': 'offer_acceptance', 'label': 'Offer acceptance',
-         'value': _pct(offers['accepted'], offers['issued']), 'format': 'pct',
-         'caption': f"{offers['accepted']} accepted of {offers['issued']} offers"},
+    ]
+    if hr_view:
+        offers = _offer_stats(hr)
+        decided = offers['accepted'] + offers['declined']
+        kpis.append({'key': 'offer_acceptance', 'label': 'Offer acceptance',
+                     'value': _pct(offers['accepted'], decided), 'format': 'pct',
+                     'caption': f"{offers['accepted']} accepted · {offers['declined']} declined · "
+                                f"{offers['pending']} pending"})
+    else:
+        kpis.append({'key': 'withdrawn', 'label': 'Withdrawn', 'value': _pct(withdrawn, total),
+                     'format': 'pct', 'caption': f'{withdrawn} of {total} candidates'})
+    kpis += [
         {'key': 'rejection', 'label': 'Rejection rate', 'value': _pct(rejected, total),
          'format': 'pct', 'caption': f'{rejected} of {total} candidates'},
         {'key': 'avg_score', 'label': 'Avg. AI score',
-         'value': round(avg_score, 1) if avg_score is not None else None, 'format': 'pct',
-         'caption': 'Screened resumes'},
+         'value': round(status_counts['avg'], 1) if status_counts['avg'] is not None else None,
+         'format': 'pct', 'caption': 'Screened resumes'},
     ]
     job_stats = Job.objects.aggregate(total=Count('id'), active=Count('id', filter=Q(status='active')))
     return {
@@ -473,7 +519,7 @@ def build(user, params):
         'range_label': range_label,
         'ranges': [(k, label) for k, label, _ in RANGES],
         'job': job,
-        'job_options': Job.objects.filter(status__in=['active', 'closed']).order_by('title'),
+        'job_options': job_options(),
         'hr_view': hr_view,
         'total_jobs': job_stats['total'],
         'active_jobs': job_stats['active'],
@@ -484,25 +530,23 @@ def build(user, params):
         'tiers': tier_mix(resumes),
         'pipeline': pipeline_progress(resumes, hr_view=hr_view),
         'interviews': interview_summary(resumes),
-        'bgv': bgv_outcomes(resumes) if hr_view else None,
+        'bgv': bgv_outcomes(hr) if hr_view else None,
         'jobs_board': job_leaderboard(resumes, ranks),
         'recruiters': recruiter_table(resumes, ranks),
         'attention': attention_items(hr_view=hr_view),
-        'pending_screening': resumes.filter(screening_status='pending').count(),
-        'processing_screening': resumes.filter(screening_status='processing').count(),
+        'pending_screening': status_counts['pending'],
+        'processing_screening': status_counts['processing'],
     }
 
 
-def _offer_stats(resumes):
-    from apps.hr_verification.models import HRVerification
-
-    issued = accepted = 0
-    for v in HRVerification.objects.filter(resume_id__in=resumes.values('id')).only('answers'):
-        answers = v.answers or {}
+def _offer_stats(hr):
+    counts = Counter()
+    for answers in hr.values():
+        answers = answers or {}
         if answers.get('offer_letter_issued') == 'yes':
-            issued += 1
-            accepted += answers.get('offer_accepted') == 'yes'
-    return {'issued': issued, 'accepted': accepted}
+            counts[{'yes': 'accepted', 'no': 'declined'}.get(answers.get('offer_accepted'), 'pending')] += 1
+    return {'accepted': counts['accepted'], 'declined': counts['declined'],
+            'pending': counts['pending']}
 
 
 def _fmt_pct(value):

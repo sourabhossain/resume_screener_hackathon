@@ -269,7 +269,10 @@
         {% if attention %}
         <section class="dash-card" aria-label="Needs attention" style="padding-top:.95rem;padding-bottom:.95rem">
             <div class="dash-card-head" style="margin-bottom:.7rem">
-                <h2 class="dash-card-title">Needs attention</h2>
+                <div>
+                    <h2 class="dash-card-title">Needs attention</h2>
+                    <p class="dash-card-sub">Right now, across all jobs</p>
+                </div>
             </div>
             <div class="dash-attn">
                 {% for item in attention %}
@@ -303,7 +306,7 @@
                         <div class="dash-bar-track">
                             <div class="dash-bar" style="width: {{ stage.width|floatformat:2 }}%" tabindex="0"
                                  data-tip-value="{{ stage.count }} candidate{{ stage.count|pluralize }}"
-                                 data-tip-label="{{ stage.label }} · {{ stage.share|floatformat:'-1' }}% of applications"></div>
+                                 data-tip-label="{{ stage.label }} · {{ stage.share|floatformat:'-1' }}% of applications" aria-label="{{ stage.count }} candidate{{ stage.count|pluralize }}, {{ stage.label }} · {{ stage.share|floatformat:'-1' }}% of applications"></div>
                             <span class="dash-bar-value">{{ stage.count }}<span>{{ stage.share|floatformat:"-1" }}%</span></span>
                         </div>
                     </div>
@@ -355,9 +358,9 @@
                         <text class="end-label" x="{{ trend.last.x }}" y="{{ trend.last.y }}" dx="-8" dy="-10" text-anchor="end">{{ trend.last.value }}</text>
                         {% endif %}
                         {% for p in trend.points %}
-                        <g class="hit" tabindex="0" data-tip-value="{{ p.value }} candidate{{ p.value|pluralize }}" data-tip-label="{{ p.label }}">
+                        <g class="hit" tabindex="0" data-tip-value="{{ p.value }} candidate{{ p.value|pluralize }}" data-tip-label="{{ p.label }}" aria-label="{{ p.value }} candidate{{ p.value|pluralize }}, {{ p.label }}">
                             <rect x="{{ p.hit_x }}" y="0" width="{{ p.hit_w }}" height="{{ trend.base_y }}"/>
-                            <line class="cross" x1="{{ p.x }}" x2="{{ p.x }}" y1="12" y2="{{ trend.base_y }}"/>
+                            <line class="cross" x1="{{ p.x }}" x2="{{ p.x }}" y1="{{ trend.top_y }}" y2="{{ trend.base_y }}"/>
                             <circle class="hdot" cx="{{ p.x }}" cy="{{ p.y }}" r="4"/>
                         </g>
                         {% endfor %}
@@ -388,7 +391,7 @@
                         <div class="dash-hist-col">
                             {% if bar.is_peak %}<span class="dash-hist-peak">{{ bar.count }}</span>{% endif %}
                             <div class="dash-hist-bar" style="height: {{ bar.height|floatformat:2 }}%" tabindex="0"
-                                 data-tip-value="{{ bar.count }} resume{{ bar.count|pluralize }}" data-tip-label="Score {{ bar.label }}"></div>
+                                 data-tip-value="{{ bar.count }} resume{{ bar.count|pluralize }}" data-tip-label="Score {{ bar.label }}" aria-label="{{ bar.count }} resume{{ bar.count|pluralize }}, Score {{ bar.label }}"></div>
                         </div>
                         {% endfor %}
                     </div>
@@ -419,10 +422,10 @@
                     </div>
                 </div>
                 {% if tiers.total %}
-                <div class="dash-stack" role="img" aria-label="Tier mix">
+                <div class="dash-stack">
                     {% for seg in tiers.segments %}{% if seg.count %}
                     <div style="width: {{ seg.width|floatformat:2 }}%; background: var(--tier-{{ seg.key }})" tabindex="0"
-                         data-tip-value="{{ seg.count }} candidate{{ seg.count|pluralize }}" data-tip-label="{{ seg.label }} tier · {{ seg.share|floatformat:'-1' }}%"></div>
+                         data-tip-value="{{ seg.count }} candidate{{ seg.count|pluralize }}" data-tip-label="{{ seg.label }} tier · {{ seg.share|floatformat:'-1' }}%" aria-label="{{ seg.count }} candidate{{ seg.count|pluralize }}, {{ seg.label }} tier · {{ seg.share|floatformat:'-1' }}%"></div>
                     {% endif %}{% endfor %}
                 </div>
                 <div class="dash-legend">
@@ -435,13 +438,13 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% else %}
+                <p class="dash-empty">No ranked candidates in this period.</p>
+                {% endif %}
                 {% if processing_screening or pending_screening %}
                 <p class="dash-foot-note">
                     {% if processing_screening %}{{ processing_screening }} being screened now. {% endif %}{% if pending_screening %}{{ pending_screening }} waiting in the queue.{% endif %}
                 </p>
-                {% endif %}
-                {% else %}
-                <p class="dash-empty">No ranked candidates in this period.</p>
                 {% endif %}
             </section>
         </div>
@@ -451,7 +454,7 @@
                 <div class="dash-card-head">
                     <div>
                         <h2 class="dash-card-title">After the shortlist</h2>
-                        <p class="dash-card-sub">Forms, assessments and checks sent to candidates in view</p>
+                        <p class="dash-card-sub">For candidates who applied in this period</p>
                     </div>
                 </div>
                 <div class="dash-meters">
@@ -474,7 +477,7 @@
                 <div class="dash-card-head">
                     <div>
                         <h2 class="dash-card-title">Interviews</h2>
-                        <p class="dash-card-sub">Panel interviews and evaluations</p>
+                        <p class="dash-card-sub">For candidates who applied in this period</p>
                     </div>
                 </div>
                 <div class="dash-stats">
@@ -485,10 +488,10 @@
                 </div>
                 {% if interviews.evaluations_submitted %}
                 <p class="dash-card-sub" style="margin: 1rem 0 .5rem">Panel verdicts &middot; {{ interviews.evaluations_submitted }} submitted</p>
-                <div class="dash-stack" role="img" aria-label="Panel verdicts">
+                <div class="dash-stack">
                     {% for v in interviews.verdicts %}{% if v.count %}
                     <div style="width: {{ v.width|floatformat:2 }}%; background: var(--{% if v.key == 'yes' %}good{% elif v.key == 'maybe' %}warning{% else %}critical{% endif %})" tabindex="0"
-                         data-tip-value="{{ v.count }}" data-tip-label="{{ v.label }} · {{ v.share|floatformat:'-1' }}%"></div>
+                         data-tip-value="{{ v.count }}" data-tip-label="{{ v.label }} · {{ v.share|floatformat:'-1' }}%" aria-label="{{ v.count }}, {{ v.label }} · {{ v.share|floatformat:'-1' }}%"></div>
                     {% endif %}{% endfor %}
                 </div>
                 <div class="dash-legend">
@@ -517,10 +520,10 @@
                     </div>
                 </div>
                 {% if bgv.rated %}
-                <div class="dash-stack" role="img" aria-label="Risk ratings">
+                <div class="dash-stack">
                     {% for r in bgv.risk %}{% if r.count %}
                     <div style="width: {{ r.width|floatformat:2 }}%; background: var(--{% if r.key == 'green' %}good{% elif r.key == 'amber' %}warning{% elif r.key == 'red' %}serious{% else %}critical{% endif %})" tabindex="0"
-                         data-tip-value="{{ r.count }}" data-tip-label="{{ r.label }} — {{ r.detail }}"></div>
+                         data-tip-value="{{ r.count }}" data-tip-label="{{ r.label }} — {{ r.detail }}" aria-label="{{ r.count }}, {{ r.label }} — {{ r.detail }}"></div>
                     {% endif %}{% endfor %}
                 </div>
                 <div class="dash-legend">
@@ -562,7 +565,7 @@
                         <span class="dash-bar-track">
                             <span class="dash-bar" style="display:block;width: {{ row.width|floatformat:2 }}%"
                                   data-tip-value="{{ row.count }} candidate{{ row.count|pluralize }}"
-                                  data-tip-label="{{ row.job.title }} · {{ row.hired }} hired"></span>
+                                  data-tip-label="{{ row.job.title }} · {{ row.hired }} hired" aria-label="{{ row.count }} candidate{{ row.count|pluralize }}, {{ row.job.title }} · {{ row.hired }} hired"></span>
                             <span class="dash-bar-value">{{ row.count }}</span>
                         </span>
                     </a>
@@ -690,16 +693,21 @@
     </div>
 </div>
 
-<div class="dash dash-tip" id="dash-tip" role="status" aria-live="polite"><strong></strong><span></span></div>
+<div class="dash dash-tip" id="dash-tip" aria-hidden="true"><strong></strong><span></span></div>
 
 <script>
 (function () {
-    const tip = document.getElementById('dash-tip');
-    if (!tip) return;
-    const valueEl = tip.querySelector('strong');
-    const labelEl = tip.querySelector('span');
+    if (window.__dashTipBound) return;
+    window.__dashTipBound = true;
 
-    function place(x, y) {
+    function tipEl() { return document.getElementById('dash-tip'); }
+
+    function show(target, x, y) {
+        const tip = tipEl();
+        if (!tip) return;
+        tip.querySelector('strong').textContent = target.getAttribute('data-tip-value') || '';
+        tip.querySelector('span').textContent = target.getAttribute('data-tip-label') || '';
+        tip.classList.add('on');
         const w = tip.offsetWidth, h = tip.offsetHeight;
         let left = x + 14, top = y - h - 12;
         if (left + w > window.innerWidth - 8) left = x - w - 14;
@@ -708,22 +716,21 @@
         tip.style.top = top + 'px';
     }
 
-    function show(target, x, y) {
-        valueEl.textContent = target.getAttribute('data-tip-value') || '';
-        labelEl.textContent = target.getAttribute('data-tip-label') || '';
-        tip.classList.add('on');
-        place(x, y);
+    function hide() {
+        const tip = tipEl();
+        if (tip) tip.classList.remove('on');
     }
 
-    function hide() { tip.classList.remove('on'); }
+    function targetOf(e) {
+        return e.target && e.target.closest ? e.target.closest('[data-tip-value]') : null;
+    }
 
     document.addEventListener('pointermove', function (e) {
-        const target = e.target.closest && e.target.closest('[data-tip-value]');
-        if (!target) { hide(); return; }
-        show(target, e.clientX, e.clientY);
+        const target = targetOf(e);
+        if (target) show(target, e.clientX, e.clientY); else hide();
     });
     document.addEventListener('focusin', function (e) {
-        const target = e.target.closest && e.target.closest('[data-tip-value]');
+        const target = targetOf(e);
         if (!target) { hide(); return; }
         const r = target.getBoundingClientRect();
         show(target, r.left + r.width / 2, r.top);
