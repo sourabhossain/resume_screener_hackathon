@@ -14,13 +14,24 @@
             </div>
             <h1 class="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Thank you</h1>
             <p class="mt-2 leading-relaxed text-zinc-500 dark:text-zinc-400">
-                {% if assessment.auto_submitted %}
-                Your time ran out and the answers you had given were submitted.
+                {% if sittings|length > 1 %}
+                All {{ sittings|length }} of your assessments have been received.
                 {% else %}
                 Your assessment has been received.
                 {% endif %}
+                {% if auto_submitted %}Where the time ran out, the answers you had given were submitted.{% endif %}
                 There is nothing further to do.
             </p>
+            {% if sittings|length > 1 %}
+            <ul class="mx-auto mt-6 max-w-sm space-y-2 text-left">
+                {% for sitting in sittings %}
+                <li class="flex items-center gap-2.5 text-sm text-zinc-600 dark:text-zinc-300">
+                    <svg class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    {{ sitting.instrument_label }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
             <p class="mt-6 text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
                 Your answers are treated as confidential and are used only for this
                 recruitment decision. You can close this page.

@@ -448,7 +448,8 @@ def _candidate_forms_context(request, resume) -> dict:
 
     # One row per assessment the job asks for, whether or not it has been sent
     # yet, so the recruiter sees the whole set rather than only what exists.
-    sittings = {a.instrument: a for a in resume.sittings.all()}
+    invitation = getattr(resume, 'assessment_invitation', None)
+    sittings = {a.instrument: a for a in resume.sittings.select_related('invitation')}
     job_assessments = [
         {'spec': instruments.get(key), 'sitting': sittings.get(key)}
         for key in instruments.clean_keys(resume.job.assessments)
@@ -482,7 +483,13 @@ def _candidate_forms_context(request, resume) -> dict:
         # The assessments go out on shortlisting, but the card stays visible
         # from then on so HR can resend or read a result.
         'job_assessments': job_assessments,
+        'assessment_invitation': invitation,
         'sei_can_send': resume.recruiter_status in SEI_STATUSES_ALLOWING_SEND,
+        'sei_has_pending': any(
+            not (e['sitting'] and e['sitting'].is_valid_result)
+            for e in job_assessments if not e.get('dropped')),
+        'sei_needs_retake': any(
+            e['sitting'] and e['sitting'].needs_retaking for e in job_assessments),
     }
 
 
@@ -1036,28 +1043,18 @@ def resume_status_update(request, uuid):
                 f'Information form sent to {resume.email}.',
             )
 
-        # The assessments go out on the same trigger, one email each: the
-        # information form is paperwork the candidate can do at leisure, these
-        # are timed sittings, and putting several in one message invites
-        # someone to open a test while filling in their passport number.
-        # Sent independently so a failure on one does not swallow the others.
-        #
-        # Which ones go is the job's choice. A job with none selected sends
-        # none -- that is the default for every job, so a new job has to ask
-        # for an assessment before a shortlisted candidate is sent one.
+        # Every assessment the job asks for goes out as one email with one link.
         from apps.sei_assessment import instruments
         from apps.sei_assessment.services import (
             InviteError as SEIInviteError, issue_invite as issue_sei)
-        for key in instruments.clean_keys(resume.job.assessments):
+        if instruments.clean_keys(resume.job.assessments):
             try:
-                issue_sei(resume, user=request.user, instrument=key)
+                issue_sei(resume, user=request.user)
             except SEIInviteError as exc:
-                logger.warning('sei.invite_skipped resume=%s instrument=%s '
-                               'reason=%s', resume.pk, key, exc)
+                logger.warning('sei.invite_skipped resume=%s reason=%s',
+                               resume.pk, exc)
                 if invite_note and invite_note[0] == 'success':
-                    invite_note = (
-                        'error',
-                        f'{instruments.get(key).label} assessment not sent: {exc}')
+                    invite_note = ('error', f'Assessments not sent: {exc}')
 
     if is_htmx:
         # 'card' (candidate detail page) swaps the control in place; 'cell'

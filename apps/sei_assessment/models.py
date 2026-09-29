@@ -1,9 +1,4 @@
-"""The candidate-facing assessments: one timed sitting per instrument.
-
-One model carries every instrument. What differs between them -- the items,
-the rating scale, the clock, the scoring -- lives in `instruments.py` and the
-scoring modules it points at; what is shared is everything below.
-"""
+"""Candidate assessments: one invitation per candidate, one timed sitting per instrument."""
 import secrets
 import uuid
 from datetime import timedelta
@@ -19,21 +14,8 @@ from . import instruments
 INVALID_LABEL = 'Invalid - Insufficient Responses'
 
 
-class SEIAssessment(models.Model):
-    """A single sitting of one instrument by one candidate.
-
-    The clock starts when the candidate first opens the questions, not when the
-    invitation is sent -- an email that sat unread for an hour must not cost
-    them their time.
-
-    The deadline is enforced here rather than in the browser. The page runs a
-    countdown and submits itself, but a countdown is a courtesy: it can be
-    paused with the devtools, and the tab can be closed. What actually decides
-    the sitting is `deadline_at`, written once when the clock starts.
-
-    The class name and table still say SEI because that was the only instrument
-    when they were written -- see the naming note in instruments.py.
-    """
+class AssessmentInvitation(models.Model):
+    """One link and one code covering every assessment the job asks for."""
 
     TOKEN_VALIDITY_DAYS = 7
     OTP_VALIDITY_MINUTES = 15
@@ -41,18 +23,10 @@ class SEIAssessment(models.Model):
     OTP_DIGITS = 6
     OTP_FIELDS = ('otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at')
 
-    # `sittings`, not `assessments`: Job.assessments already means "which
-    # questionnaires this job asks for". Two different things under one name on
-    # neighbouring models is a trap for whoever reads this next.
-    resume = models.ForeignKey(
-        'core.Resume', on_delete=models.CASCADE, related_name='sittings')
-    # Which questionnaire this sitting is. Every row written before there was
-    # more than one is SEI, which is what the migration backfills.
-    instrument = models.CharField(
-        max_length=32, default=instruments.SEI, db_index=True)
+    resume = models.OneToOneField(
+        'core.Resume', on_delete=models.CASCADE,
+        related_name='assessment_invitation')
 
-    # The candidate is not logged in, so the token identifies them. Paired with
-    # an emailed code, so a forwarded link alone cannot sit the test for them.
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     token_expires_at = models.DateTimeField()
 
@@ -60,17 +34,6 @@ class SEIAssessment(models.Model):
     otp_expires_at = models.DateTimeField(null=True, blank=True)
     otp_attempts = models.PositiveSmallIntegerField(default=0)
     otp_verified_at = models.DateTimeField(null=True, blank=True)
-
-    # Item number (as a string key) -> 0..3.
-    answers = models.JSONField(default=dict, blank=True)
-
-    started_at = models.DateTimeField(null=True, blank=True)
-    deadline_at = models.DateTimeField(null=True, blank=True, db_index=True)
-    is_submitted = models.BooleanField(default=False)
-    submitted_at = models.DateTimeField(null=True, blank=True)
-    # Whether the clock ended the sitting rather than the candidate. Worth
-    # recording: an unfinished paper reads very differently from a finished one.
-    auto_submitted = models.BooleanField(default=False)
 
     invited_at = models.DateTimeField(null=True, blank=True)
     invite_count = models.PositiveSmallIntegerField(default=0)
@@ -84,40 +47,37 @@ class SEIAssessment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'sei_assessment'
+        db_table = 'assessment_invitation'
         ordering = ['-created_at']
-        constraints = [
-            # One sitting per instrument per candidate. Resending reuses the
-            # row rather than opening a second one, so two live links for the
-            # same questionnaire cannot exist.
-            models.UniqueConstraint(
-                fields=['resume', 'instrument'], name='one_sitting_per_instrument'),
-        ]
 
     def __str__(self):
-        return f'{self.instrument_label} for {self.resume.candidate_name}'
-
-    # ── which instrument ─────────────────────────────────────────────────
-    @property
-    def spec(self):
-        """The instrument definition this sitting belongs to."""
-        return instruments.get(self.instrument)
-
-    @property
-    def instrument_label(self) -> str:
-        return self.spec.label
-
-    @property
-    def TIME_LIMIT_MINUTES(self) -> int:
-        """Per instrument, not per app. Kept under the old name because the
-        emails and pages already read it that way."""
-        return self.spec.time_limit_minutes
+        return f'Assessments for {self.resume.candidate_name}'
 
     def save(self, *args, **kwargs):
         if not self.token_expires_at:
             self.token_expires_at = timezone.now() + timedelta(
                 days=self.TOKEN_VALIDITY_DAYS)
         super().save(*args, **kwargs)
+
+    # ── the sittings, in the order they are taken ────────────────────────
+    def ordered_sittings(self):
+        """Sittings of known instruments, in `instruments.ORDER`."""
+        rank = {key: i for i, key in enumerate(instruments.ORDER)}
+        return sorted(
+            (s for s in self.sittings.all() if s.instrument in rank),
+            key=lambda s: rank[s.instrument])
+
+    def current_sitting(self, sittings=None):
+        """The first unsubmitted sitting; everything after it stays locked."""
+        for sitting in sittings if sittings is not None else self.ordered_sittings():
+            if not sitting.is_submitted:
+                return sitting
+        return None
+
+    @property
+    def is_complete(self) -> bool:
+        sittings = self.ordered_sittings()
+        return bool(sittings) and all(s.is_submitted for s in sittings)
 
     # ── link ─────────────────────────────────────────────────────────────
     @property
@@ -163,6 +123,93 @@ class SEIAssessment(models.Model):
         self.save(update_fields=['otp_attempts', 'updated_at'])
         return False
 
+
+class SEIAssessment(models.Model):
+    """A single sitting of one instrument by one candidate.
+
+    The clock starts when the candidate first opens the questions, not when the
+    invitation is sent -- an email that sat unread for an hour must not cost
+    them their time.
+
+    The deadline is enforced here rather than in the browser. The page runs a
+    countdown and submits itself, but a countdown is a courtesy: it can be
+    paused with the devtools, and the tab can be closed. What actually decides
+    the sitting is `deadline_at`, written once when the clock starts.
+
+    The class name and table still say SEI because that was the only instrument
+    when they were written -- see the naming note in instruments.py.
+    """
+
+    # `sittings`, not `assessments`: Job.assessments already means "which
+    # questionnaires this job asks for". Two different things under one name on
+    # neighbouring models is a trap for whoever reads this next.
+    resume = models.ForeignKey(
+        'core.Resume', on_delete=models.CASCADE, related_name='sittings')
+    invitation = models.ForeignKey(
+        AssessmentInvitation, on_delete=models.CASCADE, related_name='sittings')
+    # Which questionnaire this sitting is. Every row written before there was
+    # more than one is SEI, which is what the migration backfills.
+    instrument = models.CharField(
+        max_length=32, default=instruments.SEI, db_index=True)
+
+    # Only resolves links emailed before sittings were grouped.
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    # Item number (as a string key) -> rating on the instrument's scale.
+    answers = models.JSONField(default=dict, blank=True)
+
+    started_at = models.DateTimeField(null=True, blank=True)
+    deadline_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    is_submitted = models.BooleanField(default=False)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    # Whether the clock ended the sitting rather than the candidate. Worth
+    # recording: an unfinished paper reads very differently from a finished one.
+    auto_submitted = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'sei_assessment'
+        ordering = ['-created_at']
+        constraints = [
+            # One sitting per instrument per candidate. Resending reuses the
+            # row rather than opening a second one, so two live sittings of the
+            # same questionnaire cannot exist.
+            models.UniqueConstraint(
+                fields=['resume', 'instrument'], name='one_sitting_per_instrument'),
+        ]
+
+    def __str__(self):
+        return f'{self.instrument_label} for {self.resume.candidate_name}'
+
+    def save(self, *args, **kwargs):
+        if self.invitation_id is None:
+            self.invitation, _ = AssessmentInvitation.objects.get_or_create(
+                resume=self.resume)
+        super().save(*args, **kwargs)
+
+    # ── which instrument ─────────────────────────────────────────────────
+    @property
+    def spec(self):
+        """The instrument definition this sitting belongs to."""
+        return instruments.get(self.instrument)
+
+    @property
+    def instrument_label(self) -> str:
+        return self.spec.label
+
+    @property
+    def TIME_LIMIT_MINUTES(self) -> int:
+        """Per instrument, not per app. Kept under the old name because the
+        emails and pages already read it that way."""
+        return self.spec.time_limit_minutes
+
+    # ── link ─────────────────────────────────────────────────────────────
+    @property
+    def is_expired(self) -> bool:
+        return self.invitation.is_expired
+
     # ── the clock ────────────────────────────────────────────────────────
     def start_clock(self):
         """Begin the sitting, once. Returns True if this call started it.
@@ -202,6 +249,18 @@ class SEIAssessment(models.Model):
         """Whether the candidate may still answer."""
         return not self.is_submitted and not self.is_expired and not self.time_is_up
 
+    def reset(self):
+        """Clear a sitting back to unopened, for a retake. Caller saves."""
+        self.answers = {}
+        self.started_at = None
+        self.deadline_at = None
+        self.is_submitted = False
+        self.submitted_at = None
+        self.auto_submitted = False
+
+    RESET_FIELDS = ('answers', 'started_at', 'deadline_at', 'is_submitted',
+                    'submitted_at', 'auto_submitted')
+
     # ── results ──────────────────────────────────────────────────────────
     @property
     def answered_count(self) -> int:
@@ -239,4 +298,9 @@ class SEIAssessment(models.Model):
             return 'Link expired'
         if self.has_started:
             return 'In progress'
-        return 'Sent' if self.invited_at else 'Not sent'
+        if not self.invitation.invited_at:
+            return 'Not sent'
+        current = self.invitation.current_sitting()
+        if current is not None and current.pk != self.pk:
+            return 'Waiting'
+        return 'Sent'

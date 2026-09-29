@@ -8,11 +8,37 @@
         </span>
     </div>
 
+    <div class="border-b border-zinc-100 bg-zinc-50/60 px-6 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300">
+        {% if assessment_invitation.invited_at %}
+        One link and code for {% if job_assessments|length > 1 %}all {{ job_assessments|length }}, taken in order{% else %}the assessment{% endif %}.
+        Sent {{ assessment_invitation.invited_at|date:"j M Y, g:i A" }} to {{ resume.email }}{% if assessment_invitation.invite_count > 1 %} · sent {{ assessment_invitation.invite_count }} times{% endif %}.
+        {% if assessment_invitation.is_expired %}
+        <span class="font-semibold text-rose-600 dark:text-rose-400">The link has expired.</span>
+        {% else %}
+        Link works until {{ assessment_invitation.token_expires_at|date:"j M Y" }}.
+        {% endif %}
+        {% elif assessment_invitation %}
+        Prepared but not emailed yet. The invitation is queued; if it keeps saying this, send it again.
+        {% else %}
+        Sent when the candidate is shortlisted, as one email with one link{% if job_assessments|length > 1 %}. The assessments open one after another{% endif %}.
+        {% endif %}
+
+        {% if assessment_invitation.last_error %}
+        <p class="mt-2 inline-flex items-start gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
+            <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Last send failed — {{ assessment_invitation.last_error }}
+        </p>
+        {% endif %}
+    </div>
+
     <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
         {% for entry in job_assessments %}
         <div class="px-6 py-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3">
+                    {% if job_assessments|length > 1 %}
+                    <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ forloop.counter }}</span>
+                    {% endif %}
                     <h3 class="font-semibold text-zinc-900 dark:text-white">{{ entry.spec.label }}</h3>
                     {% if entry.sitting %}
                     <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
@@ -34,13 +60,13 @@
 
             <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
                 {% if not entry.sitting %}
-                    <span class="text-zinc-500 dark:text-zinc-400">Sent when the candidate is shortlisted. A timed
+                    <span class="text-zinc-500 dark:text-zinc-400">A timed
                     {{ entry.spec.time_limit_minutes }}-minute questionnaire of
-                    {{ entry.spec.total_items }} statements.</span>
+                    {{ entry.spec.total_items }} statements.{% if assessment_invitation.invited_at %} Added to the job after the link went out — Resend to include it.{% endif %}</span>
                 {% elif entry.sitting.is_submitted %}
                     {% if entry.sitting.needs_retaking %}
                     Only {{ entry.sitting.answered_count }} of {{ entry.spec.total_items }} statements
-                    were answered — too few to score. Resend to ask the candidate to take it again.
+                    were answered — too few to score. Ask the candidate to take it again.
                     {% elif entry.sitting.auto_submitted %}
                     Time ran out with {{ entry.sitting.answered_count }} of {{ entry.spec.total_items }} answered.
                     {% else %}
@@ -50,40 +76,36 @@
                     Started — the {{ entry.spec.time_limit_minutes }}-minute clock is running.
                 {% elif entry.sitting.is_expired %}
                     The link expired before the candidate opened it.
-                {% elif not entry.sitting.invited_at %}
-                    Prepared but not emailed yet. The invitation is queued; if it
-                    keeps saying this, send it again.
+                {% elif entry.sitting.status_label == 'Waiting' %}
+                    Opens for the candidate once the part before it is submitted.
+                {% elif not assessment_invitation.invited_at %}
+                    Not emailed yet.
                 {% else %}
                     Sent. The clock starts when the candidate opens the questions.
                 {% endif %}
             </p>
-
-            {% if entry.sitting.last_error %}
-            <p class="mt-2 inline-flex items-start gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
-                <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Last send failed — {{ entry.sitting.last_error }}
-            </p>
-            {% endif %}
-
-            {% if sei_can_send and not entry.sitting.is_valid_result and not entry.dropped %}
-            <form method="post" action="{% url 'sei_assessment:send' uuid=resume.uuid instrument=entry.spec.key %}"
-                  hx-boost="false" class="mt-4"
-                  {% if entry.sitting %}
-                  data-confirm
-                  data-confirm-title="Send a new {{ entry.spec.label }} link?"
-                  data-confirm-text="The previous link and code stop working, the clock restarts, and any answers already given are cleared."
-                  data-confirm-button="Resend"
-                  data-confirm-safe data-confirm-icon="question"
-                  {% endif %}>
-                {% csrf_token %}
-                <button type="submit"
-                        class="btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white">
-                    {% if entry.sitting.needs_retaking %}Ask to take it again{% elif entry.sitting %}Resend{% else %}Send now{% endif %}
-                </button>
-            </form>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
+
+    {% if sei_can_send and sei_has_pending %}
+    <div class="border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+        <form method="post" action="{% url 'sei_assessment:send' uuid=resume.uuid %}"
+              hx-boost="false"
+              {% if assessment_invitation.invited_at %}
+              data-confirm
+              data-confirm-title="{% if sei_needs_retake %}Ask the candidate to retake?{% else %}Send the link again?{% endif %}"
+              data-confirm-text="A new code goes out on the same link and the old code stops working. Finished assessments are kept{% if sei_needs_retake %}; one with too few answers to score is cleared so it can be taken again{% endif %}."
+              data-confirm-button="{% if sei_needs_retake %}Ask to retake{% else %}Resend{% endif %}"
+              data-confirm-safe data-confirm-icon="question"
+              {% endif %}>
+            {% csrf_token %}
+            <button type="submit"
+                    class="btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white">
+                {% if sei_needs_retake %}Ask to take it again{% elif assessment_invitation.invited_at %}Resend link{% else %}Send now{% endif %}
+            </button>
+        </form>
+    </div>
+    {% endif %}
 </div>
 {% endif %}

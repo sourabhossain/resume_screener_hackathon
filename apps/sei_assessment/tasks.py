@@ -4,62 +4,71 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
-from .models import SEIAssessment
-from .services import finalise_if_time_is_up, send_invite
+from .models import AssessmentInvitation, SEIAssessment
+from .services import finalise_if_time_is_up, issue_fresh_code, send_invite
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(
-    name='apps.sei_assessment.tasks.send_sei_invite',
+    name='apps.sei_assessment.tasks.send_assessment_invite',
     soft_time_limit=60,
     time_limit=90,
 )
-def send_sei_invite(assessment_id: int) -> str:
-    """Issue a fresh code and email the candidate their link.
+def send_assessment_invite(invitation_id: int) -> str:
+    """Issue a fresh code and email the candidate their one link.
 
     Deliberately does not retry: a retry re-issues the code, invalidating one
     the candidate may already be holding. Failures are recorded on the row and
     shown to the recruiter, who can press Resend.
     """
     try:
-        assessment = SEIAssessment.objects.select_related(
-            'resume', 'resume__job').get(pk=assessment_id)
-    except SEIAssessment.DoesNotExist:
-        logger.warning('sei.skipped assessment=%s (deleted)', assessment_id)
+        invitation = AssessmentInvitation.objects.select_related(
+            'resume', 'resume__job').get(pk=invitation_id)
+    except AssessmentInvitation.DoesNotExist:
+        logger.warning('sei.skipped invitation=%s (deleted)', invitation_id)
         return 'missing'
 
-    if assessment.is_submitted:
-        logger.info('sei.skipped assessment=%s (already completed)', assessment_id)
+    if invitation.is_complete:
+        logger.info('sei.skipped invitation=%s (already completed)', invitation_id)
         return 'already_submitted'
 
-    otp = assessment.issue_otp()
-    assessment.invited_at = timezone.now()
-    assessment.invite_count = (assessment.invite_count or 0) + 1
-    assessment.last_error = ''
-    assessment.last_error_at = None
-    # Not a bare save(): the candidate may be answering right now, and a full
-    # row write would put back the answers as they were when this task loaded.
-    assessment.save(update_fields=[
-        *SEIAssessment.OTP_FIELDS,
+    otp = issue_fresh_code(invitation)
+    invitation.invited_at = timezone.now()
+    invitation.invite_count = (invitation.invite_count or 0) + 1
+    invitation.last_error = ''
+    invitation.last_error_at = None
+    invitation.save(update_fields=[
+        *AssessmentInvitation.OTP_FIELDS,
         'invited_at', 'invite_count', 'last_error', 'last_error_at', 'updated_at',
     ])
 
     try:
-        send_invite(assessment, otp=otp)
+        send_invite(invitation, otp=otp)
     except Exception as exc:
         # Swallowed on purpose: raising would only retry-storm the broker. The
         # recruiter sees the reason on the candidate page and can resend.
-        SEIAssessment.objects.filter(pk=assessment.pk).update(
+        AssessmentInvitation.objects.filter(pk=invitation.pk).update(
             last_error=str(exc)[:500], last_error_at=timezone.now())
-        logger.exception('sei.failed assessment=%s', assessment.pk)
+        logger.exception('sei.failed invitation=%s', invitation.pk)
         return 'failed'
     return 'sent'
 
 
+@shared_task(name='apps.sei_assessment.tasks.send_sei_invite')
+def send_sei_invite(assessment_id: int) -> str:
+    """Old per-sitting task name, kept so messages queued before deploy still send."""
+    invitation_id = SEIAssessment.objects.filter(
+        pk=assessment_id).values_list('invitation_id', flat=True).first()
+    if invitation_id is None:
+        logger.warning('sei.skipped assessment=%s (deleted)', assessment_id)
+        return 'missing'
+    return send_assessment_invite(invitation_id)
+
+
 @shared_task(name='apps.sei_assessment.tasks.close_expired_sittings')
 def close_expired_sittings() -> int:
-    """Submit sittings whose fifteen minutes ran out while nobody was looking.
+    """Submit sittings whose clock ran out while nobody was looking.
 
     Without this an abandoned tab leaves the paper open indefinitely, and HR
     sees "In progress" for a candidate who left days ago.

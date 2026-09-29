@@ -26,6 +26,7 @@ app.conf.task_routes = {
     # behind a batch of LLM screening calls.
     'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'screening'},
     'apps.reference_checks.tasks.send_reference_check_request': {'queue': 'screening'},
+    'apps.sei_assessment.tasks.send_assessment_invite': {'queue': 'screening'},
     'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'screening'},
     'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'screening'},
 }

@@ -36,16 +36,19 @@ def candidate(db, sample_job):
 @pytest.fixture
 def sitting(db, candidate):
     assessment = SEIAssessment.objects.create(resume=candidate)
-    otp = assessment.issue_otp()
-    assessment.save()
+    invitation = assessment.invitation
+    otp = invitation.issue_otp()
+    invitation.save()
     assessment.plain_otp = otp
     return assessment
 
 
-def _entry(a):  return reverse('sei_assessment:entry', kwargs={'token': a.token})
-def _verify(a): return reverse('sei_assessment:verify', kwargs={'token': a.token})
-def _test(a):   return reverse('sei_assessment:test', kwargs={'token': a.token})
-def _save(a):   return reverse('sei_assessment:save', kwargs={'token': a.token})
+def _tok(a):    return a.invitation.token
+def _entry(a):  return reverse('sei_assessment:entry', kwargs={'token': _tok(a)})
+def _verify(a): return reverse('sei_assessment:verify', kwargs={'token': _tok(a)})
+def _test(a):   return reverse('sei_assessment:test', kwargs={'token': _tok(a)})
+def _save(a):   return reverse('sei_assessment:save',
+                               kwargs={'token': _tok(a), 'instrument': a.instrument})
 
 
 def _open(client, sitting):
@@ -283,7 +286,7 @@ def test_no_page_the_candidate_can_reach_shows_a_result(client, sitting):
     total = str(sitting.result()['total_percent'])
 
     for url in (_entry(sitting), reverse('sei_assessment:done',
-                                         kwargs={'token': sitting.token})):
+                                         kwargs={'token': _tok(sitting)})):
         body = client.get(url).content.decode()
         assert total not in body
         for label in ('Self-awareness', 'Empathy', 'Social skills'):
@@ -298,10 +301,10 @@ def test_shortlisting_sends_the_assessment(authenticated_client, candidate):
         {'recruiter_status': 'shortlisted'})
 
     assessment = SEIAssessment.objects.get(resume=candidate)
-    assert assessment.invite_count == 1
+    assert assessment.invitation.invite_count == 1
     sent = [m for m in mail.outbox if SEI_SUBJECT in m.subject]
     assert len(sent) == 1
-    assert str(assessment.token) in sent[0].body
+    assert str(assessment.invitation.token) in sent[0].body
 
 
 @pytest.mark.django_db
@@ -352,9 +355,10 @@ def test_a_sitting_already_under_way_is_not_restarted_by_accident(candidate, sit
 
 @pytest.mark.django_db
 def test_the_code_is_never_stored_in_plaintext(sitting):
-    assert sitting.otp_hash
-    assert sitting.plain_otp not in sitting.otp_hash
-    assert sitting.check_otp(sitting.plain_otp) is True
+    invitation = sitting.invitation
+    assert invitation.otp_hash
+    assert sitting.plain_otp not in invitation.otp_hash
+    assert invitation.check_otp(sitting.plain_otp) is True
 
 
 # ── an unscoreable paper ─────────────────────────────────────────────────

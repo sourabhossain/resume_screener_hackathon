@@ -74,10 +74,8 @@ def test_shortlisting_sends_exactly_what_the_job_asks_for(
 
 
 @pytest.mark.django_db
-def test_two_assessments_arrive_as_two_separate_emails(
+def test_two_assessments_arrive_as_one_email_with_one_link(
         authenticated_client, sample_job, candidate_of):
-    """One message each: a candidate has to be able to tell which link is
-    which, and a failure on one must not swallow the other."""
     sample_job.assessments = [instruments.SEI, instruments.PE]
     sample_job.save(update_fields=['assessments'])
     resume = candidate_of(sample_job)
@@ -85,15 +83,19 @@ def test_two_assessments_arrive_as_two_separate_emails(
 
     _shortlist(authenticated_client, resume)
 
-    subjects = [m.subject for m in mail.outbox if 'assessment' in m.subject.lower()]
-    assert len(subjects) == 2
+    sent = [m for m in mail.outbox if 'assessment' in m.subject.lower()]
+    assert len(sent) == 1
+    body = ' '.join(sent[0].body.split())
     for spec in instruments.all_instruments():
-        assert any(spec.label in s for s in subjects), spec.key
+        assert spec.label in body, spec.key
+    assert body.index(instruments.get(instruments.SEI).label) < body.index(
+        instruments.get(instruments.PE).label)
 
-    tokens = {str(a.token) for a in SEIAssessment.objects.filter(resume=resume)}
-    bodies = ' '.join(m.body for m in mail.outbox)
-    for token in tokens:
-        assert token in bodies
+    sittings = SEIAssessment.objects.filter(resume=resume)
+    assert {s.invitation_id for s in sittings} == {resume.assessment_invitation.pk}
+    assert str(resume.assessment_invitation.token) in body
+    for sitting in sittings:
+        assert str(sitting.token) not in body
 
 
 @pytest.mark.django_db
@@ -142,10 +144,12 @@ def test_a_second_sitting_of_the_same_instrument_is_refused(
 def test_resending_reuses_the_sitting_rather_than_opening_another(
         sample_job, candidate_of):
     from apps.sei_assessment import services
+    sample_job.assessments = [instruments.PE]
+    sample_job.save(update_fields=['assessments'])
     resume = candidate_of(sample_job)
 
-    first = services.issue_invite(resume, instrument=instruments.PE)
-    again = services.issue_invite(resume, instrument=instruments.PE, resend=True)
+    first = services.issue_invite(resume)
+    again = services.issue_invite(resume, resend=True)
 
     assert first.pk == again.pk
     assert SEIAssessment.objects.filter(resume=resume).count() == 1
@@ -239,18 +243,22 @@ def test_a_four_is_a_valid_answer_on_pe_and_not_on_sei(
     """The save endpoint validates against the sitting's own instrument. With
     one shared rule a real PE answer of 4 would be silently dropped."""
     resume = candidate_of(sample_job)
-    for key, top in ((instruments.PE, 4), (instruments.SEI, 4)):
-        sitting = SEIAssessment.objects.create(resume=resume, instrument=key)
-        otp = sitting.issue_otp()
-        sitting.save()
-        client.post(reverse('sei_assessment:verify',
-                            kwargs={'token': sitting.token}), {'code': otp})
-        client.get(reverse('sei_assessment:test', kwargs={'token': sitting.token}))
-        client.post(reverse('sei_assessment:save', kwargs={'token': sitting.token}),
-                    data=json.dumps({'answers': {'1': top}}),
-                    content_type='application/json')
+    sei = SEIAssessment.objects.create(resume=resume, instrument=instruments.SEI)
+    pe = SEIAssessment.objects.create(resume=resume, instrument=instruments.PE)
+    invitation = sei.invitation
+    otp = invitation.issue_otp()
+    invitation.save()
+    token = invitation.token
+    client.post(reverse('sei_assessment:verify', kwargs={'token': token}), {'code': otp})
+
+    def answer(sitting, payload):
+        client.get(reverse('sei_assessment:test', kwargs={'token': token}))
+        client.post(reverse('sei_assessment:save', kwargs={
+                        'token': token, 'instrument': sitting.instrument}),
+                    data=json.dumps(payload), content_type='application/json')
         sitting.refresh_from_db()
-        if key == instruments.PE:
-            assert sitting.answers == {'1': 4}
-        else:
-            assert sitting.answers == {}, 'SEI tops out at 3'
+
+    answer(sei, {'answers': {'1': 4}, 'finish': True})
+    assert sei.answers == {}, 'SEI tops out at 3'
+    answer(pe, {'answers': {'1': 4}})
+    assert pe.answers == {'1': 4}

@@ -17,21 +17,21 @@
                 Enter your verification code
             </h1>
             <p class="mt-2 text-center text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-                We emailed a {{ assessment.OTP_DIGITS }}-digit code along with this
-                link. Enter it to open the assessment.
+                We emailed a {{ invitation.OTP_DIGITS }}-digit code along with this
+                link. Enter it to open {% if part_count > 1 %}your {{ part_count }} assessments{% else %}the assessment{% endif %}.
             </p>
 
             <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
                 <p class="text-sm font-semibold text-amber-900 dark:text-amber-300">
-                    Your {{ assessment.TIME_LIMIT_MINUTES }} minutes start on the next page
+                    Entering the code does not start a timer
                 </p>
                 <p class="mt-1 text-sm text-amber-800 dark:text-amber-400">
-                    Not now. Once you continue, the clock runs and whatever you have
-                    answered when it reaches zero is submitted.
+                    The next page shows what is ahead. Each timer starts only when you
+                    press Begin, and whatever you have answered when it reaches zero is submitted.
                 </p>
             </div>
 
-            {% if assessment.otp_is_locked %}
+            {% if invitation.otp_is_locked %}
             <div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
                 <p class="text-sm font-semibold text-rose-800 dark:text-rose-300">Too many incorrect attempts</p>
                 <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">Request a new code below to continue.</p>
@@ -47,17 +47,17 @@
                     <div class="mt-2">
                         <input type="text" name="code" id="id_code"
                                inputmode="numeric" autocomplete="one-time-code"
-                               maxlength="{{ assessment.OTP_DIGITS }}" required
+                               maxlength="{{ invitation.OTP_DIGITS }}" required
                                class="form-input" style="letter-spacing: .4em; text-align: center; font-size: 1.25rem;">
                     </div>
                 </div>
-                <button type="submit" {% if assessment.otp_is_locked %}disabled{% endif %}
+                <button type="submit" {% if invitation.otp_is_locked %}disabled{% endif %}
                         class="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                    Continue to the assessment
+                    Continue
                 </button>
             </form>
 
-            <form method="post" action="{% url 'sei_assessment:resend_code' token=assessment.token %}" hx-boost="false" class="mt-3">
+            <form method="post" action="{% url 'sei_assessment:resend_code' token=invitation.token %}" hx-boost="false" class="mt-3">
                 {% csrf_token %}
                 <button type="submit" class="w-full rounded-xl border border-zinc-200 px-5 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
                     Send me a new code

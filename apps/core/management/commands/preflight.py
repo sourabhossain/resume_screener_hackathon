@@ -23,6 +23,7 @@ REQUIRED_TASKS = (
     'apps.core.tasks.close_expired_jobs',
     'apps.employee_form.tasks.send_employee_form_invite',
     'apps.reference_checks.tasks.send_reference_check_request',
+    'apps.sei_assessment.tasks.send_assessment_invite',
     'apps.sei_assessment.tasks.send_sei_invite',
     'apps.sei_assessment.tasks.close_expired_sittings',
 )

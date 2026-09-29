@@ -150,7 +150,7 @@
 
     <div class="q-hero">
         <div>
-            <p class="eyebrow">{{ instrument.label }}</p>
+            <p class="eyebrow">{% if part_count > 1 %}Part {{ part_number }} of {{ part_count }} &middot; {% endif %}{{ instrument.label }}</p>
             <h1>Hi {{ first_name }}, let&rsquo;s get to know you</h1>
             <p>{{ total_items }} statements &middot; {{ minutes }} minutes once you begin</p>
             <p class="q-guide">
@@ -159,6 +159,9 @@
             </p>
             <div class="q-chips">
                 <span>Saves as you go</span>
+                {% if next_part %}
+                <span>Part {{ part_number|add:1 }} opens after you submit</span>
+                {% endif %}
                 {% if minimum_answers >= total_items %}
                 <span>All {{ total_items }} must be answered</span>
                 {% else %}
@@ -230,7 +233,7 @@
             <button type="button" class="q-btn primary" @click="next()"
                     x-show="page < pageCount - 1">Next</button>
             <button type="submit" form="sei-form" class="q-btn primary" :disabled="busy">
-                <span x-show="!busy">Submit</span>
+                <span x-show="!busy">{% if next_part %}Submit and continue{% else %}Submit{% endif %}</span>
                 <span x-show="busy" x-cloak>Submitting&hellip;</span>
             </button>
         </div>
@@ -307,7 +310,7 @@
             },
 
             async post(body, keepalive) {
-                return fetch('{% url "sei_assessment:save" token=assessment.token %}', {
+                return fetch('{% url "sei_assessment:save" token=invitation.token instrument=assessment.instrument %}', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json',
                               'X-CSRFToken': window.CSRF_TOKEN},
@@ -355,7 +358,7 @@
             close() {
                 clearInterval(this.tick);
                 clearInterval(this.flusher);
-                window.location = '{% url "sei_assessment:done" token=assessment.token %}';
+                window.location = '{% url "sei_assessment:entry" token=invitation.token %}';
             },
         };
     }

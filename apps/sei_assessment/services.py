@@ -3,6 +3,7 @@ import logging
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -10,8 +11,7 @@ from django.utils import timezone
 from apps.core.links import absolute_url
 
 from . import instruments
-
-from .models import SEIAssessment
+from .models import AssessmentInvitation, SEIAssessment
 
 logger = logging.getLogger(__name__)
 
@@ -20,52 +20,19 @@ class InviteError(Exception):
     """Raised when an invitation cannot be sent, with a recruiter-facing message."""
 
 
-def assessment_url(assessment) -> str:
+def assessment_url(invitation) -> str:
     return absolute_url(
-        reverse('sei_assessment:entry', kwargs={'token': assessment.token}))
+        reverse('sei_assessment:entry', kwargs={'token': invitation.token}))
 
 
-def send_invite(assessment, *, otp: str) -> None:
-    recipient = (assessment.resume.email or '').strip()
-    if not recipient:
-        raise InviteError(
-            f'{assessment.resume.candidate_name} has no email address on file, '
-            'so the assessment could not be sent.')
+def _labels(sittings) -> str:
+    names = [s.instrument_label for s in sittings]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
-    spec = assessment.spec
-    context = {
-        'assessment': assessment,
-        'candidate_name': assessment.resume.candidate_name,
-        'job_title': assessment.resume.job.title,
-        'assessment_url': assessment_url(assessment),
-        'otp': otp,
-        'otp_minutes': SEIAssessment.OTP_VALIDITY_MINUTES,
-        'link_days': SEIAssessment.TOKEN_VALIDITY_DAYS,
-        'minutes': spec.time_limit_minutes,
-        'question_count': spec.total_items,
-        'minimum': spec.minimum_answers,
-        'instrument': spec,
-    }
-    message = EmailMultiAlternatives(
-        subject=f'{spec.label} assessment for your application '
-                f'— {assessment.resume.job.title}',
-        body=render_to_string('sei_assessment/email/invite.txt', context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[recipient],
-    )
-    message.attach_alternative(
-        render_to_string('sei_assessment/email/invite.html', context), 'text/html')
-    # fail_silently=False so a broken SMTP config surfaces to the recruiter
-    # rather than leaving them waiting on a sitting that was never invited.
-    message.send(fail_silently=False)
 
-    if 'smtp' not in settings.EMAIL_BACKEND:
-        logger.warning(
-            'sei.not_delivered assessment=%s backend=%s — written to this '
-            "process's output, not sent to %s",
-            assessment.pk, settings.EMAIL_BACKEND, recipient)
-    logger.info('sei.sent assessment=%s instrument=%s attempt=%s',
-                assessment.pk, assessment.instrument, assessment.invite_count + 1)
+def invitation_for(resume):
+    """The candidate's invitation, or None."""
+    return AssessmentInvitation.objects.filter(resume=resume).first()
 
 
 def sitting_for(resume, instrument_key):
@@ -74,70 +41,155 @@ def sitting_for(resume, instrument_key):
         resume=resume, instrument=instrument_key).first()
 
 
-def issue_invite(resume, *, user=None, resend=False, instrument=instruments.SEI):
-    """Create the sitting if needed and queue its invitation.
+def issue_fresh_code(invitation) -> str:
+    """A new code; keeps the session of a candidate whose clock is running."""
+    verified_at = invitation.otp_verified_at
+    otp = invitation.issue_otp()
+    if verified_at and any(
+            s.has_started and s.is_open for s in invitation.ordered_sittings()):
+        invitation.otp_verified_at = verified_at
+    return otp
 
-    Whether it *may* be sent is decided synchronously so the recruiter learns
-    it on the click; the email itself goes to Celery because SMTP is slow.
+
+def send_invite(invitation, *, otp: str) -> None:
+    resume = invitation.resume
+    recipient = (resume.email or '').strip()
+    if not recipient:
+        raise InviteError(
+            f'{resume.candidate_name} has no email address on file, '
+            'so the assessments could not be sent.')
+
+    sittings = invitation.ordered_sittings()
+    pending = [s for s in sittings if not s.is_submitted]
+    if not pending:
+        raise InviteError(
+            f'{resume.candidate_name} has already completed every assessment.')
+
+    parts = [{
+        'number': i,
+        'spec': s.spec,
+        'minutes': s.spec.time_limit_minutes,
+        'question_count': s.spec.total_items,
+        'minimum': s.spec.minimum_answers,
+        'all_required': s.spec.minimum_answers >= s.spec.total_items,
+    } for i, s in enumerate(pending, start=1)]
+    context = {
+        'invitation': invitation,
+        'candidate_name': resume.candidate_name,
+        'job_title': resume.job.title,
+        'assessment_url': assessment_url(invitation),
+        'otp': otp,
+        'otp_minutes': AssessmentInvitation.OTP_VALIDITY_MINUTES,
+        'link_days': AssessmentInvitation.TOKEN_VALIDITY_DAYS,
+        'parts': parts,
+        'part_count': len(parts),
+        'total_minutes': sum(p['minutes'] for p in parts),
+        'completed': [s.spec for s in sittings if s.is_submitted],
+    }
+    if len(pending) == 1:
+        subject = (f'{pending[0].spec.label} assessment for your application '
+                   f'— {resume.job.title}')
+    else:
+        subject = f'Your assessments for your application — {resume.job.title}'
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=render_to_string('sei_assessment/email/invite.txt', context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient],
+    )
+    message.attach_alternative(
+        render_to_string('sei_assessment/email/invite.html', context), 'text/html')
+    # fail_silently=False so a broken SMTP config surfaces to the recruiter
+    # rather than leaving them waiting on an invitation that never went out.
+    message.send(fail_silently=False)
+
+    if 'smtp' not in settings.EMAIL_BACKEND:
+        logger.warning(
+            'sei.not_delivered invitation=%s backend=%s — written to this '
+            "process's output, not sent to %s",
+            invitation.pk, settings.EMAIL_BACKEND, recipient)
+    logger.info('sei.sent invitation=%s parts=%s attempt=%s',
+                invitation.pk, [s.instrument for s in pending],
+                invitation.invite_count)
+
+
+def issue_invite(resume, *, user=None, resend=False):
+    """Sync the invitation with the job and queue its one email.
+
+    Without `resend` an invitation already sent is returned untouched.
     """
-    from .tasks import send_sei_invite
+    from .tasks import send_assessment_invite
 
-    spec = instruments.get(instrument)
+    keys = instruments.clean_keys(resume.job.assessments)
 
     if not (resume.email or '').strip():
         raise InviteError(
             f'{resume.candidate_name} has no email address, so the '
-            f'{spec.label} assessment could not be sent. Add one and try again.')
+            'assessments could not be sent. Add one and try again.')
 
-    assessment = sitting_for(resume, instrument)
-    if assessment and assessment.is_submitted and assessment.is_valid_result:
-        raise InviteError(
-            f'{resume.candidate_name} has already completed the '
-            f'{spec.label} assessment.')
-    if assessment and assessment.needs_retaking:
-        # Too few answers to score. Sending again is the point, so the sitting
-        # is reset rather than refused -- but only on an explicit resend, never
-        # as a side effect of a status change.
-        if not resend:
+    with transaction.atomic():
+        invitation, _ = AssessmentInvitation.objects.select_for_update().get_or_create(
+            resume=resume)
+        existing = {s.instrument: s for s in invitation.sittings.all()}
+        missing = [key for key in keys if key not in existing]
+        retakes = [s for s in existing.values() if s.needs_retaking]
+        unfinished = [s for s in existing.values() if not s.is_submitted]
+
+        if not missing and not retakes and not unfinished:
+            if not existing:
+                raise InviteError(
+                    f'{resume.job.title} does not ask for any assessment.')
             raise InviteError(
-                f'{resume.candidate_name} did not answer enough of the '
-                'assessment. Use Resend to ask them to take it again.')
-        assessment.answers = {}
-        assessment.started_at = None
-        assessment.deadline_at = None
-        assessment.is_submitted = False
-        assessment.submitted_at = None
-        assessment.auto_submitted = False
-        assessment.save(update_fields=[
-            'answers', 'started_at', 'deadline_at', 'is_submitted',
-            'submitted_at', 'auto_submitted', 'updated_at',
-        ])
-    if assessment and assessment.has_started and not resend:
-        raise InviteError(
-            f'{resume.candidate_name} has already started the assessment.')
-    if assessment and not resend:
-        return assessment
+                f'{resume.candidate_name} has already completed the '
+                f'{_labels(invitation.ordered_sittings())} assessment'
+                f'{"s" if len(existing) > 1 else ""}.')
 
-    if assessment is None:
-        assessment = SEIAssessment(resume=resume, instrument=instrument)
-    elif assessment.is_expired:
-        assessment.renew()
-    assessment.invited_by = user
-    if assessment.pk:
-        assessment.save(update_fields=['token_expires_at', 'invited_by', 'updated_at'])
-    else:
-        assessment.save()
+        if not resend:
+            if retakes:
+                raise InviteError(
+                    f'{resume.candidate_name} did not answer enough of the '
+                    f'{_labels(retakes)} assessment. Use Resend to ask them to '
+                    'take it again.')
+            if any(s.has_started for s in unfinished):
+                raise InviteError(
+                    f'{resume.candidate_name} has already started the assessments.')
+            if invitation.invited_at:
+                return invitation
 
-    send_sei_invite.delay(assessment.pk)
-    logger.info('sei.queued assessment=%s instrument=%s resume=%s',
-                assessment.pk, instrument, resume.pk)
-    return assessment
+        for sitting in retakes:
+            # Too few answers to score. Sending again is the point, so the
+            # sitting is reset rather than refused -- but only on an explicit
+            # resend, never as a side effect of a status change.
+            sitting.reset()
+            sitting.save(update_fields=[*SEIAssessment.RESET_FIELDS, 'updated_at'])
+        # Drop never-opened parts the job no longer asks for.
+        dropped = [s.pk for key, s in existing.items()
+                   if key not in keys and not s.has_started and not s.is_submitted]
+        if dropped:
+            SEIAssessment.objects.filter(pk__in=dropped).delete()
+        for key in missing:
+            SEIAssessment.objects.create(
+                resume=resume, invitation=invitation, instrument=key)
+        if not invitation.sittings.filter(is_submitted=False).exists():
+            raise InviteError(
+                f'{resume.job.title} no longer asks for any assessment that '
+                f'{resume.candidate_name} still has to take.')
+
+        if invitation.is_expired:
+            invitation.renew()
+        invitation.invited_by = user
+        invitation.save(update_fields=['token_expires_at', 'invited_by', 'updated_at'])
+
+    send_assessment_invite.delay(invitation.pk)
+    logger.info('sei.queued invitation=%s resume=%s instruments=%s',
+                invitation.pk, resume.pk, keys)
+    return invitation
 
 
-def resend_code(assessment) -> None:
-    otp = assessment.issue_otp()
-    assessment.save(update_fields=[*SEIAssessment.OTP_FIELDS, 'updated_at'])
-    send_invite(assessment, otp=otp)
+def resend_code(invitation) -> None:
+    otp = issue_fresh_code(invitation)
+    invitation.save(update_fields=[*AssessmentInvitation.OTP_FIELDS, 'updated_at'])
+    send_invite(invitation, otp=otp)
 
 
 def finalise_if_time_is_up(assessment) -> bool:
