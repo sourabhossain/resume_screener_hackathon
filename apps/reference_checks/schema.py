@@ -204,7 +204,7 @@ EMPLOYER_STEPS = [
         _q('employment_end_date', 'Confirmed Employment End Date', DATE, required=True,
            no=16, help='Leave blank if currently employed.', show_if=_LEFT),
         _q('separation_reason', 'Confirmed Reason for Leaving / Separation', TEXTAREA,
-           no=17),
+           no=17, required_if=_LEFT),
         _q('separation_nature', 'Nature of Separation', RADIO,
            choices=SEPARATION_NATURE_CHOICES, no=18, required_if=_LEFT),
         _other('separation_nature_other', 'separation_nature'),
@@ -535,11 +535,6 @@ def questions_by_key(kind):
 
 def readonly_keys(kind):
     return {key for key, q in questions_by_key(kind).items() if q.get('readonly')}
-
-
-def conditional_rules(kind, step_key):
-    """Old trigger/keys rule format; branching now lives on the questions."""
-    return []
 
 
 def step_heading(step) -> str:

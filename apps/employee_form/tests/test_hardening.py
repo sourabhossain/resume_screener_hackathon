@@ -651,7 +651,17 @@ def _at_declaration(form):
     form.save(update_fields=['current_step', 'answers'])
 
 
-def test_not_agreeing_to_the_declaration_needs_no_signature(verified):
+def test_not_agreeing_to_the_declaration_needs_no_signature():
+    from apps.employee_form.forms import StepForm
+    form = StepForm({'total_experience_years': '3',
+                     'availability_status': 'immediately_available',
+                     'declaration_agreement': 'disagree'}, step_key=schema.FINAL_STEP)
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data['signature'] is None
+
+
+def test_the_final_step_cannot_submit_over_incomplete_earlier_steps(verified):
     client, form = verified
     _at_declaration(form)
 
@@ -660,10 +670,34 @@ def test_not_agreeing_to_the_declaration_needs_no_signature(verified):
         'declaration_agreement': 'disagree',
     })
 
-    assert response.status_code == 302
     form.refresh_from_db()
-    assert form.is_submitted and form.declaration_declined
-    assert not form.files.filter(question_key='signature').exists()
+    assert form.is_submitted is False
+    assert response.url.endswith('/step/section_a/')
+
+
+def test_a_form_parked_on_a_retired_step_is_re_anchored(verified):
+    client, form = verified
+    EmployeeForm.objects.filter(pk=form.pk).update(current_step='employer_3')
+
+    response = client.get(reverse('employee_form:entry', kwargs={'token': form.token}))
+
+    form.refresh_from_db()
+    assert form.current_step == schema.FIRST_STEP
+    assert response.url.endswith(f'/step/{schema.FIRST_STEP}/')
+
+
+def test_declining_consent_later_drops_everything_after_section_a(verified):
+    client, form = verified
+    _reach_employment(client, form)
+    assert form.files.filter(question_key='bachelors_certificate').exists()
+
+    _post(client, form, 'section_a', dict(SECTION_A, verification_consent='no'))
+
+    form.refresh_from_db()
+    assert form.is_submitted and form.consent_declined
+    assert not form.answers.get('bachelors_institution')
+    assert not form.files.filter(question_key='bachelors_certificate').exists()
+    assert form.files.filter(question_key='nid_copy').exists()
 
 
 def test_agreeing_requires_the_signature(verified):
@@ -898,3 +932,62 @@ def test_a_fresher_still_shows_experience_in_the_header(verified):
     labels = [f['label'] for f in facts]
     assert 'Experience (years)' in labels, '0 years vanished from the header strip'
     assert 'total_experience_years' in shown
+
+
+def test_switching_department_with_an_invalid_role_answer_re_renders_the_new_block(verified):
+    client, form = verified
+    _reach_department(client, form)
+    _post(client, form, 'department', {'department': 'finance_accounts',
+                                       'finance_software': 'Oracle'})
+    form.current_step = 'department'
+    form.save(update_fields=['current_step'])
+
+    response = _post(client, form, 'department', {
+        'department': 'banking_financial_services', 'customer_facing': 'no'})
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert 'name="sales_business_type"' in body
+    assert 'name="finance_areas"' not in body
+
+
+def test_a_candidate_serving_notice_may_give_a_future_end_date(verified):
+    client, form = verified
+    _reach_employment(client, form)
+
+    response = _post(client, form, 'employment', {**EMPLOYER_1, 'employer_1_end_date': '2099-01-31'})
+
+    assert response.status_code == 302
+
+
+def test_a_past_employer_end_date_cannot_be_in_the_future(verified):
+    client, form = verified
+    _reach_employment(client, form)
+    second = {
+        'employer_2_name': 'Beta Ltd', 'employer_2_employment_type': 'contractual',
+        'employer_2_hr_contact': '+8801711000001', 'employer_2_hr_email': 'hr@beta.com',
+        'employer_2_position': 'Officer', 'employer_2_start_date': '2018-01-01',
+        'employer_2_end_date': '2099-12-31', 'employer_2_separation': 'contract_completion',
+        'employer_2_contact_permission': 'no', 'employer_2_another': 'no',
+    }
+
+    _post(client, form, 'employment', {**EMPLOYER_1, 'employer_1_another': 'yes', **second})
+
+    form.refresh_from_db()
+    assert form.current_step == 'employment'
+
+
+def test_old_answers_stay_readable_for_the_recruiter(verified):
+    client, form = verified
+    form.answers = {
+        'department': 'banking_financial_services',
+        'sales_key_accounts': 'Two banks', 'notice_period_days': 30,
+        'current_responsibilities': 'Dealer network',
+    }
+    form.save(update_fields=['answers'])
+
+    rows = {r['key']: r for s in form.answered_sections() for r in s['rows']}
+
+    assert rows['sales_key_accounts']['value'] == 'Two banks'
+    assert rows['notice_period_days']['value'] == 30
+    assert rows['current_responsibilities']['value'] == 'Dealer network'

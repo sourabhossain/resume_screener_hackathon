@@ -132,7 +132,13 @@ def detail(request, uuid):
         'sections': verification.answered_sections(),
         'documents': list(verification.files.all()),
         'missing': _missing_summary(missing),
+        'consent_declined': _consent_declined(resume),
     })
+
+
+def _consent_declined(resume) -> bool:
+    form = getattr(resume, 'employee_form', None)
+    return bool(form and (form.answers or {}).get('verification_consent') == 'no')
 
 
 @_hr_admin_required
@@ -228,6 +234,7 @@ def step(request, uuid, step_key):
     page_questions = schema.questions(step_key)
 
     return render(request, 'hr_verification/step.html', {
+        'consent_declined': _consent_declined(resume),
         'resume': resume,
         'verification': verification,
         'form': step_form,

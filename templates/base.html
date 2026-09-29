@@ -275,6 +275,7 @@
         // the only thing that notices. These carry data-required-group instead.
         function djEmptyRequiredGroups(form) {
             return Array.from(form.querySelectorAll('[data-required-group]'))
+                .filter(function (group) { return !group.closest('[hidden]'); })
                 .filter(function (group) { return !group.querySelector('input:checked'); });
         }
 

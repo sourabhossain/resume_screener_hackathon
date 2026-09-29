@@ -1,5 +1,6 @@
 """Working out who to ask, and asking them."""
 import logging
+import uuid
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -113,6 +114,24 @@ def candidate_contacts(resume) -> list:
             'organisation_label': 'Designation & Company / Institution',
             'permitted': _permission_given(answers, source_key),
             'check': existing.get(source_key),
+        })
+
+    # A request whose person is no longer on the candidate's form stays readable.
+    listed = {row['source_key'] for row in rows}
+    for source_key, check in existing.items():
+        if source_key in listed:
+            continue
+        rows.append({
+            'source_key': source_key,
+            'default_kind': check.kind,
+            'title': source_key.replace('_', ' ').title(),
+            'recipient_name': check.recipient_name,
+            'recipient_email': check.recipient_email,
+            'recipient_phone': '',
+            'recipient_organisation': check.recipient_organisation,
+            'organisation_label': 'Organisation',
+            'permitted': False,
+            'check': check,
         })
 
     return rows
@@ -341,6 +360,9 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
     if check is None:
         check = ReferenceCheck(resume=resume, source_key=source_key)
 
+    recipient_changed = bool(check.pk) and (
+        check.kind != kind
+        or check.recipient_email.strip().lower() != recipient_email.strip().lower())
     check.kind = kind
     check.recipient_name = recipient_name.strip()
     check.recipient_email = recipient_email.strip()
@@ -353,7 +375,19 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
             'be sent. Add one and try again.'
         )
     check.invited_by = user
-    if check.pk:
+    if check.pk and recipient_changed:
+        # A different person or form: nothing the previous respondent saved may reach them.
+        check.answers = {}
+        check.current_step = schema.first_step(kind)
+        check.otp_hash = ''
+        check.otp_verified_at = None
+        check.token = uuid.uuid4()
+        check.save(update_fields=[
+            'kind', 'recipient_name', 'recipient_email', 'recipient_organisation',
+            'token_expires_at', 'invited_by', 'answers', 'current_step', 'otp_hash',
+            'otp_verified_at', 'token', 'updated_at',
+        ])
+    elif check.pk:
         # Same reason as the task: never write back a stale `answers` over a
         # respondent who is part-way through.
         check.save(update_fields=[

@@ -76,7 +76,7 @@ NOT_FUTURE_DATE_KEYS = frozenset({
     'masters_completion_date',
     'bachelors_completion_date',
     *(f'employer_{i}_start_date' for i in range(1, schema.EMPLOYER_MAX + 1)),
-    *(f'employer_{i}_end_date' for i in range(1, schema.EMPLOYER_MAX + 1)),
+    *(f'employer_{i}_end_date' for i in range(2, schema.EMPLOYER_MAX + 1)),
 })
 
 DATE_RANGE_PAIRS = tuple(
@@ -464,7 +464,7 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
                     for question in block['questions']
                 ],
             }
-            for block in schema.question_groups(self.step_key, self.initial or {})
+            for block in schema.question_groups(self.step_key, self._branch_answers())
         ]
 
     def storable_answers(self):

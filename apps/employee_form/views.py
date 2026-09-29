@@ -123,6 +123,7 @@ def entry(request, token):
     if not _is_verified(request, form):
         return redirect('employee_form:verify', token=token)
 
+    form.normalise_current_step()
     return redirect('employee_form:step', token=token, step_key=form.current_step)
 
 
@@ -140,6 +141,7 @@ def verify(request, token):
         return closed
 
     if _is_verified(request, form):
+        form.normalise_current_step()
         return redirect('employee_form:step', token=token, step_key=form.current_step)
 
     otp_form = OtpForm(request.POST or None)
@@ -158,6 +160,7 @@ def verify(request, token):
             if form.check_otp(otp_form.cleaned_data['code']):
                 request.session[_session_key(form)] = True
                 logger.info('employee_form.otp_verified form=%s', form.pk)
+                form.normalise_current_step()
                 return redirect('employee_form:step', token=token, step_key=form.current_step)
             if form.otp_is_locked:
                 messages.error(
@@ -215,6 +218,7 @@ def step(request, token, step_key):
     if not _is_verified(request, form):
         return redirect('employee_form:verify', token=token)
 
+    form.normalise_current_step()
     if schema.get_step(step_key) is None:
         raise Http404('Unknown form step.')
 
@@ -289,6 +293,15 @@ def step(request, token, step_key):
 
             next_key = schema.next_step_key(step_key, answers)
             if next_key is None:
+                incomplete = form.first_incomplete_step()
+                if incomplete:
+                    form.current_step = incomplete
+                    form.save()
+                    messages.error(request, 'Some required answers are still missing. '
+                                            'Please complete this section first.')
+                    return redirect('employee_form:step', token=token, step_key=incomplete)
+                if form.consent_declined:
+                    form.drop_answers_beyond(form.path)
                 form.is_submitted = True
                 form.submitted_at = timezone.now()
                 form.current_step = step_key

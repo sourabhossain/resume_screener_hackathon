@@ -8,9 +8,11 @@ from django.db import models
 from django.utils import timezone
 
 from apps.core.documents import StoredDocumentMixin, display_date
-from apps.core.form_logic import is_visible
+from apps.core.form_logic import is_visible, missing_required
 
 from . import schema
+
+TEXTAREA_TYPE = schema.TEXTAREA
 
 
 class EmployeeForm(models.Model):
@@ -180,6 +182,29 @@ class EmployeeForm(models.Model):
         completed = self.total_steps if self.is_submitted else self.step_number - 1
         return round((completed / total) * 100)
 
+    def first_incomplete_step(self):
+        """The first step on the path still missing a required answer, or None."""
+        answers = self.answers or {}
+        uploaded = set(self.files.values_list('question_key', flat=True))
+        for key in self.path:
+            if missing_required(schema.wizard_questions(key, answers), answers, uploaded):
+                return key
+        return None
+
+    def normalise_current_step(self):
+        """Re-anchor a current_step that no longer exists or is off the path."""
+        if self.current_step in self.path:
+            return
+        self.current_step = self.first_incomplete_step() or schema.FIRST_STEP
+        self.save(update_fields=['current_step', 'updated_at'])
+
+    def drop_answers_beyond(self, step_keys):
+        """Keep only answers and files belonging to `step_keys`."""
+        keep = {q['key'] for key in step_keys for q in schema.get_step(key)['questions']}
+        self.answers = {k: v for k, v in (self.answers or {}).items() if k in keep}
+        for upload in self.files.exclude(question_key__in=keep):
+            upload.delete()
+
     def previous_step(self, step_key):
         path = self.path
         try:
@@ -217,8 +242,9 @@ class EmployeeForm(models.Model):
                 continue
             rows = []
             answers = self.answers or {}
+            view = schema.legacy_view(answers)
             for question in schema.numbered_questions(step_key, answers):
-                if not is_visible(question, answers):
+                if not is_visible(question, view):
                     continue
                 rows.append({
                     'key': question['key'],
@@ -235,7 +261,22 @@ class EmployeeForm(models.Model):
                     'title': step['title'],
                     'rows': rows,
                 })
+        legacy = [
+            {'key': key, 'number': None, 'label': label, 'type': TEXTAREA_TYPE,
+             'value': self._legacy_value(key), 'files': []}
+            for key, label in schema.LEGACY_LABELS.items()
+            if (self.answers or {}).get(key) not in (None, '', [])
+            and key != 'additional_employment_history'
+        ]
+        if legacy:
+            sections.append({'key': 'legacy', 'section': 'Earlier form version',
+                             'title': 'Answers from the earlier form version',
+                             'rows': legacy})
         return sections
+
+    def _legacy_value(self, key):
+        raw = (self.answers or {}).get(key)
+        return schema.choice_label(key, raw) if isinstance(raw, str) else raw
 
     def display_value(self, question):
         """Stored answer rendered for display: choice labels, not raw values."""

@@ -82,7 +82,7 @@ def _grid_block(answers, grid):
 
 
 def build_sections(answers, files_by_key, is_complete):
-    answers = answers or {}
+    answers = schema.legacy_view(answers)
     out = []
     for step_key in schema.STEP_KEYS:
         step = schema.get_step(step_key)

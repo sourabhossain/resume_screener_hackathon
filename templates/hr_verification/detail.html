@@ -17,6 +17,13 @@
     <header class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
         <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
 
+        {% if consent_declined %}
+        <div style="margin: 1.5rem 1.5rem 0;" class="flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
+            <p class="text-sm leading-relaxed text-rose-800 dark:text-rose-300">
+                The candidate did not consent to background verification (Employee Information Form Q14).
+            </p>
+        </div>
+        {% endif %}
         <div class="flex flex-wrap items-start justify-between gap-4 px-6 pt-6">
             <div class="min-w-0">
                 <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-primary-600 dark:text-primary-400">

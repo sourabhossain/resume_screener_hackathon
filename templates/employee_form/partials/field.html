@@ -6,7 +6,7 @@
         <input type="checkbox" data-boolean
                name="{{ field.html_name }}"
                id="{{ field.id_for_label }}"
-               {% if field.value %}checked{% endif %}
+               {% if field.value == True or field.value == 'yes' %}checked{% endif %}
                class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600 dark:bg-zinc-900">
         <span>{{ item.label|default:question.label }}</span>
     </label>
@@ -31,7 +31,7 @@
     <div class="mt-2">
         {% if question.type == 'radio' or question.type == 'checkbox' %}
         <div class="{% if question.choices|length > 8 %}grid gap-1 sm:grid-cols-2{% else %}space-y-1{% endif %}" role="group"
-             {% if question.required and question.type == 'checkbox' %}data-required-group="{{ field.html_name }}"{% endif %}>
+             {% if question.required and question.type == 'checkbox' and not question.show_if and not question.required_if %}data-required-group="{{ field.html_name }}"{% endif %}>
             {% for choice in field %}
             <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-zinc-200 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/60">
                 <span class="mt-0.5 shrink-0">{{ choice.tag }}</span>

@@ -749,6 +749,38 @@ STEPS = [
 ]
 
 
+# ── Answers saved by earlier versions of this form ───────────────────────
+LEGACY_LABELS = {
+    'has_masters': "Do you have a Master's / Postgraduate Degree?",
+    'additional_employment_history': 'Additional Employment History (if more than four employers)',
+    'notice_period_days': 'Notice Period (days)',
+    'current_responsibilities': 'Briefly describe your current / most recent key responsibilities',
+    'measurable_achievements': 'List up to 3 measurable achievements',
+    'sales_new_business': 'New Business / Partnership Acquisition Responsibility',
+    'marketing_tools': 'Marketing / Analytics / Automation Tools Used',
+    'finance_reconciliation': 'Reconciliation / Control / Revenue Leakage Responsibility',
+    'tech_infra_responsibility': 'Infrastructure / Cloud / Security Responsibility (if relevant)',
+    'ops_team_size': 'Team / Vendor Size Overseen',
+    'ops_stakeholder_exposure': 'Customer / Merchant / Internal Stakeholder Exposure',
+    'corp_tools': 'Systems / Tools Used',
+}
+
+
+def legacy_view(answers):
+    """Answers with the gates earlier versions never asked filled in, for reading back."""
+    view = dict(answers or {})
+    if 'has_employment' not in view:
+        named = declared_employer_indices(view)
+        if named:
+            view['has_employment'] = 'yes'
+            for index in named[:-1]:
+                view.setdefault(f'employer_{index}_another', 'yes')
+    if 'customer_facing' not in view and any(
+            view.get(k) for k in ('sales_key_accounts', 'sales_portfolio_value')):
+        view['customer_facing'] = 'yes'
+    return view
+
+
 # ── Presentation hints ───────────────────────────────────────────────────
 HALF_WIDTH_KEYS = frozenset({
     'requisition_id', 'mobile_number', 'personal_email', 'nid_number',

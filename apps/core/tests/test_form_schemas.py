@@ -110,32 +110,38 @@ def test_every_step_is_reachable(label, steps, by_key):
 
 
 def _rules(label, steps):
-    if label.startswith('reference_checks/'):
-        kind = label.split('/', 1)[1]
-        return [r for k in rc.step_keys(kind) for r in rc.conditional_rules(kind, k)]
-    module = {'employee_form': ef, 'hr_verification': hv,
-              'candidate_mapping': cm}[label]
-    rules = getattr(module, 'CONDITIONAL_RULES', [])
-    if isinstance(rules, dict):
-        return [r for group in rules.values() for r in group]
-    return list(rules)
+    """Every leaf of every show_if / required_if rule in the form."""
+    leaves = []
+
+    def walk(rule):
+        if not rule:
+            return
+        for key in ('all', 'any'):
+            for child in rule.get(key, []):
+                walk(child)
+        if 'not' in rule:
+            walk(rule['not'])
+        if 'q' in rule:
+            leaves.append(rule)
+
+    for step in steps:
+        for question in step['questions']:
+            walk(question.get('show_if'))
+            walk(question.get('required_if'))
+    return leaves
 
 
 @pytest.mark.parametrize('label,steps,by_key', FORMS, ids=FORM_IDS)
 def test_conditional_rules_reference_real_questions_and_values(label, steps, by_key):
-    """A rule that waits on a value the question never offers is a field that
-    can never become required -- and one naming a missing key is dead."""
+    """A rule waiting on a value the question never offers can never fire, and
+    one naming a missing key is dead."""
     for rule in _rules(label, steps):
-        trigger = rule['trigger']
+        trigger = rule['q']
         assert trigger in by_key, f'{label}: rule trigger {trigger!r} is not a question'
-
         offered = {v for v, _ in (by_key[trigger].get('choices') or [])}
-        if offered:
-            unknown = [w for w in rule.get('when', []) if w not in offered]
+        if offered and by_key[trigger]['type'] != 'boolean':
+            unknown = [w for w in rule.get('in', []) if w not in offered]
             assert not unknown, (
                 f'{label}: rule on {trigger!r} waits for {unknown}, '
                 f'but it offers {sorted(offered)}'
             )
-
-        for key in rule.get('keys', []):
-            assert key in by_key, f'{label}: rule target {key!r} is not a question'

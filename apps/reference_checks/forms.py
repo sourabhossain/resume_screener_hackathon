@@ -41,6 +41,7 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
             self.fields[question['key']] = build_field(question)
             if question.get('readonly'):
                 self.fields[question['key']].required = False
+                self.fields[question['key']].disabled = True
                 self.initial[question['key']] = self.fixed[question['key']]
             self.questions.append(question)
 

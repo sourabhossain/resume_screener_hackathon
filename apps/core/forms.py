@@ -81,6 +81,11 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
                   'message each. Leave both clear to send none.',
     )
 
+    requisition_id = forms.CharField(
+        max_length=64, label='Requisition ID',
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. REQ-2026-014'}),
+    )
+
     class Meta:
         model = Job
         fields = [

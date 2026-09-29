@@ -222,7 +222,29 @@ class ReferenceCheck(models.Model):
                     })
             out.append({'key': step['key'], 'title': schema.step_heading(step),
                         'rows': rows})
+        legacy = self.legacy_rows()
+        if legacy:
+            out.append({'key': 'legacy', 'title': 'Answers from the earlier form version',
+                        'rows': legacy})
         return out
+
+    def legacy_rows(self):
+        from .legacy import LEGACY_CHOICES, LEGACY_LABELS
+        current = set(schema.questions_by_key(self.kind))
+        labels = LEGACY_LABELS.get(self.kind, {})
+        choices = LEGACY_CHOICES.get(self.kind, {})
+        rows = []
+        for key, label in labels.items():
+            raw = (self.answers or {}).get(key)
+            if key in current or raw in (None, '', []):
+                continue
+            options = choices.get(key, {})
+            if isinstance(raw, list):
+                value = ', '.join(str(options.get(v, v)) for v in raw)
+            else:
+                value = options.get(raw, raw)
+            rows.append({'key': key, 'label': label, 'value': value})
+        return rows
 
     HEADLINES = {
         schema.EMPLOYER: ('rehire_eligible', 'Eligible for rehire'),
@@ -233,6 +255,12 @@ class ReferenceCheck(models.Model):
     @property
     def headline(self) -> str:
         """The one answer HR looks for first, per form."""
+        answers = self.answers or {}
+        if self.kind == schema.PROFESSIONAL and not answers.get('hire_again') \
+                and answers.get('recommend'):
+            from .legacy import LEGACY_CHOICES
+            raw = answers['recommend']
+            return LEGACY_CHOICES['professional'].get('recommend', {}).get(raw, raw)
         key = self.HEADLINES.get(self.kind, ('', ''))[0]
         question = schema.questions_by_key(self.kind).get(key)
         return self.display_value(question) if question else ''

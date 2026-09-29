@@ -60,7 +60,7 @@ def rule_keys(rule) -> set:
     if not rule:
         return set()
     if 'all' in rule or 'any' in rule:
-        return set().union(*(rule_keys(r) for r in rule.get('all') or rule.get('any')))
+        return set().union(*(rule_keys(r) for r in rule.get('all', rule.get('any')) or []))
     if 'not' in rule:
         return rule_keys(rule['not'])
     return {rule['q']}

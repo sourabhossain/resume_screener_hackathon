@@ -89,13 +89,13 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
             if question['type'] in (schema.TEXT, schema.TEXTAREA):
                 cleaned[key] = (value or '').strip()
 
+        self.apply_logic(cleaned)
+
         for start_key, end_key in DATE_RANGE_PAIRS:
             start = cleaned.get(start_key)
             end = cleaned.get(end_key)
-            if start and end and end < start:
+            if start and end and end < start and not self.errors.get(end_key):
                 self.add_error(end_key, 'This date cannot be before the start date.')
-
-        self.apply_logic(cleaned)
         return cleaned
 
     def field_groups(self):

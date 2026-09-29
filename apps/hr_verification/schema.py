@@ -414,8 +414,9 @@ def _reference_block(index):
            help='Phone and official / work email.'),
         _q(f'{p}_verification_status', f'{r} Verification Status', SELECT, required=True,
            choices=REFERENCE_STATUS, no=base + 4),
-        _q(f'{p}_verification_method', f'{r} Verification Method', SELECT, required=True,
-           choices=REFERENCE_METHOD, no=base + 4),
+        _q(f'{p}_verification_method', f'{r} Verification Method', SELECT,
+           choices=REFERENCE_METHOD, no=base + 4,
+           required_if=negate(when(f'{p}_verification_status', 'not_attempted'))),
         _q(f'{p}_feedback', f'{r} Feedback Summary', TEXTAREA, no=base + 5),
         _q(f'{p}_recommend', f'Would {r} Rehire / Recommend the Candidate?', RADIO,
            choices=REFERENCE_RECOMMEND, no=base + 6),
@@ -635,8 +636,10 @@ STEPS = [
                choices=OFFER_ACCEPTED_CHOICES, no=86),
             _q('offer_acceptance_date', 'Offer Acceptance Date', DATE, required=True,
                no=87, show_if=when('offer_accepted', 'yes')),
-            _q('confirmed_joining_date', 'Confirmed Joining Date', DATE, required=True,
-               no=88),
+            _q('confirmed_joining_date', 'Confirmed Joining Date', DATE, no=88,
+               required_if=when('final_joining_clearance', 'cleared_to_join',
+                                'cleared_followup'),
+               help='Required when proceeding to join.'),
             _q('actual_joining_date', 'Actual Joining Date', DATE, no=89),
             *_grid_questions(JOINING_GRID, required_suffixes=('status',)),
             _q('pending_items', 'Pending Item(s), Owner & Due Date', TEXTAREA,
@@ -838,8 +841,114 @@ def wizard_label(question) -> str:
     return label
 
 
+# Choice labels of the pre-PDF version, for reading records saved on it.
+LEGACY_CHOICE_LABELS = {'agency': 'Background Check Agency',
+ 'amber': 'Amber – Minor / Explainable Concern',
+ 'bachelors': "Undergraduate / Bachelor's Degree",
+ 'banking_financial_services': 'Banking and Financial Services',
+ 'both': 'Both Internal HR and Background Check Agency',
+ 'business_development': 'Business Development',
+ 'certificate_review': 'Certificate Review',
+ 'clear': 'Clear / Satisfactory',
+ 'cleared': 'Cleared',
+ 'cleared_conditions': 'Cleared with Conditions / Clarification',
+ 'cleared_followup': 'Cleared with Follow-up',
+ 'cleared_to_join': 'Cleared to Join / Joined',
+ 'concern': 'Concern / Adverse Finding',
+ 'conditional': 'Conditional / With Reservations',
+ 'conditionally_cleared': 'Conditionally Cleared',
+ 'corroborated': 'Corroborated by 2+ Independent Sources',
+ 'critical': 'Critical – Serious / Disqualifying Concern',
+ 'data': 'Data',
+ 'digital_communications': 'Digital Communications',
+ 'direct_call': 'Direct Call to Employer HR',
+ 'direct_internal': 'Direct / Internal',
+ 'direct_manager': 'Direct Manager',
+ 'direct_report': 'Direct Report',
+ 'do_not_proceed': 'Do Not Proceed',
+ 'document': 'Document Verification',
+ 'document_review': 'Document Review',
+ 'documentation_external_audit': 'Documentation & External Audit',
+ 'ecommerce_operations': 'E-Commerce Operations',
+ 'ecommerce_services': 'E-Commerce Services',
+ 'engineering': 'Engineering',
+ 'enterprise_risk_management': 'Enterprise Risk Management',
+ 'field_verification': 'Field Verification',
+ 'finance_accounts': 'Finance and Accounts',
+ 'former_employer_hr': 'Former Employer HR',
+ 'former_manager': 'Former Direct Manager',
+ 'further_review': 'Further Review Required',
+ 'government_project': 'Government Project',
+ 'green': 'Green – No Material Concern',
+ 'hold': 'Hold',
+ 'hr_other': 'HR / Other',
+ 'hsc': 'HSC / A Level / Equivalent',
+ 'human_resources': 'Human Resources',
+ 'in_progress': 'In Progress',
+ 'infrastructure_security': 'Infrastructure and Security',
+ 'innovation_coe': 'Innovation Center of Excellence',
+ 'institution_confirmation': 'Institution / Board / University Confirmation',
+ 'internal_control_compliance': 'Internal Control & Compliance',
+ 'internal_hr': 'Internal HR',
+ 'issuing_organisation': 'Issuing Organisation Confirmation',
+ 'legal_affairs': 'Legal Affairs',
+ 'management': 'Management',
+ 'masters': "Master's / Postgraduate Degree",
+ 'na': 'Not Applicable',
+ 'no': 'No',
+ 'not_asked': 'Not Asked / Not Disclosed',
+ 'not_attempted': 'Not Yet Attempted',
+ 'not_cleared': 'Not Cleared',
+ 'not_disclosed': 'Employer Would Not Disclose',
+ 'not_required': 'Not Required',
+ 'not_started': 'Not Started',
+ 'official_email': 'Official Email Confirmation',
+ 'official_source': 'Direct / Official Source Check',
+ 'online': 'Online Verification',
+ 'other': 'Other',
+ 'partially': 'Partially Verified',
+ 'partially_verified': 'Partially Verified',
+ 'partnership_management': 'Partnership Management',
+ 'peer': 'Peer',
+ 'pending': 'Pending',
+ 'pending_exception': 'Pending Approved Exception',
+ 'police': 'Police Verification',
+ 'procurement': 'Procurement',
+ 'professional_reference': 'Professional Reference',
+ 'project_management_office': 'Project Management Office',
+ 'red': 'Red – Material Concern Requiring Escalation',
+ 'revenue_assurance': 'Revenue Assurance',
+ 'risk_compliance': 'Risk & Compliance',
+ 'service_assurance_call_center': 'Service Assurance-Call Center',
+ 'service_assurance_quality_assurance': 'Service Assurance-Quality Assurance',
+ 'service_assurance_technical_operations': 'Service Assurance-Technical Operations',
+ 'single_source': 'Single Source, Plausible',
+ 'skip_level_manager': 'Skip-level Manager',
+ 'ssc': 'SSC / O Level / Equivalent',
+ 'tbd': 'To Be Decided',
+ 'unable': 'Unable to Verify',
+ 'unverified': 'Unverified / Rumour',
+ 'verified': 'Verified',
+ 'written_reference': 'Written Reference / Service Letter',
+ 'yes': 'Yes'}
+
+
 def choice_label(question_key, value):
     question = QUESTIONS_BY_KEY.get(question_key)
     if not question or 'choices' not in question:
-        return value
-    return dict(question['choices']).get(value, value)
+        return LEGACY_CHOICE_LABELS.get(value, value)
+    return dict(question['choices']).get(value, LEGACY_CHOICE_LABELS.get(value, value))
+
+
+def legacy_view(answers):
+    """Answers with the employment gate filled in for records saved before it existed."""
+    view = dict(answers or {})
+    if 'has_employment' in view:
+        return view
+    named = [i for i in range(1, EMPLOYER_MAX + 1)
+             if (view.get(f'employer_{i}_name') or '').strip()]
+    if named:
+        view['has_employment'] = 'yes'
+        for index in named[:-1]:
+            view.setdefault(f'employer_{index}_another', 'yes')
+    return view

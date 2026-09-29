@@ -253,6 +253,7 @@ class TestJobViews:
         """Test creating a new job."""
         data = {
             'title': 'New Job',
+            'requisition_id': 'REQ-1',
             'description': 'Job description',
             'status': 'draft'
         }
@@ -292,6 +293,7 @@ class TestJobViews:
         """Test editing a job."""
         data = {
             'title': 'Updated Title',
+            'requisition_id': 'REQ-2',
             'description': sample_job.description,
             'status': sample_job.status
         }
@@ -715,3 +717,11 @@ class TestDownloadResumesZip:
         url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
         response = authenticated_client.get(url + '?filter=all')
         assert '_summary.txt' in self._zip_names(response)
+
+
+@pytest.mark.django_db
+def test_a_job_needs_a_requisition_id(authenticated_client):
+    response = authenticated_client.post(reverse('core:job_create'), {
+        'title': 'No Requisition', 'description': 'x', 'status': 'draft'})
+    assert response.status_code == 200
+    assert not Job.objects.filter(title='No Requisition').exists()
