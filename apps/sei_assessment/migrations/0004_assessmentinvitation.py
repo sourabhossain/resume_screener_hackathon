@@ -9,7 +9,8 @@ ORDER = ('sei', 'pe')
 
 
 def group_sittings(apps, schema_editor):
-    """One invitation per candidate; the first sitting lends its token and code."""
+    """One invitation per candidate: the first sitting lends its token, the
+    most recently emailed one its code."""
     Sitting = apps.get_model('sei_assessment', 'SEIAssessment')
     Invitation = apps.get_model('sei_assessment', 'AssessmentInvitation')
 
@@ -21,16 +22,19 @@ def group_sittings(apps, schema_editor):
     for resume_id, sittings in by_resume.items():
         sittings.sort(key=lambda s: (rank.get(s.instrument, len(ORDER)), s.pk))
         lead = sittings[0]
+        coded = [s for s in sittings if s.otp_hash] or [lead]
+        latest = max(coded, key=lambda s: (s.invited_at is not None, s.invited_at or s.created_at))
+        verified = [s.otp_verified_at for s in sittings if s.otp_verified_at]
         invited = [s.invited_at for s in sittings if s.invited_at]
         errored = [s for s in sittings if s.last_error]
         invitation = Invitation.objects.create(
             resume_id=resume_id,
             token=lead.token,
             token_expires_at=max(s.token_expires_at for s in sittings),
-            otp_hash=lead.otp_hash,
-            otp_expires_at=lead.otp_expires_at,
-            otp_attempts=lead.otp_attempts,
-            otp_verified_at=lead.otp_verified_at,
+            otp_hash=latest.otp_hash,
+            otp_expires_at=latest.otp_expires_at,
+            otp_attempts=latest.otp_attempts,
+            otp_verified_at=max(verified) if verified else None,
             invited_at=min(invited) if invited else None,
             invite_count=max(s.invite_count for s in sittings),
             invited_by_id=lead.invited_by_id,

@@ -93,7 +93,7 @@
         border-radius: .75rem; background: var(--paper);
     }
     .lb-card h2 { margin: 0 0 .65rem; font-size: .9375rem; font-weight: 600; color: var(--ink); }
-    .lb-card ul { margin: 0; padding-left: 1.1rem; }
+    .lb-card ul { margin: 0; padding-left: 1.1rem; list-style: disc; }
     .lb-card li { font-size: .875rem; line-height: 1.6; color: var(--ink-2); }
     .lb-card li + li { margin-top: .35rem; }
     .lb-card li b { color: var(--ink); font-weight: 600; }
@@ -103,6 +103,7 @@
         display: inline-flex; align-items: center; gap: .5rem;
         padding: .7rem 1.25rem; border-radius: .6rem; font-size: .9375rem; font-weight: 600;
         background: var(--accent); color: var(--btn-ink); text-decoration: none;
+        border: 0; cursor: pointer; font-family: inherit;
     }
     .lb-btn:hover { filter: brightness(1.06); }
     .lb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -191,12 +192,15 @@
         </ul>
 
         <div class="lb-go">
-            <a class="lb-btn" href="{% url 'sei_assessment:test' token=invitation.token %}"
-               onclick="this.setAttribute('aria-disabled', 'true')">
-                {% if part_count > 1 %}Begin part {{ current_number }}: {{ current.spec.label }}{% else %}Begin the assessment{% endif %}
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-            </a>
-            <p class="lb-fine">Starts a {{ current.spec.time_limit_minutes }}-minute timer.</p>
+            <form method="post" action="{% url 'sei_assessment:begin' token=invitation.token instrument=current.instrument %}"
+                  hx-boost="false" onsubmit="this.querySelector('button').setAttribute('aria-disabled', 'true')">
+                {% csrf_token %}
+                <button type="submit" class="lb-btn">
+                    {% if part_count > 1 %}Begin part {{ current_number }}: {{ current.spec.label }}{% else %}Begin the assessment{% endif %}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                </button>
+            </form>
+            <p class="lb-fine">Starts the {{ current.spec.time_limit_minutes }}-minute timer.</p>
         </div>
     </div>
 

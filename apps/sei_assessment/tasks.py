@@ -1,5 +1,6 @@
 """Background delivery, and closing sittings the candidate walked away from."""
 import logging
+from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
@@ -58,12 +59,16 @@ def send_assessment_invite(invitation_id: int) -> str:
 @shared_task(name='apps.sei_assessment.tasks.send_sei_invite')
 def send_sei_invite(assessment_id: int) -> str:
     """Old per-sitting task name, kept so messages queued before deploy still send."""
-    invitation_id = SEIAssessment.objects.filter(
-        pk=assessment_id).values_list('invitation_id', flat=True).first()
-    if invitation_id is None:
+    sitting = SEIAssessment.objects.select_related('invitation').filter(
+        pk=assessment_id).first()
+    if sitting is None:
         logger.warning('sei.skipped assessment=%s (deleted)', assessment_id)
         return 'missing'
-    return send_assessment_invite(invitation_id)
+    # Both old per-part messages map to one invitation; send it once.
+    sent_at = sitting.invitation.invited_at
+    if sent_at and timezone.now() - sent_at < timedelta(minutes=10):
+        return 'already_sent'
+    return send_assessment_invite(sitting.invitation_id)
 
 
 @shared_task(name='apps.sei_assessment.tasks.close_expired_sittings')

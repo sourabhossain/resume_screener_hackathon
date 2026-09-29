@@ -252,7 +252,8 @@ def test_a_four_is_a_valid_answer_on_pe_and_not_on_sei(
     client.post(reverse('sei_assessment:verify', kwargs={'token': token}), {'code': otp})
 
     def answer(sitting, payload):
-        client.get(reverse('sei_assessment:test', kwargs={'token': token}))
+        client.post(reverse('sei_assessment:begin', kwargs={
+                        'token': token, 'instrument': sitting.instrument}))
         client.post(reverse('sei_assessment:save', kwargs={
                         'token': token, 'instrument': sitting.instrument}),
                     data=json.dumps(payload), content_type='application/json')

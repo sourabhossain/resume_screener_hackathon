@@ -68,11 +68,15 @@ class AssessmentInvitation(models.Model):
             key=lambda s: rank[s.instrument])
 
     def current_sitting(self, sittings=None):
-        """The first unsubmitted sitting; everything after it stays locked."""
-        for sitting in sittings if sittings is not None else self.ordered_sittings():
-            if not sitting.is_submitted:
-                return sitting
-        return None
+        """The running sitting if any, else the first unsubmitted one."""
+        sittings = sittings if sittings is not None else self.ordered_sittings()
+        pending = [s for s in sittings if not s.is_submitted]
+        running = [s for s in pending if s.has_started]
+        return (running or pending or [None])[0]
+
+    def running_sitting(self, sittings=None):
+        current = self.current_sitting(sittings)
+        return current if current is not None and current.has_started else None
 
     @property
     def is_complete(self) -> bool:

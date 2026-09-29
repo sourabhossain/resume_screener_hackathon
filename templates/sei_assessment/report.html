@@ -212,13 +212,17 @@
             {% if assessment.has_started %}
             {{ resume.candidate_name|title }} is part-way through. The result appears
             once the sitting closes, either on submission or when the clock runs out.
+            {% elif assessment.status_label == 'Waiting' %}
+            It opens for the candidate once the assessment before it is submitted.
+            {% elif assessment.status_label == 'Not sent' %}
+            The assessment link has not been emailed yet.
             {% else %}
             The assessment has been sent but not opened. The clock starts when the
             questions are first opened, not when the invitation went out.
             {% endif %}
         </p>
-        {% if assessment.last_error %}
-        <p><b>The last send failed:</b> {{ assessment.last_error }}</p>
+        {% if assessment.invitation.last_error %}
+        <p><b>The last send failed:</b> {{ assessment.invitation.last_error }}</p>
         {% endif %}
     </div>
 

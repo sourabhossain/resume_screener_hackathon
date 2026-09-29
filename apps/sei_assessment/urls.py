@@ -19,4 +19,5 @@ urlpatterns = [
     path('assessment/<uuid:token>/save/', views.save, name='save_legacy'),
     path('assessment/<uuid:token>/done/', views.done, name='done'),
     path('assessment/<uuid:token>/start/', views.test, name='test'),
+    path('assessment/<uuid:token>/start/<slug:instrument>/', views.begin, name='begin'),
 ]

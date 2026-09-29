@@ -127,13 +127,18 @@ def issue_invite(resume, *, user=None, resend=False):
             f'{resume.candidate_name} has no email address, so the '
             'assessments could not be sent. Add one and try again.')
 
+    # Created outside the lock: a locking read on a missing row takes a gap lock
+    # on MySQL, and two first sends would deadlock on the insert.
+    AssessmentInvitation.objects.get_or_create(resume=resume)
     with transaction.atomic():
-        invitation, _ = AssessmentInvitation.objects.select_for_update().get_or_create(
-            resume=resume)
+        invitation = AssessmentInvitation.objects.select_for_update().get(resume=resume)
         existing = {s.instrument: s for s in invitation.sittings.all()}
         missing = [key for key in keys if key not in existing]
-        retakes = [s for s in existing.values() if s.needs_retaking]
+        retakes = [s for s in existing.values()
+                   if s.needs_retaking and s.instrument in keys]
         unfinished = [s for s in existing.values() if not s.is_submitted]
+        dropped = [s.pk for key, s in existing.items()
+                   if key not in keys and not s.has_started and not s.is_submitted]
 
         if not missing and not retakes and not unfinished:
             if not existing:
@@ -156,6 +161,11 @@ def issue_invite(resume, *, user=None, resend=False):
             if invitation.invited_at:
                 return invitation
 
+        running = invitation.running_sitting()
+        if retakes and running is not None and running.is_open:
+            raise InviteError(
+                f'{resume.candidate_name} is taking the {running.instrument_label} '
+                'assessment right now. Ask for the retake once it is finished.')
         for sitting in retakes:
             # Too few answers to score. Sending again is the point, so the
             # sitting is reset rather than refused -- but only on an explicit
@@ -163,8 +173,6 @@ def issue_invite(resume, *, user=None, resend=False):
             sitting.reset()
             sitting.save(update_fields=[*SEIAssessment.RESET_FIELDS, 'updated_at'])
         # Drop never-opened parts the job no longer asks for.
-        dropped = [s.pk for key, s in existing.items()
-                   if key not in keys and not s.has_started and not s.is_submitted]
         if dropped:
             SEIAssessment.objects.filter(pk__in=dropped).delete()
         for key in missing:

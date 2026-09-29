@@ -51,6 +51,12 @@ def _save(a):   return reverse('sei_assessment:save',
                                kwargs={'token': _tok(a), 'instrument': a.instrument})
 
 
+def _begin(client, a):
+    return client.post(reverse('sei_assessment:begin',
+                               kwargs={'token': _tok(a), 'instrument': a.instrument}),
+                       follow=True)
+
+
 def _open(client, sitting):
     client.post(_verify(sitting), {'code': sitting.plain_otp})
     return client
@@ -91,7 +97,8 @@ def test_the_right_code_opens_the_questions(client, sitting):
     response = client.post(_verify(sitting), {'code': sitting.plain_otp})
 
     assert response.status_code == 302
-    assert client.get(_test(sitting)).status_code == 200
+    assert client.get(_entry(sitting)).status_code == 200
+    assert _begin(client, sitting).status_code == 200
 
 
 # ── the clock ────────────────────────────────────────────────────────────
@@ -101,7 +108,7 @@ def test_the_clock_starts_when_the_questions_are_opened_not_when_sent(client, si
     candidate their fifteen minutes."""
     assert sitting.started_at is None
 
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     sitting.refresh_from_db()
     assert sitting.started_at is not None
@@ -112,7 +119,7 @@ def test_the_clock_starts_when_the_questions_are_opened_not_when_sent(client, si
 @pytest.mark.django_db
 def test_reloading_the_page_does_not_restart_the_clock(client, sitting):
     """Otherwise a refresh every fourteen minutes buys unlimited time."""
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     sitting.refresh_from_db()
     first_deadline = sitting.deadline_at
 
@@ -139,7 +146,7 @@ def test_two_tabs_opened_together_get_one_clock(client, sitting):
 # ── answering ────────────────────────────────────────────────────────────
 @pytest.mark.django_db
 def test_answers_save_as_they_are_picked(client, sitting):
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     response = _post(client, sitting, {'answers': {'1': 3, '2': 1}})
 
@@ -151,7 +158,7 @@ def test_answers_save_as_they_are_picked(client, sitting):
 @pytest.mark.django_db
 def test_a_later_save_merges_rather_than_replaces(client, sitting):
     """Each save carries only what changed since the last one."""
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {'1': 3}})
 
     _post(client, sitting, {'answers': {'2': 2}})
@@ -166,7 +173,7 @@ def test_a_later_save_merges_rather_than_replaces(client, sitting):
     {'answers': {'x': 2}}, {'answers': {'1': 'three'}},
 ])
 def test_unusable_answers_are_dropped_not_stored(client, sitting, payload):
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     _post(client, sitting, payload)
 
@@ -187,7 +194,7 @@ def test_someone_without_the_code_cannot_answer(client, sitting):
 # ── how it ends ──────────────────────────────────────────────────────────
 @pytest.mark.django_db
 def test_submitting_closes_the_sitting(client, sitting):
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     response = _post(client, sitting, {'answers': {'1': 3}, 'finish': True})
 
@@ -201,7 +208,7 @@ def test_submitting_closes_the_sitting(client, sitting):
 def test_answers_are_refused_once_the_clock_runs_out(client, sitting):
     """The browser is not the authority. Even with the countdown disabled, a
     late answer must not be accepted."""
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {'1': 3}})
     SEIAssessment.objects.filter(pk=sitting.pk).update(
         deadline_at=timezone.now() - timedelta(seconds=1))
@@ -221,7 +228,7 @@ def test_an_abandoned_sitting_is_closed_by_the_sweep(client, sitting):
     Without the sweep, HR would see "In progress" for someone long gone."""
     from apps.sei_assessment.tasks import close_expired_sittings
 
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {'1': 3, '2': 2}})
     SEIAssessment.objects.filter(pk=sitting.pk).update(
         deadline_at=timezone.now() - timedelta(minutes=1))
@@ -238,7 +245,7 @@ def test_an_abandoned_sitting_is_closed_by_the_sweep(client, sitting):
 def test_the_sweep_leaves_a_running_sitting_alone(client, sitting):
     from apps.sei_assessment.tasks import close_expired_sittings
 
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     assert close_expired_sittings() == 0
     sitting.refresh_from_db()
@@ -257,7 +264,7 @@ def test_the_sweep_ignores_a_sitting_never_opened(sitting):
 
 @pytest.mark.django_db
 def test_a_finished_sitting_cannot_be_answered_again(client, sitting):
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {'1': 3}, 'finish': True})
 
     _post(client, sitting, {'answers': {'2': 3}})
@@ -268,7 +275,7 @@ def test_a_finished_sitting_cannot_be_answered_again(client, sitting):
 
 @pytest.mark.django_db
 def test_reopening_a_finished_sitting_shows_the_thank_you(client, sitting):
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {'1': 3}, 'finish': True})
 
     body = client.get(_entry(sitting)).content.decode()
@@ -279,7 +286,7 @@ def test_reopening_a_finished_sitting_shows_the_thank_you(client, sitting):
 # ── the candidate never sees a score ─────────────────────────────────────
 @pytest.mark.django_db
 def test_no_page_the_candidate_can_reach_shows_a_result(client, sitting):
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {str(i): 3 for i in range(1, 49)},
                             'finish': True})
     sitting.refresh_from_db()
@@ -366,7 +373,7 @@ def test_the_code_is_never_stored_in_plaintext(sitting):
 def test_too_few_answers_yields_no_score_and_asks_for_a_retake(
         hr_client, client, candidate, sitting):
     """Twenty of forty-eight is not a low score, it is no score."""
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {str(i): 2 for i in range(1, 21)},
                             'finish': True})
 
@@ -433,7 +440,7 @@ def test_the_sitting_is_fifteen_minutes(client, sitting):
     clock changing length, which a derived assertion would happily allow."""
     assert SEI_MINUTES == 15
 
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     sitting.refresh_from_db()
     span = (sitting.deadline_at - sitting.started_at).total_seconds()
@@ -442,7 +449,7 @@ def test_the_sitting_is_fifteen_minutes(client, sitting):
 
 @pytest.mark.django_db
 def test_the_page_carries_the_instruction_wording(client, sitting):
-    raw = _open(client, sitting).get(_test(sitting)).content.decode()
+    raw = _begin(_open(client, sitting), sitting).content.decode()
     body = ' '.join(raw.split())   # the copy wraps across lines in the template
 
     assert 'first and most natural reaction' in body
@@ -460,7 +467,7 @@ def test_two_tabs_answering_at_once_do_not_lose_answers(client, sitting):
     """Both tabs merge onto the copy they loaded, so without a lock the later
     write drops the earlier answers -- and in a timed sitting there is no
     chance to enter them again."""
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     _post(client, sitting, {'answers': {'1': 3}})
     _post(client, sitting, {'answers': {'2': 2}})
@@ -482,7 +489,7 @@ def test_a_save_merges_onto_whatever_is_in_the_database_not_what_was_loaded(
     """
     from apps.sei_assessment import services as sei_services
 
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
     fired = []
     real_finalise = sei_services.finalise_if_time_is_up
 
@@ -509,7 +516,7 @@ def test_answering_steadily_for_the_whole_sitting_is_not_rate_limited(client, si
     """The page flushes every five seconds, so a full fifteen minutes is about
     180 calls. A limit at that boundary would start refusing saves in the last
     minutes of the test."""
-    _open(client, sitting).get(_test(sitting))
+    _begin(_open(client, sitting), sitting)
 
     codes = [_post(client, sitting, {'answers': {'1': 3}}).status_code
              for _ in range(260)]

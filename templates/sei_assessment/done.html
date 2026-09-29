@@ -14,7 +14,9 @@
             </div>
             <h1 class="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Thank you</h1>
             <p class="mt-2 leading-relaxed text-zinc-500 dark:text-zinc-400">
-                {% if sittings|length > 1 %}
+                {% if sittings|length == 2 %}
+                Both of your assessments have been received.
+                {% elif sittings|length > 2 %}
                 All {{ sittings|length }} of your assessments have been received.
                 {% else %}
                 Your assessment has been received.

@@ -64,8 +64,16 @@ def _session_key(invitation) -> str:
 
 
 def _is_verified(request, invitation) -> bool:
-    return bool(invitation.otp_verified_at) and request.session.get(
-        _session_key(invitation)) is True
+    if not invitation.otp_verified_at:
+        return False
+    if request.session.get(_session_key(invitation)) is True:
+        return True
+    # Sessions verified on a per-part link before parts were grouped.
+    legacy_keys = [f'sei_verified:{s.token}' for s in invitation.sittings.all()]
+    if any(request.session.get(key) is True for key in legacy_keys):
+        request.session[_session_key(invitation)] = True
+        return True
+    return False
 
 
 def _settle(invitation):
@@ -197,9 +205,10 @@ def resend_code(request, token):
     return redirect('sei_assessment:verify', token=invitation.token)
 
 
+@require_POST
 @_candidate_page
-def test(request, token):
-    """The current part's questions. Opening this page starts its clock."""
+def begin(request, token, instrument):
+    """Start the named part's clock, only if it is the part now open."""
     invitation = _get(token)
     sittings = _settle(invitation)
     closed = _closed_response(request, invitation, sittings)
@@ -208,10 +217,29 @@ def test(request, token):
     if not _is_verified(request, invitation):
         return redirect('sei_assessment:verify', token=invitation.token)
 
-    assessment = invitation.current_sitting(sittings)
-    if assessment.start_clock():
+    current = invitation.current_sitting(sittings)
+    if current.instrument != instrument:
+        return redirect('sei_assessment:entry', token=invitation.token)
+    if current.start_clock():
         logger.info('sei.started assessment=%s instrument=%s',
-                    assessment.pk, assessment.instrument)
+                    current.pk, current.instrument)
+    return redirect('sei_assessment:test', token=invitation.token)
+
+
+@_candidate_page
+def test(request, token):
+    """The running part's questions. Never starts a clock."""
+    invitation = _get(token)
+    sittings = _settle(invitation)
+    closed = _closed_response(request, invitation, sittings)
+    if closed:
+        return closed
+    if not _is_verified(request, invitation):
+        return redirect('sei_assessment:verify', token=invitation.token)
+
+    assessment = invitation.running_sitting(sittings)
+    if assessment is None:
+        return redirect('sei_assessment:entry', token=invitation.token)
 
     spec = assessment.spec
     number = sittings.index(assessment) + 1
@@ -258,7 +286,7 @@ def save(request, token, instrument=None):
     elif legacy is not None:
         assessment = legacy
     else:
-        assessment = None
+        assessment = invitation.running_sitting()
     if assessment is None:
         return JsonResponse({'status': 'error', 'error': 'unknown part'}, status=404)
 

@@ -62,8 +62,12 @@ def _save(client, invitation, key, payload):
                        data=json.dumps(payload), content_type='application/json')
 
 
+def _begin(client, invitation, key):
+    return client.post(_url('begin', invitation, instrument=key), follow=True)
+
+
 def _finish(client, invitation, key, count):
-    client.get(_url('test', invitation))
+    _begin(client, invitation, key)
     return _save(client, invitation, key, {
         'answers': {str(i): 1 for i in range(1, count + 1)}, 'finish': True})
 
@@ -146,7 +150,7 @@ def test_the_code_leads_to_the_overview_not_straight_into_a_clock(client, invite
 def test_the_first_part_opens_first_and_only_it_starts(client, invited):
     _verify(client, invited)
 
-    page = _flat(client.get(_url('test', invited)))
+    page = _flat(_begin(client, invited, SEI))
 
     assert f'Part 1 of 2 &middot; {SEI_LABEL}' in page
     assert 'Submit and continue' in page
@@ -157,7 +161,7 @@ def test_the_first_part_opens_first_and_only_it_starts(client, invited):
 @pytest.mark.django_db
 def test_a_locked_part_cannot_be_written_to(client, invited):
     _verify(client, invited)
-    client.get(_url('test', invited))
+    _begin(client, invited, SEI)
 
     response = _save(client, invited, PE, {'answers': {'1': 2}})
 
@@ -177,7 +181,7 @@ def test_submitting_the_first_opens_the_second_without_starting_its_clock(
     assert 'Begin part 2' in page
     assert not _sitting(invited, PE).has_started
 
-    page = _flat(client.get(_url('test', invited)))
+    page = _flat(_begin(client, invited, PE))
     assert f'Part 2 of 2 &middot; {PE_LABEL}' in page
     assert 'Submit and continue' not in page
     assert _sitting(invited, PE).has_started
@@ -187,7 +191,7 @@ def test_submitting_the_first_opens_the_second_without_starting_its_clock(
 def test_a_stale_tab_on_a_closed_part_cannot_write_into_the_next(client, invited):
     _verify(client, invited)
     _finish(client, invited, SEI, 48)
-    client.get(_url('test', invited))
+    _begin(client, invited, PE)
 
     response = _save(client, invited, SEI, {'answers': {'3': 2}})
 
@@ -199,7 +203,7 @@ def test_a_stale_tab_on_a_closed_part_cannot_write_into_the_next(client, invited
 def test_a_part_whose_time_ran_out_unlocks_the_next_without_the_sweep(
         client, invited):
     _verify(client, invited)
-    client.get(_url('test', invited))
+    _begin(client, invited, SEI)
     _save(client, invited, SEI, {'answers': {'1': 2}})
     SEIAssessment.objects.filter(invitation=invited, instrument=SEI).update(
         deadline_at=timezone.now() - timedelta(seconds=1))
@@ -215,7 +219,7 @@ def test_a_part_whose_time_ran_out_unlocks_the_next_without_the_sweep(
 @pytest.mark.django_db
 def test_returning_mid_part_goes_straight_back_to_the_questions(client, invited):
     _verify(client, invited)
-    client.get(_url('test', invited))
+    _begin(client, invited, SEI)
 
     response = client.get(_url('entry', invited))
 
@@ -231,7 +235,7 @@ def test_both_done_thanks_them_once_for_everything(client, invited):
 
     for name in ('entry', 'done', 'test'):
         page = _flat(client.get(_url(name, invited)))
-        assert 'All 2 of your assessments have been received' in page, name
+        assert 'Both of your assessments have been received' in page, name
 
 
 @pytest.mark.django_db
@@ -257,7 +261,7 @@ def test_an_old_per_part_link_lands_on_the_one_invitation(client, invited):
 @pytest.mark.django_db
 def test_an_old_page_still_saves_to_its_own_part(client, invited):
     _verify(client, invited)
-    client.get(_url('test', invited))
+    _begin(client, invited, SEI)
     sei = _sitting(invited, SEI)
 
     client.post(reverse('sei_assessment:save_legacy', kwargs={'token': sei.token}),
@@ -341,7 +345,7 @@ def test_everything_done_refuses_a_resend(client, invited):
 @pytest.mark.django_db
 def test_a_new_code_does_not_throw_out_a_candidate_mid_part(client, invited):
     _verify(client, invited)
-    client.get(_url('test', invited))
+    _begin(client, invited, SEI)
 
     services.issue_invite(invited.resume, resend=True)
 
@@ -381,3 +385,116 @@ def test_the_candidate_page_offers_one_send_button_not_one_per_part(
     send_url = reverse('sei_assessment:send', kwargs={'uuid': invited.resume.uuid})
     assert page.count(send_url) == 1
     assert 'Waiting' in page
+
+
+# ── found in review ──────────────────────────────────────────────────────
+@pytest.mark.django_db
+def test_opening_the_questions_page_never_starts_a_clock(client, invited):
+    _verify(client, invited)
+
+    response = client.get(_url('test', invited))
+
+    assert response.url == _url('entry', invited)
+    assert not SEIAssessment.objects.filter(
+        invitation=invited, started_at__isnull=False).exists()
+
+
+@pytest.mark.django_db
+def test_reloading_after_part_one_times_out_does_not_start_part_two(client, invited):
+    _verify(client, invited)
+    _begin(client, invited, SEI)
+    SEIAssessment.objects.filter(invitation=invited, instrument=SEI).update(
+        deadline_at=timezone.now() - timedelta(seconds=1))
+
+    response = client.get(_url('test', invited))
+
+    assert response.url == _url('entry', invited)
+    assert not _sitting(invited, PE).has_started
+
+
+@pytest.mark.django_db
+def test_beginning_a_part_that_is_not_open_is_refused(client, invited):
+    _verify(client, invited)
+
+    client.post(_url('begin', invited, instrument=PE))
+
+    assert not _sitting(invited, PE).has_started
+    assert not _sitting(invited, SEI).has_started
+
+
+@pytest.mark.django_db
+def test_a_running_part_stays_current_even_after_an_earlier_one_reopens(invited):
+    SEIAssessment.objects.filter(invitation=invited, instrument=SEI).update(
+        is_submitted=True, answers={'1': 1})
+    _sitting(invited, PE).start_clock()
+    SEIAssessment.objects.filter(invitation=invited, instrument=SEI).update(
+        is_submitted=False, answers={})
+
+    assert invited.current_sitting().instrument == PE
+
+
+@pytest.mark.django_db
+def test_a_retake_is_refused_while_another_part_is_running(client, invited):
+    _verify(client, invited)
+    _finish(client, invited, SEI, 10)
+    _begin(client, invited, PE)
+
+    with pytest.raises(services.InviteError, match='right now'):
+        services.issue_invite(invited.resume, resend=True)
+
+    sei = _sitting(invited, SEI)
+    assert sei.is_submitted and sei.answers, 'the paper was reset under a running clock'
+
+
+@pytest.mark.django_db
+def test_an_unscoreable_paper_the_job_no_longer_asks_for_is_kept(
+        client, job, invited):
+    _verify(client, invited)
+    _finish(client, invited, SEI, 10)
+    job.assessments = [PE]
+    job.save(update_fields=['assessments'])
+
+    services.issue_invite(invited.resume, resend=True)
+
+    sei = _sitting(invited, SEI)
+    assert sei.is_submitted and sei.answers
+
+
+@pytest.mark.django_db
+def test_a_page_open_at_deploy_on_the_shared_token_still_saves(client, invited):
+    _verify(client, invited)
+    _begin(client, invited, SEI)
+
+    response = client.post(
+        reverse('sei_assessment:save_legacy', kwargs={'token': invited.token}),
+        data=json.dumps({'answers': {'4': 1}}), content_type='application/json')
+
+    assert response.json()['status'] == 'saved'
+    assert _sitting(invited, SEI).answers == {'4': 1}
+
+
+@pytest.mark.django_db
+def test_a_session_verified_on_an_old_part_link_stays_verified(client, invited):
+    AssessmentInvitation.objects.filter(pk=invited.pk).update(
+        otp_verified_at=timezone.now())
+    pe = _sitting(invited, PE)
+    session = client.session
+    session[f'sei_verified:{pe.token}'] = True
+    session.save()
+
+    response = client.get(_url('entry', invited))
+
+    assert response.status_code == 200
+    assert 'Begin part 1' in _flat(response)
+
+
+@pytest.mark.django_db
+def test_the_old_task_does_not_resend_an_invitation_just_sent(candidate):
+    from apps.sei_assessment.tasks import send_sei_invite
+    invitation = services.issue_invite(candidate)
+    mail.outbox = []
+
+    for sitting in invitation.sittings.all():
+        send_sei_invite(sitting.pk)
+
+    assert _assessment_mail() == []
