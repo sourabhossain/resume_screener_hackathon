@@ -44,6 +44,18 @@ class SoftDeleteModel(models.Model):
         self.save(update_fields=['is_deleted', 'deleted_at'])
 
 
+class LiveResumeManager(SoftDeleteManager):
+    """Résumés that are not deleted and whose job is not deleted either.
+
+    Deleting a job hides its candidates everywhere at once: no detail page, no
+    talent pool, no status change that would email a form for a job that no
+    longer exists. Restoring the job brings them back.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(job__is_deleted=False)
+
+
 class Job(SoftDeleteModel):
     """Job Description model - stores job postings for resume screening."""
 
@@ -147,6 +159,9 @@ class Job(SoftDeleteModel):
 
 class Resume(SoftDeleteModel):
     """Resume model - stores candidate resumes and their screening results."""
+
+    objects = LiveResumeManager()
+    all_objects = models.Manager()
     
     TIER_CHOICES = [
         ('low', 'Low'),

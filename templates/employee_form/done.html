@@ -16,7 +16,7 @@
 
         <h1 class="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Information form submitted</h1>
         <p class="mt-2 leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Thank you, <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ form_obj.resume.candidate_name|title }}</span>.
+            Thank you{% if verified %}, <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ form_obj.resume.candidate_name|title }}</span>{% endif %}.
             {% if form_obj.consent_declined %}
             You did not consent to background verification, so the form has ended here and your response has been passed to our HR team for review.
             {% elif form_obj.declaration_declined %}

@@ -196,7 +196,7 @@ def test_declining_consent_is_stored_as_declined(client, candidate):
     client.post(
         reverse('employee_form:step',
                 kwargs={'token': form.token, 'step_key': 'section_a'}),
-        {**SECTION_A, 'verification_consent': 'no', 'nid_copy': _pdf('n.pdf')})
+        {**SECTION_A, 'verification_consent': 'no', 'nid_copy': _pdf('n.pdf'), 'confirm_end': '1'})
 
     form.refresh_from_db()
     assert form.answers.get('verification_consent') == 'no'

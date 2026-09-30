@@ -130,8 +130,9 @@ class InvalidLink(Exception):
 
 def _get_check(token):
     try:
+        # A deleted candidate's link stops working for the referee too.
         return ReferenceCheck.objects.select_related(
-            'resume', 'resume__job').get(token=token)
+            'resume', 'resume__job').get(token=token, resume__is_deleted=False, resume__job__is_deleted=False)
     except ReferenceCheck.DoesNotExist as exc:
         raise InvalidLink from exc
 
@@ -226,6 +227,9 @@ def verify(request, token):
         elif check.otp_is_expired:
             error = 'That code has expired. Use "Send me a new code" below.'
         elif check.check_otp(code):
+            # A fresh session id on verification: one fixed before the code was
+            # entered must not inherit access to the form.
+            request.session.cycle_key()
             request.session[_session_key(check)] = True
             return redirect('reference_checks:step', token=token,
                             step_key=check.resume_step)
@@ -243,6 +247,9 @@ def verify(request, token):
 @require_POST
 @ratelimit(key='ip', rate='100/h', method='POST', block=True)
 @ratelimit(key=_rate_key, rate='5/h', method='POST', block=True)
+# And a daily cap: each new code resets the wrong-guess count, so without it
+# resends would multiply the guesses allowed on one link.
+@ratelimit(key=_rate_key, rate='20/d', method='POST', block=True)
 @_respondent_page
 def resend_code(request, token):
     check = _get_check(token)
@@ -294,6 +301,12 @@ def step(request, token, step_key):
             next_key = schema.next_step_key(check.kind, step_key)
             with transaction.atomic():
                 locked = ReferenceCheck.objects.select_for_update().get(pk=check.pk)
+                # Re-checked under the lock: HR may have handed the request to a
+                # new recipient (new token, answers cleared) or it may already be
+                # sent. Either way this page's answers must not be written in.
+                if (locked.token != check.token or locked.is_submitted
+                        or not locked.otp_verified_at):
+                    return redirect('reference_checks:entry', token=token)
                 merged = {**(locked.answers or {}), **form.storable_answers()}
                 locked.answers = merged
                 incomplete = None

@@ -326,10 +326,10 @@ class SEIAssessment(models.Model):
             if self.auto_submitted:
                 return 'Time expired'
             return 'Completed'
-        if self.is_expired:
-            return 'Link expired'
         if self.has_started:
             return 'In progress'
+        if self.is_expired:
+            return 'Link expired'
         if not self.invitation.invited_at:
             return 'Not sent'
         current = self.invitation.current_sitting()

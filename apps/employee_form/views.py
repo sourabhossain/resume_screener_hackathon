@@ -82,7 +82,10 @@ def _get_form(token):
     the message deliberately says nothing about whether the token ever existed.
     """
     try:
+        # A deleted candidate's link stops working: nothing more is collected
+        # about someone the recruiter has removed.
         return EmployeeForm.objects.select_related('resume', 'resume__job').get(
+            resume__is_deleted=False, resume__job__is_deleted=False,
             token=token
         )
     except EmployeeForm.DoesNotExist as exc:
@@ -158,6 +161,9 @@ def verify(request, token):
             )
         elif otp_form.is_valid():
             if form.check_otp(otp_form.cleaned_data['code']):
+                # A fresh session id on verification: one fixed before the code was
+                # entered must not inherit access to the form.
+                request.session.cycle_key()
                 request.session[_session_key(form)] = True
                 logger.info('employee_form.otp_verified form=%s', form.pk)
                 form.normalise_current_step()
@@ -184,6 +190,9 @@ def verify(request, token):
 @require_POST
 @ratelimit(key='ip', rate='100/h', method='POST', block=True)
 @ratelimit(key=_rate_key, rate='5/h', method='POST', block=True)
+# And a daily cap: each new code resets the wrong-guess count, so without it
+# resends would multiply the guesses allowed on one link.
+@ratelimit(key=_rate_key, rate='20/d', method='POST', block=True)
 @_candidate_page
 def resend_code(request, token):
     """Candidate-triggered resend of the one-time code."""
@@ -204,6 +213,12 @@ def resend_code(request, token):
         messages.success(request, 'A new code is on its way to your email.')
 
     return redirect('employee_form:verify', token=token)
+
+
+# What a candidate's step writes. Never the whole row: the invitation task
+# writes the code fields at the same time, and a full save from either side
+# would put back the other's stale copy.
+STEP_SAVE_FIELDS = ['answers', 'current_step', 'is_submitted', 'submitted_at', 'updated_at']
 
 
 @_candidate_page
@@ -248,6 +263,7 @@ def step(request, token, step_key):
     # point for anything the candidate has not filled in yet.
     prefill = pending_prefill(form.resume, answers)
 
+    confirm_end = False
     if request.method == 'POST':
         step_form = StepForm(
             request.POST, request.FILES,
@@ -296,25 +312,37 @@ def step(request, token, step_key):
                 incomplete = form.first_incomplete_step()
                 if incomplete:
                     form.current_step = incomplete
-                    form.save()
+                    form.save(update_fields=STEP_SAVE_FIELDS)
                     messages.error(request, 'Some required answers are still missing. '
                                             'Please complete this section first.')
                     return redirect('employee_form:step', token=token, step_key=incomplete)
-                if form.consent_declined:
-                    form.drop_answers_beyond(form.path)
-                form.is_submitted = True
-                form.submitted_at = timezone.now()
-                form.current_step = step_key
-                form.save()
-                logger.info(
-                    'employee_form.submitted form=%s resume=%s', form.pk, form.resume_id
-                )
-                return redirect('employee_form:done', token=token)
-
-            form.current_step = next_key
-            form.save()
-            return redirect('employee_form:step', token=token, step_key=next_key)
-        form_errors_to_messages(request, step_form)
+                ends_early = form.consent_declined or form.declaration_declined
+                if ends_early and request.POST.get('confirm_end') != '1':
+                    # Declining consent or the declaration ends the form for
+                    # good and deletes the later answers. One click on "No"
+                    # must not do that unannounced: the answer is saved and
+                    # the candidate is asked to confirm.
+                    form.current_step = step_key
+                    form.save(update_fields=STEP_SAVE_FIELDS)
+                    confirm_end = True
+                else:
+                    if form.consent_declined:
+                        form.drop_answers_beyond(form.path)
+                    form.drop_hidden_files()
+                    form.is_submitted = True
+                    form.submitted_at = timezone.now()
+                    form.current_step = step_key
+                    form.save(update_fields=STEP_SAVE_FIELDS)
+                    logger.info(
+                        'employee_form.submitted form=%s resume=%s', form.pk, form.resume_id
+                    )
+                    return redirect('employee_form:done', token=token)
+            else:
+                form.current_step = next_key
+                form.save(update_fields=STEP_SAVE_FIELDS)
+                return redirect('employee_form:step', token=token, step_key=next_key)
+        if not confirm_end:
+            form_errors_to_messages(request, step_form)
     else:
         step_form = StepForm(
             step_key=step_key, already_uploaded=uploaded_keys,
@@ -368,6 +396,8 @@ def step(request, token, step_key):
         # not as something already confirmed by the candidate.
         'prefilled_keys': set(prefill),
         'is_final': schema.next_step_key(step_key, answers) is None,
+        'confirm_end': confirm_end,
+        'declined_consent': form.consent_declined,
         'logic_rules': page_rules(_logic_questions(step_key, answers)),
         'logic_context': context_answers(_logic_questions(step_key, answers), answers),
     })
@@ -424,7 +454,11 @@ def done(request, token):
     form = _get_form(token)
     if not form.is_submitted:
         return redirect('employee_form:entry', token=token)
-    return render(request, 'employee_form/done.html', {'form_obj': form})
+    return render(request, 'employee_form/done.html', {
+        'form_obj': form,
+        # The link alone is not proof of identity: no name without the code.
+        'verified': _is_verified(request, form),
+    })
 
 
 # ── Recruiter-facing (portal) ────────────────────────────────────────────

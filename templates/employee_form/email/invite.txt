@@ -1,4 +1,4 @@
-Dear {{ candidate_name|title }},
+{% autoescape off %}Dear {{ candidate_name|title }},
 
 Congratulations — you have been shortlisted for the position of {{ job_title }} at SSL Wireless.
 
@@ -21,3 +21,4 @@ Please note:
 If you did not apply for this position, please ignore this email.
 
 SSL Wireless
+{% endautoescape %}

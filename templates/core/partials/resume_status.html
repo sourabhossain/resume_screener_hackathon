@@ -1,7 +1,7 @@
 <div id="screening-status"
      class="space-y-8"
      aria-live="polite"
-     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.verification_status == 'processing' %}
+     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.screening_status == 'completed' and resume.verification_status == 'processing' %}
      hx-get="{% url 'core:resume_status_fragment' resume.uuid %}"
      hx-trigger="every 3s"
      hx-target="this"
@@ -198,7 +198,7 @@
     </div>
     {% endif %}
 
-    {% if resume.verification_status == 'pending' or resume.verification_status == 'processing' %}
+    {% if resume.screening_status == 'completed' and resume.verification_status == 'pending' or resume.screening_status == 'completed' and resume.verification_status == 'processing' %}
     <div class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 border border-blue-200 dark:border-blue-800 flex items-center gap-3">
         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 shrink-0"></div>
         <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Verifying links...</p>

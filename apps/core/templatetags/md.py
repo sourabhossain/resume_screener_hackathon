@@ -62,17 +62,25 @@ def _plain_to_html(text):
     return result
 
 
-# Neutralise dangerous URL schemes that survive markdown link rendering, e.g.
-# [click](javascript:alert(1)) -> <a href="javascript:alert(1)">. Markdown text
-# is recruiter-authored but shown on PUBLIC careers pages, so it must be XSS-safe.
-_UNSAFE_LINK_RE = re.compile(
-    r'(href|src)\s*=\s*(["\'])\s*(?:javascript|data|vbscript):[^"\']*\2',
-    re.IGNORECASE,
-)
+# Every href/src the renderer produced is checked against an allow-list of
+# schemes. A block-list (javascript:, data:) is not enough: browsers strip
+# leading control characters and whitespace, so "\x01javascript:" still runs.
+# Markdown text is recruiter-authored but shown on PUBLIC careers pages.
+_LINK_ATTR_RE = re.compile(r'(href|src)\s*=\s*(["\'])(.*?)\2', re.IGNORECASE | re.DOTALL)
+_SAFE_LINK_RE = re.compile(r'^(?:https?://|mailto:|#|/(?!/))', re.IGNORECASE)
+_INVISIBLE_RE = re.compile(r'[\x00-\x20\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]')
+
+
+def _safe_link(match) -> str:
+    attr, quote, value = match.groups()
+    cleaned = _INVISIBLE_RE.sub('', value)
+    if not _SAFE_LINK_RE.match(cleaned):
+        cleaned = '#'
+    return f'{attr}={quote}{cleaned}{quote}'
 
 
 def _strip_unsafe_links(html: str) -> str:
-    return _UNSAFE_LINK_RE.sub(r'\1=\2#\2', html)
+    return _LINK_ATTR_RE.sub(_safe_link, html)
 
 
 @register.filter

@@ -95,7 +95,8 @@ class StepForm(AriaInvalidMixin, forms.Form):
 
         if upload:
             try:
-                cleaned[key] = _validate_upload(upload)
+                # A signature is a picture: PDF or image only, never a Word file.
+                cleaned[key] = _validate_upload(upload, 'pdf_image')
             except forms.ValidationError as exc:
                 self.add_error(key, exc)
             return
@@ -115,6 +116,11 @@ class StepForm(AriaInvalidMixin, forms.Form):
         """
         for rule in self.rules:
             if not self._rule_is_active(cleaned, rule):
+                # The description belongs to the "yes" answer. Changed to "none
+                # known", a stale allegation must not stay on the signed record.
+                for key in rule['keys']:
+                    if key in cleaned and key in self.fields:
+                        cleaned[key] = '' if not isinstance(cleaned[key], list) else []
                 continue
             for key in rule['keys']:
                 if key not in self.fields or self.errors.get(key):

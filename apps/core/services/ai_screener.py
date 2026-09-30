@@ -93,6 +93,10 @@ class ResumeScreeningState(TypedDict):
     error: Optional[str]
 
 
+class JobTypeDetectionError(Exception):
+    """The detector could not reach or understand the model, as opposed to being unsure."""
+
+
 def detect_job_type_with_reason(job_description: str) -> tuple[Optional[str], str]:
     """Detect the job family and explain the verdict.
 
@@ -155,14 +159,20 @@ def detect_job_type_with_reason(job_description: str) -> tuple[Optional[str], st
         )
         return job_type, ''
     except Exception as e:
-        logger.info("Job type detection failed (%s). Flagging for manual review", e)
-        return None, f"Automatic job-type detection failed ({e}). Re-run screening to try again."
+        # An error talking to the model is not an unclear job description:
+        # raised so the résumé lands on Screening failed (with bulk re-run)
+        # instead of Needs review, which asks for the description to be edited.
+        logger.warning("Job type detection failed (%s)", e)
+        raise JobTypeDetectionError(f"Automatic job-type detection failed ({e})") from e
 
 
 def detect_job_type(job_description: str) -> Optional[str]:
     """Return a valid job family, or None when uncertain/low-confidence/failed.
     Thin wrapper over detect_job_type_with_reason for callers that only need the label."""
-    return detect_job_type_with_reason(job_description)[0]
+    try:
+        return detect_job_type_with_reason(job_description)[0]
+    except JobTypeDetectionError:
+        return None
 
 
 def extract_node(state: ResumeScreeningState) -> ResumeScreeningState:
@@ -301,6 +311,9 @@ def rank_node(state: ResumeScreeningState) -> ResumeScreeningState:
 
     try:
         config = settings.AI_SCREENING_CONFIG
+        # Rounded as it is stored: a raw 79.6 is saved as 80, and the stored
+        # score re-derives the tier, so the reasoning must be written for 80.
+        state['final_score'] = round(state['final_score'])
         score = state['final_score']
 
         if score >= config['TOP_TIER_THRESHOLD']:
@@ -374,7 +387,11 @@ def screen_resume(
     resolved_job_type = job_type.strip()
     review_reason = ''
     if not resolved_job_type:
-        resolved_job_type, review_reason = detect_job_type_with_reason(job_description)
+        try:
+            resolved_job_type, review_reason = detect_job_type_with_reason(job_description)
+        except JobTypeDetectionError as exc:
+            return {'error': str(exc), 'needs_review': False, 'job_type': '',
+                    'final_score': None, 'tier': '', 'recommendation': '', 'reasoning': ''}
 
     # No confident family -> flag for manual review instead of guessing. The
     # per-candidate reason is carried so it can be stored and shown in the UI.

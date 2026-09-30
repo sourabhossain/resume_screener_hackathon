@@ -111,20 +111,37 @@ def issue_invite(resume, *, user=None, resend=False):
             'so the form invitation could not be sent.'
         )
 
-    if form.is_expired:
+    from apps.core.utils import claim_send, queue_task
+    if resend and form.pk and not claim_send('employee_form', form.pk):
+        raise InviteError('The form was sent a moment ago. Wait a few seconds before sending it again.')
+
+    # An explicit resend gives the full window again, so the email's "works
+    # for N days" is true.
+    if resend or form.is_expired:
         form.renew()
     if user is not None:
         form.invited_by = user
     form.save()
 
-    send_employee_form_invite.delay(form.pk)
+    if not queue_task(send_employee_form_invite, form.pk):
+        EmployeeForm.objects.filter(pk=form.pk).update(
+            last_error='Could not queue the email: the background queue is unavailable.',
+            last_error_at=timezone.now())
+        raise InviteError('The form could not be sent right now because the background '
+                          'queue is unavailable. Try again in a minute.')
     logger.info('employee_form.invite_queued resume=%s form=%s', resume.pk, form.pk)
     return form
 
 
 def issue_otp_only(form) -> None:
-    """Re-send just the code, for the candidate's own "Resend code" action."""
+    """Re-send just the code, for the candidate's own "Resend code" action.
+
+    A session already verified stays verified: anyone holding the link can
+    press Resend, and that must not throw the candidate out mid-form.
+    """
+    verified_at = form.otp_verified_at
     otp = form.issue_otp()
+    form.otp_verified_at = verified_at
     form.save(update_fields=[
         'otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at', 'updated_at',
     ])

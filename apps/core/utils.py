@@ -23,3 +23,27 @@ def compute_file_hash(file) -> str:
         sha256.update(chunk)
     file.seek(0)
     return sha256.hexdigest()
+
+
+def claim_send(kind: str, pk, seconds: int = 15) -> bool:
+    """True for the first send of one invitation within a few seconds, else False.
+
+    A double click on Resend queues two tasks, and the second code invalidates
+    the first before the candidate can use it.
+    """
+    from django.core.cache import cache
+    try:
+        return cache.add(f'send-claim:{kind}:{pk}', 1, seconds)
+    except Exception:
+        return True
+
+
+def queue_task(task, *args) -> bool:
+    """Queue a Celery task; False instead of an exception when the broker is down."""
+    import logging
+    try:
+        task.delay(*args)
+        return True
+    except Exception:
+        logging.getLogger(__name__).exception('queue.failed task=%s args=%s', task.name, args)
+        return False

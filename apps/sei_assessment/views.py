@@ -31,13 +31,15 @@ class InvalidLink(Exception):
 
 def _resolve(token):
     """(invitation, legacy sitting) for an invitation token or a pre-grouping sitting token."""
+    # A deleted candidate's link stops working.
     invitation = AssessmentInvitation.objects.select_related(
-        'resume', 'resume__job').filter(token=token).first()
+        'resume', 'resume__job').filter(token=token, resume__is_deleted=False, resume__job__is_deleted=False).first()
     if invitation is not None:
         return invitation, None
     legacy = SEIAssessment.objects.select_related(
         'invitation', 'invitation__resume', 'invitation__resume__job',
-    ).filter(token=token).first()
+    ).filter(token=token, invitation__resume__is_deleted=False,
+             invitation__resume__job__is_deleted=False).first()
     if legacy is None:
         raise InvalidLink
     return legacy.invitation, legacy
@@ -241,6 +243,9 @@ def verify(request, token):
         elif invitation.otp_is_expired:
             error = 'That code has expired. Use "Send me a new code" below.'
         elif invitation.check_otp(code):
+            # A fresh session id on verification: one fixed before the code was
+            # entered must not inherit access to the assessment.
+            request.session.cycle_key()
             request.session[_session_key(invitation)] = True
             return redirect('sei_assessment:entry', token=invitation.token)
         else:
@@ -256,6 +261,9 @@ def verify(request, token):
 @require_POST
 @ratelimit(key='ip', rate='100/h', method='POST', block=True)
 @ratelimit(key=_rate_key, rate='5/h', method='POST', block=True)
+# And a daily cap: each new code resets the wrong-guess count, so without it
+# resends would multiply the guesses allowed on one link.
+@ratelimit(key=_rate_key, rate='20/d', method='POST', block=True)
 @_candidate_page
 def resend_code(request, token):
     invitation = _get(token)

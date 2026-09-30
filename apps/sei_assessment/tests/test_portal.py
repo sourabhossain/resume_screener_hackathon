@@ -445,7 +445,7 @@ def test_a_submit_the_timer_sent_is_recorded_as_time_expired(client, both):
 def test_the_hr_report_explains_the_category_as_the_recruiter_guide_does(client, django_user_model, both):
     _enter(client, both)
     _begin(client, both, PE)
-    # Worked example on the score sheet: 11 / 12 / 13 reads Low / High / High.
+    # Totals 11 / 12 / 15 read Low / High / High.
     answers = {'1': 2, '4': 2, '7': 3, '10': 2, '13': 2,
                '2': 2, '5': 2, '8': 2, '11': 2, '14': 4,
                '3': 1, '6': 1, '9': 3, '12': 1, '15': 1}
@@ -466,3 +466,83 @@ def test_the_hr_report_explains_the_category_as_the_recruiter_guide_does(client,
     assert html.count('This candidate') == 1
     for name in ('Effective', 'Insensitive', 'Egocentric', 'Dogmatic', 'Task-Obsessed', 'Lonely-Empathic', 'Ineffective'):
         assert name in html
+
+
+# ── found in the full-system review ──────────────────────────────────────
+@pytest.mark.django_db
+def test_asking_for_a_retake_gives_the_full_link_window_again(client, both):
+    from datetime import timedelta
+    from django.utils import timezone
+    _enter(client, both)
+    _begin(client, both, PE)
+    _save(client, both, PE, {'answers': {'1': 1}, 'finish': True})
+    AssessmentInvitation.objects.filter(pk=both.pk).update(
+        token_expires_at=timezone.now() + timedelta(minutes=30))
+
+    services.issue_invite(both.resume, resend=True)
+
+    both.refresh_from_db()
+    assert both.token_expires_at > timezone.now() + timedelta(days=6)
+    assert not _part(both, PE).is_submitted
+
+
+@pytest.mark.django_db
+def test_a_retired_instrument_does_not_crash_the_resend(both):
+    SEIAssessment.objects.filter(invitation=both, instrument=SEI).update(
+        instrument='retired', is_submitted=True)
+
+    services.issue_invite(both.resume, resend=True)
+
+
+@pytest.mark.django_db
+def test_a_part_running_past_the_link_reads_in_progress(client, both):
+    from datetime import timedelta
+    from django.utils import timezone
+    _enter(client, both)
+    _begin(client, both, PE)
+    AssessmentInvitation.objects.filter(pk=both.pk).update(
+        token_expires_at=timezone.now() - timedelta(minutes=1))
+
+    assert _part(both, PE).status_label == 'In progress'
+
+
+@pytest.mark.django_db
+def test_a_new_code_during_the_grace_keeps_the_final_save(client, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+    _move_deadline(both, PE, -2)
+
+    services.resend_code(AssessmentInvitation.objects.get(pk=both.pk))
+    reply = _save(client, both, PE, {'answers': {'1': 3}, 'finish': True}).json()
+
+    assert reply['status'] == 'submitted'
+
+
+@pytest.mark.django_db
+def test_hr_never_reads_in_progress_after_the_clock_and_grace(client, django_user_model, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+    _move_deadline(both, PE, -(SEIAssessment.SAVE_GRACE_SECONDS + 1))
+    django_user_model.objects.create_user(username='portal-hr4', password='p', is_staff=True)
+    hr = type(client)()
+    hr.login(username='portal-hr4', password='p')
+
+    hr.get(reverse('core:resume_detail', kwargs={'uuid': both.resume.uuid}))
+
+    assert _part(both, PE).is_submitted
+
+
+@pytest.mark.django_db
+def test_a_dropped_invalid_paper_does_not_offer_a_retake(client, django_user_model, sample_job, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+    _save(client, both, PE, {'answers': {'1': 1}, 'finish': True})
+    sample_job.assessments = [SEI]
+    sample_job.save(update_fields=['assessments'])
+    django_user_model.objects.create_user(username='portal-hr5', password='p', is_staff=True)
+    hr = type(client)()
+    hr.login(username='portal-hr5', password='p')
+
+    response = hr.get(reverse('core:resume_detail', kwargs={'uuid': both.resume.uuid}))
+
+    assert response.context['sei_needs_retake'] is False

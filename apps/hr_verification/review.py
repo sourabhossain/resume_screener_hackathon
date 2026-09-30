@@ -107,4 +107,30 @@ def build_sections(answers, files_by_key, is_complete):
             'complete': is_complete(step_key),
             'blocks': blocks,
         })
+    legacy = _legacy_rows(answers)
+    if legacy:
+        out.append({'key': 'legacy', 'section': 'Earlier form version',
+                    'title': 'Answers from the earlier form version', 'complete': True,
+                    'blocks': [{'title': '', 'kind': 'rows', 'rows': legacy}]})
     return out
+
+
+def _legacy_rows(answers):
+    """Answers saved by an earlier version of the form, whose questions are gone.
+
+    A signed-off verification is a record: an answer must never vanish from it
+    just because the question was later renamed or removed.
+    """
+    rows = []
+    for key, raw in (answers or {}).items():
+        if key.startswith('_') or key in schema.QUESTIONS_BY_KEY or raw in (None, '', [], {}):
+            continue
+        if isinstance(raw, list):
+            value = ', '.join(str(schema.choice_label(key, v)) for v in raw)
+        elif isinstance(raw, str):
+            value = schema.choice_label(key, raw)
+        else:
+            value = str(raw)
+        rows.append({'key': key, 'label': key.replace('_', ' ').capitalize(),
+                     'value': value, 'files': []})
+    return rows

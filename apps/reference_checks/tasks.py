@@ -37,6 +37,9 @@ def send_reference_check_request(check_id: int) -> str:
     if check.is_submitted:
         logger.info('reference_checks.skipped check=%s (already replied)', check_id)
         return 'already_submitted'
+    if check.resume.is_deleted or check.resume.job.is_deleted:
+        logger.info('reference_checks.skipped check=%s (candidate deleted)', check_id)
+        return 'deleted'
 
     otp = check.issue_otp()
     check.invited_at = timezone.now()

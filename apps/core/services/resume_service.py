@@ -1,3 +1,4 @@
+import os
 import logging
 import re
 from typing import Dict, Any
@@ -12,6 +13,32 @@ from apps.core.exceptions import (
 from apps.core.types import ScreeningResult
 
 logger = logging.getLogger(__name__)
+
+
+def _name_from_filename(file_name: str) -> str:
+    """The placeholder bulk upload derives from a file name (see resume_bulk_create)."""
+    base = os.path.splitext(os.path.basename(file_name or ''))[0]
+    return base.replace('_', ' ').replace('-', ' ').strip()[:255]
+
+
+def _name_is_placeholder(resume) -> bool:
+    """Whether the stored name was guessed rather than typed by a person."""
+    current = (resume.candidate_name or '').strip()
+    return (not current or current.lower() == 'unknown'
+            or current == _name_from_filename(resume.file_name))
+
+
+def _usable_ai_name(raw) -> str:
+    """The model's name for the candidate, cleaned, or '' if it has none."""
+    from apps.core.form_utils import clean_person_text
+    from django import forms as dj_forms
+    name = ' '.join(str(raw or '').split())[:255]
+    if not name or name.lower() in ('unknown', 'n/a', 'none', 'null'):
+        return ''
+    try:
+        return clean_person_text(name) or ''
+    except dj_forms.ValidationError:
+        return ''
 
 
 class ResumeService:
@@ -135,9 +162,12 @@ class ResumeService:
             from apps.core.models import Resume as ResumeModel
             # Persist WHY it was flagged (from the detector) so the recruiter can
             # see the specific reason in the UI, not just a generic message.
+            # The old score and decision go too: a résumé waiting for review
+            # must not keep counting in the talent pool or interview numbers.
             ResumeModel.objects.filter(pk=resume.pk).update(
                 screening_status='needs_review',
                 reasoning=result.get('reasoning', '') or '',
+                final_score=None, tier='', recommendation='',
             )
             return
 
@@ -145,7 +175,9 @@ class ResumeService:
             from apps.core.models import Resume as ResumeModel
             resume = ResumeModel.objects.select_for_update().get(pk=resume.pk)
 
-            resume.candidate_name = result.get('candidate_name', resume.candidate_name)
+            name = _usable_ai_name(result.get('candidate_name'))
+            if name and _name_is_placeholder(resume):
+                resume.candidate_name = name
             # Only fill contact details from the AI result when they are still
             # blank — i.e. neither typed by the user in the form nor recovered by
             # the earlier regex extraction (_fill_contact_info). This prevents AI
@@ -169,6 +201,9 @@ class ResumeService:
             resume.final_score = round(result.get('final_score', 0))
             resume.reasoning = result.get('reasoning', '')
             resume.screening_status = 'completed'
+            # These scores are the model's, not a person's: a fresh screening
+            # replaces any manual edit, so the "manually edited" mark goes too.
+            resume.score_manually_edited = False
             resume.save()
 
         # on_commit defers the task until the outermost transaction commits,

@@ -60,8 +60,9 @@ class Interview(SoftDeleteModel):
         return self.evaluations.filter(is_submitted=False).count()
 
     def avg_score(self):
-        evals = self.evaluations.filter(is_submitted=True)
-        if not evals.exists():
+        # From .all() so a prefetch is used: one query per interview otherwise.
+        evals = [e for e in self.evaluations.all() if e.is_submitted]
+        if not evals:
             return None
         totals = [e.total_score for e in evals if e.total_score is not None]
         return round(sum(totals) / len(totals)) if totals else None

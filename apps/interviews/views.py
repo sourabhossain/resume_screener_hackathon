@@ -111,7 +111,8 @@ def evaluation_renew(request, token):
 
 
 def evaluate(request, token):
-    ev = get_object_or_404(InterviewEvaluation, token=token)
+    # A deleted interview or candidate closes the panel's links with it.
+    ev = get_object_or_404(InterviewEvaluation, token=token, interview__is_deleted=False, interview__resume__is_deleted=False, interview__resume__job__is_deleted=False)
 
     if ev.is_submitted:
         return render(request, 'interviews/already_submitted.html', {'ev': ev})
@@ -159,7 +160,7 @@ def evaluate(request, token):
 
 
 def evaluate_done(request, token):
-    ev = get_object_or_404(InterviewEvaluation, token=token)
+    ev = get_object_or_404(InterviewEvaluation, token=token, interview__is_deleted=False, interview__resume__is_deleted=False, interview__resume__job__is_deleted=False)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
 
 

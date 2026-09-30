@@ -177,6 +177,12 @@
                 {% include 'core/partials/file_dropzone.html' %}
             </div>
 
+            <p class="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                By applying, you agree that SSL Wireless may process the information in your application,
+                including an automated review of your CV, for recruitment purposes only. Questions about your data:
+                <a href="mailto:jobs@sslwireless.com" class="underline">jobs@sslwireless.com</a>.
+            </p>
+
             <button type="submit"
                     :disabled="submitting"
                     :class="{ 'opacity-50 cursor-not-allowed': submitting }"

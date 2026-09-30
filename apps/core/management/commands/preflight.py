@@ -21,6 +21,7 @@ REQUIRED_TASKS = (
     'apps.core.tasks.verify_resume_links_task',
     'apps.core.tasks.draft_job_description_task',
     'apps.core.tasks.close_expired_jobs',
+    'apps.core.tasks.release_stale_screenings',
     'apps.employee_form.tasks.send_employee_form_invite',
     'apps.reference_checks.tasks.send_reference_check_request',
     'apps.sei_assessment.tasks.send_assessment_invite',
@@ -32,6 +33,7 @@ REQUIRED_TASKS = (
 # perfectly healthy while beat is down, and nothing else would say so.
 SCHEDULED_TASKS = (
     'apps.core.tasks.close_expired_jobs',
+    'apps.core.tasks.release_stale_screenings',
     'apps.sei_assessment.tasks.close_expired_sittings',
 )
 
@@ -153,6 +155,19 @@ class Command(BaseCommand):
         else:
             good.append(f'{len(registered)} worker(s), all {len(REQUIRED_TASKS)} '
                         'tasks registered')
+
+        # A task every worker knows still never runs if no worker listens on
+        # the queue it is routed to -- e.g. the notifications worker not started.
+        try:
+            active = celery_app.control.inspect(timeout=5).active_queues() or {}
+        except Exception:
+            active = {}
+        listening = {q.get('name') for queues in active.values() for q in queues}
+        routed = {route.get('queue') for route in (celery_app.conf.task_routes or {}).values()}
+        routed.add(celery_app.conf.task_default_queue)
+        for queue in sorted(q for q in routed - listening if q):
+            bad.append(f'No worker listens on the "{queue}" queue, so its tasks '
+                       'are queued and never run. Start that worker.')
 
     def _check_scheduler(self, good, bad):
         """Celery beat, which nothing else would report as missing.

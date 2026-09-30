@@ -299,8 +299,10 @@ def send_request(check, *, otp: str) -> None:
         'otp_minutes': ReferenceCheck.OTP_VALIDITY_MINUTES,
         'link_days': ReferenceCheck.TOKEN_VALIDITY_DAYS,
     }
-    subject = (f'{schema.KIND_LABELS[check.kind]} request — '
-               f'{candidate_name(check.resume)} ({check.verification_reference_id})')
+    # The name is typed by the candidate, and a newline in a header makes the
+    # mail library refuse the message -- every request would fail to send.
+    subject = ' '.join((f'{schema.KIND_LABELS[check.kind]} request — '
+                        f'{candidate_name(check.resume)} ({check.verification_reference_id})').split())
     message = EmailMultiAlternatives(
         subject=subject,
         body=render_to_string('reference_checks/email/request.txt', context),
@@ -357,6 +359,10 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
     if check and not resend:
         return check
 
+    from apps.core.utils import claim_send, queue_task
+    if check is not None and resend and not claim_send('reference_check', check.pk):
+        raise SendError('This request was sent a moment ago. Wait a few seconds before sending it again.')
+
     if check is None:
         check = ReferenceCheck(resume=resume, source_key=source_key)
 
@@ -367,7 +373,9 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
     check.recipient_name = recipient_name.strip()
     check.recipient_email = recipient_email.strip()
     check.recipient_organisation = recipient_organisation.strip()
-    if check.pk and check.is_expired:
+    # An explicit resend, or a new recipient, gets the full window again, so
+    # the email's "works for N days" is true.
+    if check.pk and (resend or recipient_changed or check.is_expired):
         check.renew()
     if not check.recipient_email:
         raise SendError(
@@ -397,15 +405,26 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
     else:
         check.save()
 
-    send_reference_check_request.delay(check.pk)
+    if not queue_task(send_reference_check_request, check.pk):
+        ReferenceCheck.objects.filter(pk=check.pk).update(
+            last_error='Could not queue the email: the background queue is unavailable.',
+            last_error_at=timezone.now())
+        raise SendError('The request could not be sent right now because the background '
+                        'queue is unavailable. Try again in a minute.')
     logger.info('reference_checks.queued check=%s resume=%s source=%s',
                 check.pk, resume.pk, source_key)
     return check
 
 
 def resend_code(check) -> None:
-    """Re-send just the code, for the respondent's own "Resend" action."""
+    """Re-send just the code, for the respondent's own "Resend" action.
+
+    A session already verified stays verified: anyone holding the link can
+    press Resend, and that must not throw the respondent out mid-form.
+    """
+    verified_at = check.otp_verified_at
     otp = check.issue_otp()
+    check.otp_verified_at = verified_at
     check.save(update_fields=[*ReferenceCheck.OTP_FIELDS, 'updated_at'])
     send_request(check, otp=otp)
 

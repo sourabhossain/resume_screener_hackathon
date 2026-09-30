@@ -125,7 +125,7 @@
                 {% else %}
                 <span class="text-xs font-semibold text-zinc-400">Not saved</span>
                 {% endif %}
-                {% if not verification.is_submitted %}
+                {% if not verification.is_submitted and section.key != 'legacy' %}
                 <a href="{% url 'hr_verification:step' uuid=resume.uuid step_key=section.key %}"
                    class="text-xs font-semibold text-primary-600 hover:underline dark:text-primary-400">Edit</a>
                 {% endif %}

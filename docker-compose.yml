@@ -11,7 +11,7 @@ services:
       - MYSQL_PASSWORD=${DB_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       interval: 10s
@@ -21,7 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6381:6379"
+      - "127.0.0.1:6381:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -41,7 +41,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     depends_on:
@@ -68,6 +68,36 @@ services:
       context: .
       target: app
     command: celery -A config worker -Q screening --concurrency=8 -n screening@%h -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - DEBUG=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    healthcheck:
+      test: ["CMD", "celery", "-A", "config", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Candidate, referee and interviewer emails plus the scheduled sweeps. Kept
+  # off the screening queue so a batch of CVs never delays an invitation.
+  celery-notifications:
+    build:
+      context: .
+      target: app
+    command: celery -A config worker -Q notifications --concurrency=4 -n notifications@%h -l info
     volumes:
       - .:/app
     env_file:
@@ -148,7 +178,7 @@ services:
       PMA_PORT: 3306
       UPLOAD_LIMIT: 64M
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     depends_on:
       db:
         condition: service_healthy

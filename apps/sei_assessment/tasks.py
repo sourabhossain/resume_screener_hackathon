@@ -33,6 +33,9 @@ def send_assessment_invite(invitation_id: int) -> str:
     if invitation.is_complete:
         logger.info('sei.skipped invitation=%s (already completed)', invitation_id)
         return 'already_submitted'
+    if invitation.resume.is_deleted or invitation.resume.job.is_deleted:
+        logger.info('sei.skipped invitation=%s (candidate deleted)', invitation_id)
+        return 'deleted'
 
     otp = issue_fresh_code(invitation)
     invitation.invited_at = timezone.now()

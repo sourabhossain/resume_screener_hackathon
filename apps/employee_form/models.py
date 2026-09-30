@@ -205,6 +205,21 @@ class EmployeeForm(models.Model):
         for upload in self.files.exclude(question_key__in=keep):
             upload.delete()
 
+    def drop_hidden_files(self):
+        """Delete documents whose question is hidden, or off the path, at submission.
+
+        A file is only cleaned up when its own step is saved again; one attached
+        on a step that then failed validation, followed by a submit from a later
+        step, would otherwise reach the recruiter under an answer that no longer
+        asks for it.
+        """
+        from apps.core.form_logic import is_visible
+        answers = self.answers or {}
+        keep = {q['key'] for key in self.review_path for q in schema.get_step(key)['questions']
+                if is_visible(q, answers)}
+        for upload in self.files.exclude(question_key__in=keep):
+            upload.delete()
+
     def previous_step(self, step_key):
         path = self.path
         try:

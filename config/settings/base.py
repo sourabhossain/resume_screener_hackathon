@@ -93,6 +93,9 @@ DATABASES = {
         'OPTIONS': {
             'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            # Encrypt the connection when the database is on another host:
+            # candidate records must not cross the network in the clear.
+            **({'ssl': {'ca': os.environ['DB_SSL_CA']}} if os.environ.get('DB_SSL_CA') else {}),
         },
     }
 }
@@ -211,6 +214,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        # The candidate-facing apps log sends, failures and submissions; they
+        # belong in the same kept file as the rest.
+        **{name: {'handlers': ['console', 'file'], 'level': 'INFO', 'propagate': False}
+           for name in ('apps.employee_form', 'apps.hr_verification', 'apps.candidate_mapping',
+                        'apps.reference_checks', 'apps.sei_assessment', 'config')},
     },
 }
 
@@ -260,7 +268,8 @@ CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localho
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+# Beat's crontabs read in local time, so "00:05" is just after midnight in Dhaka.
+CELERY_TIMEZONE = 'Asia/Dhaka'
 
 
 # Cache — shared Redis (separate DB index from the Celery broker) so that
@@ -293,6 +302,15 @@ CACHES = {
 # blip takes down login / careers-apply / API writes entirely. The trade-off is
 # that rate limiting is disabled only for the duration of a Redis outage.
 RATELIMIT_FAIL_OPEN = True
+
+# Rate limits key on the visitor, not the proxy in front: see config/client_ip.py.
+CLIENT_IP_HEADER = os.environ.get('CLIENT_IP_HEADER', '')
+RATELIMIT_IP_META_KEY = 'config.client_ip.client_ip'
+
+# A signed-in session lasts a working day, not Django's default two weeks: HR
+# accounts open NID scans and police verification, and candidates verify on
+# shared computers.
+SESSION_COOKIE_AGE = int(os.environ.get('SESSION_COOKIE_AGE', 60 * 60 * 10))
 
 
 # OpenAI Configuration

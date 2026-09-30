@@ -24,7 +24,11 @@ if os.environ.get('DEBUG', '').lower() in ('true', '1', 'yes'):
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
+
+# nginx overwrites X-Real-IP with the visitor's address; the app port is bound
+# to localhost (docker-compose.prod.yml), so only nginx can set it.
+CLIENT_IP_HEADER = os.environ.get('CLIENT_IP_HEADER', 'HTTP_X_REAL_IP')
 
 # Django 4.0+ checks the Origin header against this list for CSRF on HTTPS.
 # Must include every public hostname (and port if non-standard) the app serves.

@@ -1,4 +1,4 @@
-Dear {{ recipient_name }},
+{% autoescape off %}Dear {{ recipient_name }},
 
 {{ candidate_name|title }} has applied for the position of {{ job_title }} at
 SSL Wireless and has given us your name as a contact for this
@@ -23,3 +23,4 @@ reply to this email and we will correct our records.
 
 Thank you,
 SSL Wireless HR
+{% endautoescape %}

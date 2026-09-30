@@ -14,11 +14,13 @@ from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
 from django.db.models import Avg, Case, Count, IntegerField, Prefetch, Q, Value, When
 from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 from django.utils.text import slugify
 from zipstream import ZipStream
 from django.db import connection
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
+from config.client_ip import client_ip
 from .models import Job, Resume
 from .services import jd_archetypes
 from .forms import JobForm, ResumeForm, ResumeEditForm
@@ -127,9 +129,13 @@ def dashboard(request):
 def job_list(request):
     from django.core.paginator import Paginator
 
+    # Only what the three preview initials need: the full rows carry the CV's
+    # extracted text, and a busy job has hundreds of them.
     resume_prefetch = Prefetch(
         'resumes',
-        queryset=_ordered_active_resumes_queryset(Resume.all_objects.all()),
+        queryset=_ordered_active_resumes_queryset(Resume.all_objects.all()).only(
+            'id', 'job_id', 'candidate_name', 'recommendation', 'final_score',
+            'created_at', 'is_deleted'),
     )
 
     jobs = Job.objects.annotate(
@@ -364,8 +370,8 @@ def resume_create(request, job_slug):
             resume.screening_status = 'processing'
             resume.save()
 
-            from apps.core.tasks import screen_resume_task
-            screen_resume_task.delay(resume.id)
+            from apps.core.services.screening_queue import queue_screening
+            queue_screening(resume.id)
 
             messages.success(
                 request,
@@ -398,8 +404,13 @@ def _candidate_forms_context(request, resume) -> dict:
 
     # One row per assessment the job asks for, whether or not it has been sent
     # yet, so the recruiter sees the whole set rather than only what exists.
+    from apps.sei_assessment.services import finalise_if_time_is_up
     invitation = getattr(resume, 'assessment_invitation', None)
     sittings = {a.instrument: a for a in resume.sittings.select_related('invitation')}
+    # Close any part whose clock ran out, so HR never reads "In progress" for a
+    # candidate who stopped minutes ago and the sweep has not reached yet.
+    for sitting in sittings.values():
+        finalise_if_time_is_up(sitting)
     job_assessments = [
         {'spec': instruments.get(key), 'sitting': sittings.get(key)}
         for key in instruments.clean_keys(resume.job.assessments)
@@ -447,7 +458,8 @@ def _candidate_forms_context(request, resume) -> dict:
             not (e['sitting'] and e['sitting'].is_valid_result)
             for e in job_assessments if not e.get('dropped')),
         'sei_needs_retake': any(
-            e['sitting'] and e['sitting'].needs_retaking for e in job_assessments),
+            e['sitting'] and e['sitting'].needs_retaking
+            for e in job_assessments if not e.get('dropped')),
     }
 
 
@@ -480,7 +492,21 @@ def resume_edit(request, uuid):
         form = ResumeEditForm(request.POST, request.FILES, instance=resume)
         if form.is_valid():
             changed = {f for f in form.changed_data if f in SCORE_FIELDS}
+            new_file = 'file' in form.changed_data
+            if new_file:
+                file_hash = compute_file_hash(request.FILES['file'])
+                if Resume.objects.filter(job=resume.job, file_hash=file_hash,
+                                         is_deleted=False).exclude(pk=resume.pk).exists():
+                    messages.error(request, 'This resume file has already been submitted for this job.')
+                    return render(request, 'core/resume_edit_form.html', {
+                        'form': form, 'job': resume.job, 'title': 'Edit Resume', 'resume': resume})
             instance = form.save(commit=False)
+            if new_file:
+                # A new CV is a new document: the cached text and hash belong to
+                # the old one, and screening must read the file now attached.
+                instance.file_hash = file_hash
+                instance.raw_text = ''
+                instance.screening_status = 'processing'
             if changed:
                 from django.utils import timezone as tz
                 instance.score_manually_edited = True
@@ -497,7 +523,12 @@ def resume_edit(request, uuid):
                 else:
                     instance.tier, instance.recommendation = 'low', 'reject'
             instance.save()
-            messages.success(request, 'Resume updated successfully!')
+            if new_file:
+                from apps.core.services.screening_queue import queue_screening
+                queue_screening(instance.id)
+                messages.success(request, 'Resume updated. The new file is being screened again.')
+            else:
+                messages.success(request, 'Resume updated successfully!')
             return redirect('core:resume_detail', uuid=uuid)
         else:
             form_errors_to_messages(request, form)
@@ -543,7 +574,7 @@ def serve_protected_media(request, path):
     ):
         raise Http404
 
-    if not os.path.exists(full_path):
+    if not os.path.isfile(full_path):
         raise Http404
     # Inline rendering is opt-in per request and restricted to formats a browser
     # displays without executing anything author-controlled. Images are included
@@ -556,6 +587,8 @@ def serve_protected_media(request, path):
         request.GET.get('inline') == '1'
         and full_path.lower().endswith(INLINE_SAFE_SUFFIXES)
     )
+    # Who opened which document: NID scans and HR evidence need an access trail.
+    logger.info('media.served user=%s path=%s inline=%s', request.user.pk, relative, inline)
     response = FileResponse(open(full_path, 'rb'), as_attachment=not inline)
     # Candidate PII and HR evidence: NID scans, signatures, agency reports. Kept
     # out of shared caches and off disk, so a document does not outlive the
@@ -623,7 +656,7 @@ def resume_bulk_create(request, job_slug):
             messages.error(request, 'Maximum 20 files per upload.')
             return render(request, 'core/resume_bulk_form.html', {'job': job})
 
-        from apps.core.tasks import screen_resume_task
+        from apps.core.services.screening_queue import queue_screening
 
         ALLOWED = {'pdf', 'docx'}
         MAX_SIZE = 5 * 1024 * 1024
@@ -667,7 +700,7 @@ def resume_bulk_create(request, job_slug):
                 screening_status='processing',
             )
             resume.file.save(safe_basename, file, save=True)
-            screen_resume_task.delay(resume.id)
+            queue_screening(resume.id)
             queued += 1
 
         if queued:
@@ -687,7 +720,7 @@ def resume_rescreen(request, uuid):
     if request.method != 'POST':
         return redirect('core:resume_detail', uuid=uuid)
 
-    from apps.core.tasks import screen_resume_task
+    from apps.core.services.screening_queue import queue_screening, stale_filter
 
     # When the button is clicked via HTMX (the app is hx-boosted) we swap the
     # status region in place and DON'T redirect. A redirect back to this same
@@ -699,10 +732,14 @@ def resume_rescreen(request, uuid):
         resume.refresh_from_db()
         return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
 
-    # Atomic update prevents duplicate tasks from concurrent clicks
+    # Atomic update prevents duplicate tasks from concurrent clicks. A row left
+    # 'processing' long after its task should have ended can be claimed too, or
+    # a lost task would lock the candidate out of screening for good.
     updated = Resume.objects.filter(
-        uuid=uuid, screening_status__in=['pending', 'completed', 'failed', 'needs_review']
-    ).update(screening_status='processing')
+        Q(screening_status__in=['completed', 'failed', 'needs_review']) | stale_filter()
+        | Q(screening_status='pending'),
+        uuid=uuid,
+    ).update(screening_status='processing', updated_at=timezone.now())
 
     if not updated:
         if is_htmx:
@@ -711,7 +748,7 @@ def resume_rescreen(request, uuid):
         messages.info(request, 'Screening is already in progress. Please wait for it to complete.')
         return redirect('core:resume_detail', uuid=uuid)
 
-    screen_resume_task.delay(resume.id)
+    queue_screening(resume.id)
 
     if is_htmx:
         return _status_fragment()
@@ -730,7 +767,9 @@ def careers_list(request):
     """
     from django.core.paginator import Paginator
 
-    jobs_qs = Job.objects.filter(status='active').order_by('-created_at')
+    # Past its closing date a job is over even before the nightly task closes it.
+    jobs_qs = Job.objects.filter(status='active').exclude(
+        closing_date__lt=timezone.localdate()).order_by('-created_at')
 
     search_query = request.GET.get('q', '').strip()
     if search_query:
@@ -761,7 +800,8 @@ def careers_list(request):
     return render(request, 'careers/job_list.html', context)
 
 
-@ratelimit(key='ip', rate='10/h', method='POST', block=True)
+@ratelimit(key=lambda group, request: f"{client_ip(request)}:{request.resolver_match.kwargs.get('slug', '')}",
+           rate='20/h', method='POST', block=True)
 def careers_apply(request, slug):
     """Public job detail + resume submission form. Only open jobs accept applications.
 
@@ -844,8 +884,8 @@ def careers_apply(request, slug):
             resume.screening_status = 'processing'
             resume.save()
 
-            from apps.core.tasks import screen_resume_task
-            screen_resume_task.delay(resume.id)
+            from apps.core.services.screening_queue import queue_screening
+            queue_screening(resume.id)
 
             return redirect('core:careers_thanks', slug=job.slug)
         else:
@@ -862,7 +902,8 @@ def careers_apply(request, slug):
 
 def careers_thanks(request, slug):
     """Confirmation shown after a candidate submits an application."""
-    job = get_object_or_404(Job, slug=slug)
+    # Only jobs the public could have applied to: a draft's title stays private.
+    job = get_object_or_404(Job, slug=slug, status__in=('active', 'closed'))
     return render(request, 'careers/thanks.html', {'job': job})
 
 
@@ -913,6 +954,10 @@ def user_change_password(request, pk):
         form = SetPasswordForm(target, request.POST)
         if form.is_valid():
             form.save()
+            if target.pk == request.user.pk:
+                # Changing your own password must not sign you out.
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, target)
             messages.success(request, f'Password for "{target.username}" changed successfully.')
             return redirect('core:user_list')
         else:
@@ -988,6 +1033,7 @@ def resume_status_update(request, uuid):
     invite_note = None
     if new_status == 'shortlisted' and previous_status != 'shortlisted':
         from apps.employee_form.services import InviteError, issue_invite
+        already_invited = bool(getattr(getattr(resume, 'employee_form', None), 'invited_at', None))
         try:
             issue_invite(resume, user=request.user)
         except InviteError as exc:
@@ -997,8 +1043,9 @@ def resume_status_update(request, uuid):
             )
         else:
             invite_note = (
-                'success',
-                f'Information form sent to {resume.email}.',
+                ('info', 'The information form was already sent earlier; it was not sent again.')
+                if already_invited else
+                ('success', f'Information form sent to {resume.email}.')
             )
 
         # Every assessment the job asks for goes out as one email with one link.
@@ -1138,7 +1185,7 @@ def screening_rescreen_bulk(request):
     if request.method != 'POST':
         return redirect('core:screening_failed')
 
-    from apps.core.tasks import screen_resume_task
+    from apps.core.services.screening_queue import queue_screening
 
     scope = request.POST.get('scope', 'selected')
     if scope == 'all':
@@ -1161,13 +1208,18 @@ def screening_rescreen_bulk(request):
         messages.info(request, 'Nothing to re-screen.')
         return redirect('core:screening_failed')
 
-    # Atomically claim only rows still 'failed' so concurrent clicks can't
-    # dispatch the same resume twice.
-    Resume.objects.filter(id__in=ids, screening_status='failed').update(screening_status='processing')
-    for rid in ids:
-        screen_resume_task.delay(rid)
+    # Claimed one row at a time, and only the rows this request claimed are
+    # queued: two clicks at once would otherwise both dispatch every résumé.
+    claimed = [rid for rid in ids if Resume.objects.filter(
+        id=rid, screening_status='failed').update(
+            screening_status='processing', updated_at=timezone.now())]
+    for rid in claimed:
+        queue_screening(rid)
 
-    n = len(ids)
+    n = len(claimed)
+    if not n:
+        messages.info(request, 'Those candidates are already being re-screened.')
+        return redirect('core:screening_failed')
     messages.success(
         request,
         f'AI screening re-queued for {n} candidate{"s" if n != 1 else ""}. Results will appear shortly.',
@@ -1188,6 +1240,13 @@ def job_export_csv(request, slug):
         .order_by('-final_score', '-created_at')
     )
 
+    def cell(value):
+        # A spreadsheet runs a cell that starts with = + - @ as a formula. Names
+        # and contact details come from candidates and the model, so they are
+        # quoted rather than trusted.
+        text = '' if value is None else str(value)
+        return "'" + text if text[:1] in ('=', '+', '-', '@', '\t', '\r') else text
+
     def rows():
         header = [
             'Candidate Name', 'Email', 'Phone', 'Tier', 'AI Recommendation',
@@ -1199,9 +1258,9 @@ def job_export_csv(request, slug):
         yield header
         for r in resumes:
             yield [
-                r.candidate_name,
-                r.email,
-                r.phone,
+                cell(r.candidate_name),
+                cell(r.email),
+                cell(r.phone),
                 r.get_tier_display(),
                 r.get_recommendation_display() if r.recommendation else '',
                 r.get_recruiter_status_display() if r.recruiter_status else '',
@@ -1215,7 +1274,7 @@ def job_export_csv(request, slug):
                 r.verification_score if r.verification_score is not None else '',
                 r.get_screening_status_display(),
                 'Yes' if r.score_manually_edited else 'No',
-                r.created_at.strftime('%Y-%m-%d'),
+                timezone.localtime(r.created_at).strftime('%Y-%m-%d'),
             ]
 
     class Echo:
@@ -1248,6 +1307,7 @@ def download_resumes_zip(request, slug):
     job = get_object_or_404(Job, slug=slug)
 
     filter_type = request.GET.get('filter', 'all')
+    logger.info('media.zip_export user=%s job=%s filter=%s', request.user.pk, job.pk, filter_type)
 
     resumes = (
         Resume.objects

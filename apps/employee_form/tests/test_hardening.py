@@ -634,7 +634,7 @@ def test_declining_consent_ends_the_form_for_hr_review(verified):
     client, form = verified
 
     response = _post(client, form, 'section_a', dict(
-        SECTION_A, verification_consent='no', nid_copy=_pdf('n.pdf')))
+        SECTION_A, verification_consent='no', nid_copy=_pdf('n.pdf'), confirm_end='1'))
 
     assert response.status_code == 302
     form.refresh_from_db()
@@ -690,7 +690,7 @@ def test_declining_consent_later_drops_everything_after_section_a(verified):
     _reach_employment(client, form)
     assert form.files.filter(question_key='bachelors_certificate').exists()
 
-    _post(client, form, 'section_a', dict(SECTION_A, verification_consent='no'))
+    _post(client, form, 'section_a', dict(SECTION_A, verification_consent='no', confirm_end='1'))
 
     form.refresh_from_db()
     assert form.is_submitted and form.consent_declined
@@ -990,3 +990,17 @@ def test_old_answers_stay_readable_for_the_recruiter(verified):
     assert rows['sales_key_accounts']['value'] == 'Two banks'
     assert rows['notice_period_days']['value'] == 30
     assert rows['current_responsibilities']['value'] == 'Dealer network'
+
+
+def test_declining_consent_asks_for_confirmation_before_ending_the_form(verified):
+    """One click on "No" saves the answer and asks; nothing is submitted or deleted yet."""
+    client, form = verified
+
+    response = _post(client, form, 'section_a', dict(
+        SECTION_A, verification_consent='no', nid_copy=_pdf('n.pdf')))
+
+    form.refresh_from_db()
+    assert response.status_code == 200
+    assert not form.is_submitted
+    assert form.answers.get('verification_consent') == 'no'
+    assert 'Yes, end and submit my form' in response.content.decode()

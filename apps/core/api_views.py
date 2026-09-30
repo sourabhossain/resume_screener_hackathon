@@ -97,9 +97,22 @@ class ResumeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        from apps.core.tasks import screen_resume_task
-        resume = serializer.save(screening_status='processing')
-        screen_resume_task.delay(resume.id)
+        import os
+        from rest_framework.exceptions import ValidationError
+        from apps.core.services.screening_queue import queue_screening
+        from apps.core.utils import compute_file_hash
+
+        upload = serializer.validated_data.get('file')
+        extra = {}
+        if upload:
+            file_hash = compute_file_hash(upload)
+            job = serializer.validated_data['job']
+            if Resume.objects.filter(job=job, file_hash=file_hash).exists():
+                raise ValidationError({'file': ['This resume file has already been submitted for this job.']})
+            extra = {'file_hash': file_hash, 'file_name': upload.name[:255],
+                     'file_type': os.path.splitext(upload.name)[1].lstrip('.').lower()}
+        resume = serializer.save(screening_status='processing', **extra)
+        queue_screening(resume.id)
 
     def get_queryset(self):
         queryset = Resume.objects.select_related('job')

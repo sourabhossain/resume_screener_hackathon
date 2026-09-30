@@ -20,15 +20,16 @@ app.conf.task_routes = {
     'apps.core.tasks.screen_resume_task': {'queue': 'screening'},
     'apps.core.tasks.batch_screen_resumes': {'queue': 'screening'},
     'apps.core.tasks.verify_resume_links_task': {'queue': 'verification'},
-    'apps.core.tasks.close_expired_jobs': {'queue': 'screening'},
+    'apps.core.tasks.close_expired_jobs': {'queue': 'notifications'},
+    'apps.core.tasks.release_stale_screenings': {'queue': 'notifications'},
     'apps.core.tasks.draft_job_description_task': {'queue': 'screening'},
-    # Candidate invitation emails: short, I/O-bound, must not queue
-    # behind a batch of LLM screening calls.
-    'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'screening'},
-    'apps.reference_checks.tasks.send_reference_check_request': {'queue': 'screening'},
-    'apps.sei_assessment.tasks.send_assessment_invite': {'queue': 'screening'},
-    'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'screening'},
-    'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'screening'},
+    # Invitation emails and the scheduled sweeps: short and I/O-bound, on their
+    # own queue and worker so a batch of LLM screening calls never delays them.
+    'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'notifications'},
+    'apps.reference_checks.tasks.send_reference_check_request': {'queue': 'notifications'},
+    'apps.sei_assessment.tasks.send_assessment_invite': {'queue': 'notifications'},
+    'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'notifications'},
+    'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'notifications'},
 }
 app.conf.task_default_queue = 'screening'
 
@@ -43,10 +44,16 @@ app.autodiscover_tasks()
 from celery.schedules import crontab  # noqa: E402
 
 app.conf.beat_schedule = {
-    # Every day at 00:05 UTC: flip active jobs past their closing_date to 'closed'.
+    # Every day at 00:05 Dhaka time: flip active jobs past their closing_date to 'closed'.
     'close-expired-jobs-daily': {
         'task': 'apps.core.tasks.close_expired_jobs',
         'schedule': crontab(hour=0, minute=5),
+    },
+    # A résumé whose screening task was lost is failed after 30 minutes so it
+    # appears on the Screening failed page for a re-run.
+    'release-stale-screenings': {
+        'task': 'apps.core.tasks.release_stale_screenings',
+        'schedule': crontab(minute='*/10'),
     },
     # The SEI sitting is fifteen minutes long, so a candidate who closes the tab
     # leaves an open paper. Swept every five minutes rather than daily: HR

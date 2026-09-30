@@ -50,6 +50,11 @@ _login_view = ratelimit(key='post:username', rate='5/m', method='POST', block=Tr
 _login_view = ratelimit(key='ip', rate='10/m', method='POST', block=True)(_login_view)
 _login_view = _auth_cache_required(_login_view)
 
+# The admin has its own login form; without this it takes unlimited guesses.
+admin.site.login = _auth_cache_required(
+    ratelimit(key='ip', rate='10/m', method='POST', block=True)(
+        ratelimit(key='post:username', rate='5/m', method='POST', block=True)(admin.site.login)))
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.core.urls')),

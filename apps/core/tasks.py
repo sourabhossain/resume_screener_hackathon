@@ -120,6 +120,7 @@ def verify_resume_links_task(self, resume_id: int):
 
 @shared_task
 def batch_screen_resumes(job_id: int):
+    from django.utils import timezone
     from apps.core.models import Resume
 
     # skip_locked=True prevents concurrent calls from dispatching the same resumes twice
@@ -135,12 +136,33 @@ def batch_screen_resumes(job_id: int):
         if not resume_ids:
             return {'queued': 0}
 
-        Resume.objects.filter(id__in=resume_ids).update(screening_status='processing')
+        Resume.objects.filter(id__in=resume_ids).update(
+            screening_status='processing', updated_at=timezone.now())
 
+    from apps.core.services.screening_queue import queue_screening
     for resume_id in resume_ids:
-        screen_resume_task.delay(resume_id)
+        queue_screening(resume_id)
 
     return {'queued': len(resume_ids)}
+
+
+@shared_task(ignore_result=True)
+def release_stale_screenings():
+    """Fail résumés whose screening task was lost, so they show up for a re-run.
+
+    A row saved as 'processing' whose message never reached a worker (broker
+    down, worker killed) would otherwise sit in 'processing' for ever, and
+    neither the candidate nor the recruiter could get it screened.
+    """
+    from django.utils import timezone
+    from apps.core.models import Resume
+    from apps.core.services.screening_queue import STALE_REASON, stale_filter
+
+    count = Resume.objects.filter(stale_filter()).update(
+        screening_status='failed', reasoning=STALE_REASON, updated_at=timezone.now())
+    if count:
+        logger.warning('screening.released_stale count=%s', count)
+    return {'released': count}
 
 
 @shared_task(ignore_result=True)

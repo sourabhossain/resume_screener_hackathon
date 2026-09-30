@@ -46,8 +46,11 @@ def issue_fresh_code(invitation) -> str:
     """A new code; keeps the session of a candidate whose clock is running."""
     verified_at = invitation.otp_verified_at
     otp = invitation.issue_otp()
+    # Still running includes the grace for the page's final save: a new code in
+    # those seconds must not lock the candidate out of saving their last answers.
     if verified_at and any(
-            s.has_started and s.is_open for s in invitation.ordered_sittings()):
+            s.has_started and not s.is_submitted and not s.past_grace
+            for s in invitation.ordered_sittings()):
         invitation.otp_verified_at = verified_at
     return otp
 
@@ -133,10 +136,17 @@ def issue_invite(resume, *, user=None, resend=False):
 
     # Created outside the lock: a locking read on a missing row takes a gap lock
     # on MySQL, and two first sends would deadlock on the insert.
-    AssessmentInvitation.objects.get_or_create(resume=resume)
+    invitation_row, _ = AssessmentInvitation.objects.get_or_create(resume=resume)
+    from apps.core.utils import claim_send, queue_task
+    if resend and invitation_row.invited_at and not claim_send('assessment', invitation_row.pk):
+        raise InviteError('The assessment link was sent a moment ago. Wait a few seconds '
+                          'before sending it again.')
     with transaction.atomic():
         invitation = AssessmentInvitation.objects.select_for_update().get(resume=resume)
-        existing = {s.instrument: s for s in invitation.sittings.all()}
+        # Only instruments that still exist: a retired one has no scorer, and
+        # asking it whether it needs a retake would crash the resend.
+        existing = {s.instrument: s for s in invitation.sittings.all()
+                    if s.instrument in instruments.REGISTRY}
         missing = [key for key in keys if key not in existing]
         retakes = [s for s in existing.values()
                    if s.needs_retaking and s.instrument in keys]
@@ -187,12 +197,19 @@ def issue_invite(resume, *, user=None, resend=False):
                 f'{resume.job.title} no longer asks for any assessment that '
                 f'{resume.candidate_name} still has to take.')
 
-        if invitation.is_expired:
+        # An explicit resend is a fresh start: the candidate gets the full
+        # window again, not whatever was left of the old one.
+        if resend or invitation.is_expired:
             invitation.renew()
         invitation.invited_by = user
         invitation.save(update_fields=['token_expires_at', 'invited_by', 'updated_at'])
 
-    send_assessment_invite.delay(invitation.pk)
+    if not queue_task(send_assessment_invite, invitation.pk):
+        AssessmentInvitation.objects.filter(pk=invitation.pk).update(
+            last_error='Could not queue the email: the background queue is unavailable.',
+            last_error_at=timezone.now())
+        raise InviteError('The assessment link could not be sent right now because the '
+                          'background queue is unavailable. Try again in a minute.')
     logger.info('sei.queued invitation=%s resume=%s instruments=%s',
                 invitation.pk, resume.pk, keys)
     return invitation

@@ -1,10 +1,12 @@
 """
 Django REST Framework Serializers for Job and Resume.
 """
+from django import forms as dj_forms
 from rest_framework import serializers
+
+from .forms import FileValidationMixin
 from .models import Job, Resume
 
-_SCORE_FIELD = dict(min_value=0, max_value=100, allow_null=True, required=False)
 
 
 class ResumeSerializer(serializers.ModelSerializer):
@@ -14,11 +16,13 @@ class ResumeSerializer(serializers.ModelSerializer):
     screening_status_display = serializers.CharField(source='get_screening_status_display', read_only=True)
     verification_status_display = serializers.CharField(source='get_verification_status_display', read_only=True)
 
-    experience_score = serializers.FloatField(**_SCORE_FIELD)
-    education_score = serializers.FloatField(**_SCORE_FIELD)
-    skills_score = serializers.FloatField(**_SCORE_FIELD)
-    certification_score = serializers.FloatField(**_SCORE_FIELD)
-    final_score = serializers.FloatField(**_SCORE_FIELD)
+    # Read-only here: scores are the model's, or a person's through the edit
+    # page, which records who changed them. The API has no such audit trail.
+    experience_score = serializers.FloatField(read_only=True)
+    education_score = serializers.FloatField(read_only=True)
+    skills_score = serializers.FloatField(read_only=True)
+    certification_score = serializers.FloatField(read_only=True)
+    final_score = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Resume
@@ -45,6 +49,21 @@ class ResumeSerializer(serializers.ModelSerializer):
             'extracted_links', 'verification_results', 'verification_status',
             'verification_status_display', 'verification_score', 'verified_at',
         ]
+
+
+    def validate_file(self, upload):
+        """The same type, size and content checks as the upload pages."""
+        try:
+            return FileValidationMixin().validate_resume_file(upload)
+        except dj_forms.ValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
+
+    def validate_candidate_name(self, value):
+        from .form_utils import clean_person_text
+        try:
+            return clean_person_text(value, required=True)
+        except dj_forms.ValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
 
 
 class JobListSerializer(serializers.ModelSerializer):

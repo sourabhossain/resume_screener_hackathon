@@ -109,8 +109,10 @@
             view: 'questions',
             fromReview: false,
             bad: false,
-            dirty: false,
+            unsent: {},
+            inflightBatch: {},
             inflight: null,
+            backupKey: 'ap:' + state.saveUrl,
             saving: false,
             saveFailed: false,
             submitFailed: false,
@@ -126,9 +128,13 @@
                 const firstGap = this.items.findIndex((no) => this.answers[no] === undefined);
                 if (firstGap > 0) { this.page = Math.floor(firstGap / this.perPage); }
                 if (firstGap === -1 && this.total) { this.view = 'review'; }
+                this.restoreBackup();
                 this.tick = setInterval(() => this.countDown(), 1000);
                 this.flusher = setInterval(() => this.flush(), 5000);
                 window.addEventListener('pagehide', () => this.flushOnLeave());
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'hidden') { this.flushOnLeave(); }
+                });
                 window.addEventListener('keydown', (event) => this.hotkey(event));
             },
 
@@ -212,27 +218,57 @@
 
             record(no, value) {
                 this.answers[no] = value;
-                this.dirty = true;
+                this.unsent[no] = value;
+                this.backup();
             },
 
-            // Every save carries the whole answer sheet, one request at a time,
-            // so a slow reply can never land after a newer one and undo it.
-            post(body, keepalive) {
+            // Answers not yet confirmed by the server are kept in this tab's
+            // session storage, so a lost session, a crash or a reload does not
+            // cost them: they are merged back and sent when the page returns.
+            backup() {
+                try {
+                    const pending = Object.assign({}, this.inflightBatch, this.unsent);
+                    if (Object.keys(pending).length) {
+                        sessionStorage.setItem(this.backupKey, JSON.stringify(pending));
+                    } else {
+                        sessionStorage.removeItem(this.backupKey);
+                    }
+                } catch (err) {}
+            },
+            restoreBackup() {
+                let saved = {};
+                try { saved = JSON.parse(sessionStorage.getItem(this.backupKey) || '{}'); } catch (err) {}
+                Object.entries(saved).forEach(([no, value]) => {
+                    if (!this.items.includes(Number(no))) { return; }
+                    this.answers[no] = value;
+                    this.unsent[no] = value;
+                    const radio = document.querySelector('input[name="q' + no + '"][value="' + value + '"]');
+                    if (radio) { radio.checked = true; }
+                });
+                if (Object.keys(this.unsent).length) { this.$nextTick(() => this.flush()); }
+            },
+
+            // Only what changed since the last confirmed save, one request at a
+            // time: a second tab left open cannot write its stale copy back
+            // over an answer changed here.
+            post(answers, extra, keepalive) {
                 return fetch(state.saveUrl, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
-                    body: JSON.stringify(Object.assign({answers: Object.assign({}, this.answers)}, body || {})),
+                    body: JSON.stringify(Object.assign({answers: answers}, extra || {})),
                     keepalive: !!keepalive,
                 });
             },
 
             flush() {
-                if (this.inflight || !this.dirty || this.done) { return this.inflight; }
-                this.dirty = false;
+                if (this.inflight || this.done || !Object.keys(this.unsent).length) { return this.inflight; }
+                const batch = this.unsent;
+                this.unsent = {};
+                this.inflightBatch = batch;
                 this.saving = true;
                 this.inflight = (async () => {
                     try {
-                        const r = await this.post();
+                        const r = await this.post(batch);
                         if (r.status === 403) { this.close(); return; }
                         if (!r.ok) { throw new Error('save failed'); }
                         const reply = await r.json();
@@ -242,8 +278,11 @@
                         }
                         if (this.saveFailed) { this.announcement = 'Your answers are saved again.'; }
                         this.saveFailed = false;
+                        this.inflightBatch = {};
+                        this.backup();
                     } catch (err) {
-                        this.dirty = true;
+                        this.unsent = Object.assign({}, batch, this.unsent);
+                        this.inflightBatch = {};
                         if (!this.saveFailed) { this.announcement = 'Could not save. Check your connection.'; }
                         this.saveFailed = true;
                     } finally {
@@ -255,7 +294,10 @@
             },
 
             flushOnLeave() {
-                if (this.dirty && !this.done) { this.post({}, true).catch(() => {}); }
+                const pending = Object.assign({}, this.inflightBatch, this.unsent);
+                if (Object.keys(pending).length && !this.done) {
+                    this.post(pending, {}, true).catch(() => {});
+                }
             },
 
             submit() {
@@ -270,11 +312,17 @@
                 this.done = true;
                 this.busy = true;
                 if (this.inflight) { await this.inflight; }
+                const batch = this.unsent;
                 try {
-                    const r = await this.post({finish: true, timed_out: !!timedOut || this.secondsLeft === 0});
+                    const r = await this.post(batch, {finish: true, timed_out: !!timedOut || this.secondsLeft === 0});
                     if (r.status === 403) { this.close(); return; }
                     const reply = r.ok ? await r.json() : {};
-                    if (reply.status === 'submitted' || reply.status === 'closed') { this.close(); return; }
+                    if (reply.status === 'submitted' || reply.status === 'closed') {
+                        this.unsent = {};
+                        this.backup();
+                        this.close();
+                        return;
+                    }
                     throw new Error('submit failed');
                 } catch (err) {
                     this.done = false;

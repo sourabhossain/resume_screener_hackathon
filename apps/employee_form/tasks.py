@@ -43,13 +43,26 @@ def send_employee_form_invite(form_id: int) -> str:
     if form.is_submitted:
         logger.info('employee_form.invite_skipped form=%s (already submitted)', form_id)
         return 'already_submitted'
+    if form.resume.is_deleted or form.resume.job.is_deleted:
+        logger.info('employee_form.invite_skipped form=%s (candidate deleted)', form_id)
+        return 'deleted'
 
     otp = form.issue_otp()
     form.invited_at = timezone.now()
     form.invite_count = (form.invite_count or 0) + 1
     form.last_error = ''
     form.last_error_at = None
-    form.save()
+    # Only the invitation's own fields, and never onto a submitted form: a full
+    # save here would write back the answers loaded above over a submission
+    # the candidate made while the code was being hashed.
+    fields = ['otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at',
+              'invited_at', 'invite_count', 'last_error', 'last_error_at', 'updated_at']
+    form.updated_at = timezone.now()
+    written = EmployeeForm.objects.filter(pk=form.pk, is_submitted=False).update(
+        **{name: getattr(form, name) for name in fields})
+    if not written:
+        logger.info('employee_form.invite_skipped form=%s (submitted meanwhile)', form_id)
+        return 'already_submitted'
 
     try:
         send_invite(form, otp=otp)
