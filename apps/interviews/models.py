@@ -34,7 +34,8 @@ MAX_SCORE = len(CRITERIA_KEYS) * 5  # 100
 
 class Interview(SoftDeleteModel):
     PHASE_CHOICES = [('1', 'Interview 1'), ('2', 'Interview 2'), ('3', 'Interview 3')]
-    STATUS_CHOICES = [('scheduled', 'Scheduled'), ('completed', 'Completed'), ('cancelled', 'Cancelled')]
+    SCHEDULED, COMPLETED, CANCELLED = 'scheduled', 'completed', 'cancelled'
+    STATUS_CHOICES = [(SCHEDULED, 'Scheduled'), (COMPLETED, 'Completed'), (CANCELLED, 'Cancelled')]
 
     resume = models.ForeignKey(
         'core.Resume', on_delete=models.CASCADE, related_name='interviews'
@@ -58,6 +59,17 @@ class Interview(SoftDeleteModel):
     @property
     def pending_count(self):
         return self.evaluations.filter(is_submitted=False).count()
+
+    def complete_if_all_submitted(self) -> bool:
+        """Mark a scheduled interview completed once every evaluator has submitted."""
+        if self.status != self.SCHEDULED:
+            return False
+        evaluations = list(self.evaluations.all())
+        if evaluations and all(e.is_submitted for e in evaluations):
+            Interview.objects.filter(pk=self.pk, status=self.SCHEDULED).update(status=self.COMPLETED)
+            self.status = self.COMPLETED
+            return True
+        return False
 
     def avg_score(self):
         # From .all() so a prefetch is used: one query per interview otherwise.

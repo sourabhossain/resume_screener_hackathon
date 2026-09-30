@@ -1,5 +1,6 @@
 import uuid
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.contrib import messages
@@ -29,7 +30,7 @@ def interview_create(request, resume_uuid):
             prior_phase = required_prior.get(phase)
             if prior_phase and not Interview.objects.filter(
                 resume=resume, phase=prior_phase, is_deleted=False
-            ).exists():
+            ).exclude(status=Interview.CANCELLED).exists():
                 phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
                 form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
             else:
@@ -51,6 +52,9 @@ def interview_detail(request, pk):
         return redirect('core:dashboard')
     add_form = InterviewerAddForm(request.POST or None)
 
+    if request.method == 'POST' and interview.status == Interview.CANCELLED:
+        messages.error(request, 'This interview is cancelled. Reopen it before adding an evaluator.')
+        return redirect('interviews:detail', pk=pk)
     if request.method == 'POST' and add_form.is_valid():
         ev = add_form.save(commit=False)
         ev.interview = interview
@@ -83,6 +87,32 @@ def interview_delete(request, pk):
 
 
 @login_required
+@require_POST
+def interview_status(request, pk):
+    """Cancel, complete or reopen an interview."""
+    interview = get_object_or_404(Interview, pk=pk)
+    if not _can_access_interview(request.user, interview):
+        messages.error(request, 'You do not have permission to change this interview.')
+        return redirect('core:dashboard')
+    action = request.POST.get('action')
+    target = {'cancel': Interview.CANCELLED, 'complete': Interview.COMPLETED,
+              'reopen': Interview.SCHEDULED}.get(action)
+    if target is None:
+        messages.error(request, 'Unknown action.')
+    elif target == interview.status:
+        messages.info(request, f'The interview is already {interview.get_status_display().lower()}.')
+    else:
+        interview.status = target
+        interview.save(update_fields=['status'])
+        messages.success(request, {
+            Interview.CANCELLED: 'Interview cancelled. Evaluation links that were not used no longer work.',
+            Interview.COMPLETED: 'Interview marked as completed.',
+            Interview.SCHEDULED: 'Interview reopened.',
+        }[target])
+    return redirect('interviews:detail', pk=pk)
+
+
+@login_required
 def evaluation_delete(request, token):
     ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview__resume__job__owner'), token=token)
     if not _can_access_interview(request.user, ev.interview):
@@ -102,6 +132,9 @@ def evaluation_renew(request, token):
     if not _can_access_interview(request.user, ev.interview):
         messages.error(request, 'You do not have permission to renew this evaluation link.')
         return redirect('core:dashboard')
+    if request.method == 'POST' and ev.interview.status == Interview.CANCELLED:
+        messages.error(request, 'This interview is cancelled. Reopen it before renewing a link.')
+        return redirect('interviews:detail', pk=ev.interview_id)
     if request.method == 'POST' and not ev.is_submitted:
         ev.token = uuid.uuid4()
         ev.token_expires_at = timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS)
@@ -116,6 +149,10 @@ def evaluate(request, token):
 
     if ev.is_submitted:
         return render(request, 'interviews/already_submitted.html', {'ev': ev})
+
+    # A cancelled interview needs no scores: its open links stop working.
+    if ev.interview.status == Interview.CANCELLED:
+        return render(request, 'interviews/cancelled.html', {'ev': ev})
 
     if ev.is_expired:
         return render(request, 'interviews/expired.html', {'ev': ev})
@@ -146,6 +183,7 @@ def evaluate(request, token):
             ev.is_submitted = True
             ev.submitted_at = timezone.now()
             ev.save()
+            ev.interview.complete_if_all_submitted()
 
             return redirect('interviews:evaluate_done', token=token)
         else:
@@ -174,6 +212,7 @@ def rank_report(request, job_slug):
         Interview.objects
         .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,
                 evaluations__is_submitted=True)
+        .exclude(status=Interview.CANCELLED)
         .prefetch_related('evaluations', 'resume')
         .select_related('resume')
         .distinct()
@@ -246,6 +285,7 @@ def rank_report(request, job_slug):
         Interview.objects
         .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,
                 evaluations__is_submitted=True)
+        .exclude(status=Interview.CANCELLED)
         .values_list('phase', flat=True)
         .distinct()
         .order_by('phase')

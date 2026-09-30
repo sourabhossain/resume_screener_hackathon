@@ -204,7 +204,7 @@ def _reference(index):
         f'reference_{index}_designation': 'CTO, Acme',
         f'reference_{index}_relationship': 'direct_manager',
         f'reference_{index}_contact': '+8801711000000',
-        f'reference_{index}_email': 'karim@acme.com',
+        f'reference_{index}_email': f'referee{index}@acme.com',
         f'reference_{index}_contact_permission': 'yes',
     }
 
@@ -954,9 +954,23 @@ def test_a_candidate_serving_notice_may_give_a_future_end_date(verified):
     client, form = verified
     _reach_employment(client, form)
 
-    response = _post(client, form, 'employment', {**EMPLOYER_1, 'employer_1_end_date': '2099-01-31'})
+    from datetime import timedelta
+    from django.utils import timezone
+    notice_ends = (timezone.localdate() + timedelta(days=60)).isoformat()
+
+    response = _post(client, form, 'employment', {**EMPLOYER_1, 'employer_1_end_date': notice_ends})
 
     assert response.status_code == 302
+
+
+def test_a_current_end_date_years_ahead_is_taken_for_a_typo(verified):
+    client, form = verified
+    _reach_employment(client, form)
+
+    response = _post(client, form, 'employment', {**EMPLOYER_1, 'employer_1_end_date': '2099-01-31'})
+
+    assert response.status_code == 200
+    assert 'more than a year ahead' in response.content.decode()
 
 
 def test_a_past_employer_end_date_cannot_be_in_the_future(verified):

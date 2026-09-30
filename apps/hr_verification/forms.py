@@ -34,6 +34,24 @@ DATE_RANGE_PAIRS = (
     ('offer_letter_issue_date', 'offer_acceptance_date'),
 )
 
+# Pairs whose two dates sit in different sections, so one side is read from
+# the answers already saved (the form's context).
+CROSS_SECTION_DATE_PAIRS = (
+    ('verification_start_date', 'verification_completion_date',
+     'The completion date cannot be before the verification start date.',
+     'The start date cannot be after the verification completion date.'),
+)
+
+
+def _as_date(value):
+    import datetime
+    if isinstance(value, datetime.date):
+        return value
+    try:
+        return datetime.date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
 
 class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
     """The questions of one section; `context` = stored answers of the other sections."""
@@ -96,6 +114,17 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
             end = cleaned.get(end_key)
             if start and end and end < start and not self.errors.get(end_key):
                 self.add_error(end_key, 'This date cannot be before the start date.')
+
+        for start_key, end_key, end_message, start_message in CROSS_SECTION_DATE_PAIRS:
+            on_page = start_key in self.fields, end_key in self.fields
+            if not any(on_page):
+                continue
+            start = cleaned.get(start_key) if on_page[0] else _as_date(self.logic_context.get(start_key))
+            end = cleaned.get(end_key) if on_page[1] else _as_date(self.logic_context.get(end_key))
+            if start and end and end < start:
+                key, message = (end_key, end_message) if on_page[1] else (start_key, start_message)
+                if not self.errors.get(key):
+                    self.add_error(key, message)
         return cleaned
 
     def field_groups(self):

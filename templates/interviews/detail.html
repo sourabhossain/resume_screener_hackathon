@@ -21,6 +21,7 @@
                 </p>
 
                 <div class="mt-3 flex flex-wrap gap-2">
+                    {% include 'interviews/partials/status_chip.html' with iv=interview %}
                     <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                         {{ interview.submitted_count }} submitted
@@ -55,6 +56,36 @@
                 {% endif %}
             </div>
 
+            <div class="flex flex-wrap items-start gap-2">
+            {% if interview.status == 'scheduled' %}
+            <form method="post" action="{% url 'interviews:status' interview.pk %}" hx-boost="false">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="complete">
+                <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Mark completed
+                </button>
+            </form>
+            <form method="post" action="{% url 'interviews:status' interview.pk %}"
+                  hx-boost="false"
+                  data-confirm
+                  data-confirm-title="Cancel this interview?"
+                  data-confirm-text="Evaluation links that have not been used will stop working. Submitted evaluations are kept, and you can reopen the interview later."
+                  data-confirm-button="Cancel interview">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="cancel">
+                <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Cancel interview
+                </button>
+            </form>
+            {% else %}
+            <form method="post" action="{% url 'interviews:status' interview.pk %}" hx-boost="false">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reopen">
+                <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Reopen interview
+                </button>
+            </form>
+            {% endif %}
             <form method="post" action="{% url 'interviews:delete' interview.pk %}"
                   hx-boost="false"
                   data-confirm
@@ -67,6 +98,7 @@
                     Delete Interview
                 </button>
             </form>
+            </div>
         </div>
     </div>
 

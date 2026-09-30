@@ -269,6 +269,7 @@ def step(request, token, step_key):
             request.POST, request.FILES,
             step_key=step_key, already_uploaded=uploaded_keys,
             initial={**prefill, **answers}, context=answers,
+            own_emails=(form.resume.email, answers.get('personal_email')),
         )
         valid = step_form.is_valid()
 

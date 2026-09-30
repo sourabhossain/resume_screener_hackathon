@@ -84,6 +84,21 @@ DATE_RANGE_PAIRS = tuple(
     for i in range(1, schema.EMPLOYER_MAX + 1)
 )
 
+# Addresses the recruiter will contact about the candidate. They must reach
+# someone else: an employer's HR office or a referee, never the candidate.
+REFEREE_EMAIL_KEYS = (
+    *(f'employer_{i}_hr_email' for i in range(1, schema.EMPLOYER_MAX + 1)),
+    'reference_1_email', 'reference_2_email',
+)
+
+# Dates that are still to come: joining, and the last day of a notice being
+# served. A past value is a typo or a stale answer from an earlier visit.
+NOT_PAST_DATE_KEYS = frozenset({'earliest_joining_date', 'last_working_day'})
+
+# The current employer's end date may lie ahead (a notice being served), but
+# not by more than this: further out it is a mistyped year.
+MAX_DAYS_AHEAD = {'employer_1_end_date': 366}
+
 
 def _validate_upload(upload, formats=None):
     """Size, extension and magic-byte checks for one uploaded document."""
@@ -243,8 +258,15 @@ def build_field(question):
             **common, max_length=32, widget=forms.TextInput(attrs=styled),
         )
     if qtype == schema.DATE:
+        # The picker itself stops a date on the wrong side of today; the server
+        # check in StepForm.clean is the rule.
+        limits = {}
+        if question['key'] in NOT_PAST_DATE_KEYS:
+            limits['min'] = timezone.localdate().isoformat()
+        elif question['key'] in NOT_FUTURE_DATE_KEYS:
+            limits['max'] = timezone.localdate().isoformat()
         return forms.DateField(
-            **common, widget=forms.DateInput(attrs={**styled, 'type': 'date'}),
+            **common, widget=forms.DateInput(attrs={**styled, 'type': 'date', **limits}),
         )
     if qtype == schema.RADIO:
         return forms.ChoiceField(
@@ -307,9 +329,12 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
     candidate revisits the step via Back.
     """
 
-    def __init__(self, *args, step_key=None, already_uploaded=(), context=None, **kwargs):
+    def __init__(self, *args, step_key=None, already_uploaded=(), context=None,
+                 own_emails=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.logic_context = context or {}
+        # The candidate's own addresses, which no referee address may repeat.
+        self.own_emails = {e.strip().lower() for e in own_emails if e and e.strip()}
         self.step_key = step_key
         self.step = schema.get_step(step_key)
         self.already_uploaded = set(already_uploaded)
@@ -372,8 +397,13 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
                 continue
 
             if question['type'] == schema.DATE:
-                if value and key in NOT_FUTURE_DATE_KEYS and value > timezone.localdate():
+                today = timezone.localdate()
+                if value and key in NOT_FUTURE_DATE_KEYS and value > today:
                     self.add_error(key, 'This date cannot be in the future.')
+                elif value and key in NOT_PAST_DATE_KEYS and value < today:
+                    self.add_error(key, 'This date cannot be in the past.')
+                elif value and key in MAX_DAYS_AHEAD and (value - today).days > MAX_DAYS_AHEAD[key]:
+                    self.add_error(key, 'This date is more than a year ahead. Please check the year.')
                 continue
 
             if question['type'] == schema.TEXT:
@@ -392,6 +422,34 @@ class StepForm(ConditionalFormMixin, AriaInvalidMixin, forms.Form):
             end = cleaned.get(end_key)
             if start and end and end < start:
                 self.add_error(end_key, 'The end date cannot be before the start date.')
+
+        # A referee or employer HR address that is the candidate's own would send
+        # the verification to the person being verified.
+        own = set(self.own_emails)
+        if cleaned.get('personal_email'):
+            own.add(str(cleaned['personal_email']).strip().lower())
+        for key in REFEREE_EMAIL_KEYS:
+            value = (cleaned.get(key) or '').strip().lower()
+            if value and value in own and not self.errors.get(key):
+                self.add_error(key, 'This is your own email address. Enter the official '
+                                    'address of the person or office to contact.')
+        # The two references are on separate pages, so the other one is read
+        # from what was saved before.
+        def reference_email(key):
+            value = cleaned.get(key) if key in self.fields else self.logic_context.get(key)
+            return (value or '').strip().lower()
+        first, second = reference_email('reference_1_email'), reference_email('reference_2_email')
+        if first and first == second:
+            key = 'reference_2_email' if 'reference_2_email' in self.fields else 'reference_1_email'
+            if key in self.fields and not self.errors.get(key):
+                self.add_error(key, 'Reference 1 and Reference 2 must be different people.')
+
+        # Nobody can join before they have left their current employer.
+        last_day = cleaned.get('last_working_day')
+        joining = cleaned.get('earliest_joining_date')
+        if last_day and joining and joining < last_day and not self.errors.get('earliest_joining_date'):
+            self.add_error('earliest_joining_date',
+                           'The joining date cannot be before your last working day.')
 
         self.apply_logic(cleaned)
         self._mirror_permanent_address(cleaned)

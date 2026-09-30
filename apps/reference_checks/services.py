@@ -353,6 +353,15 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
             'contacted, so no request can be sent.'
         )
 
+    # The request must reach someone other than the person being verified.
+    form = getattr(resume, 'employee_form', None)
+    own = {(e or '').strip().lower() for e in (
+        resume.email, (form.answers or {}).get('personal_email') if form else '')} - {''}
+    if (recipient_email or '').strip().lower() in own:
+        raise SendError(
+            f'That address belongs to {resume.candidate_name}. A verification request '
+            'must go to the employer or referee, not the candidate.')
+
     check = resume.reference_checks.filter(source_key=source_key).first()
     if check and check.is_submitted:
         raise SendError(f'{contact["title"]} has already replied.')

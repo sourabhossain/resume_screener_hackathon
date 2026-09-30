@@ -131,7 +131,7 @@
                     <svg class="h-4 w-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 </div>
                 <div>
-                    <p class="font-semibold text-zinc-900 dark:text-white">{{ iv.get_phase_display }}</p>
+                    <p class="flex items-center gap-2 font-semibold text-zinc-900 dark:text-white">{{ iv.get_phase_display }}{% if iv.status != 'scheduled' %} {% include 'interviews/partials/status_chip.html' %}{% endif %}</p>
                     <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.scheduled_date|date:"F j, Y" }}</p>
                 </div>
             </div>
