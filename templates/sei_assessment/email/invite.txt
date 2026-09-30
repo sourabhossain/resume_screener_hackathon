@@ -1,42 +1,44 @@
 Dear {{ candidate_name|title }},
 
 Thank you for your application for the position of {{ job_title }} at SSL
-Wireless. As the next step we would like you to complete {% if part_count > 1 %}{{ part_count }} short
-assessments, about {{ total_minutes }} minutes in total:
+Wireless. As the next step we would like you to complete {% if part_count > 1 %}a short
+assessment in {{ part_count }} parts, {{ total_minutes }} minutes of answering in total:
 {% for part in parts %}
-  {{ part.number }}. {{ part.spec.label }} — {{ part.question_count }} statements, {{ part.minutes }} minutes{% endfor %}
+  Part {{ part.number }} — {{ part.question_count }} {{ part.noun_plural }}, {{ part.minutes }} minutes{% endfor %}
 
-They open one at a time, in this order: when you submit one, the next becomes
-available on the same page. You can take a break between them.
+The parts open one at a time, in this order: when you submit one, the next
+becomes available on the same page. You can take a short break between them.
+{% elif multi %}the remaining
+part of your assessment: {{ parts.0.question_count }} {{ parts.0.noun_plural }}, {{ parts.0.minutes }} minutes once you begin.
 {% else %}a short
-assessment: {{ parts.0.spec.label }} — {{ parts.0.question_count }} statements,
-{{ parts.0.minutes }} minutes once you begin.
+assessment: {{ parts.0.question_count }} {{ parts.0.noun_plural }}, {{ parts.0.minutes }} minutes once you begin.
 {% endif %}{% if completed %}
-You have already completed {% for spec in completed %}{{ spec.label }}{% if not forloop.last %}, {% endif %}{% endfor %}, so {% if completed|length > 1 %}they are{% else %}it is{% endif %} not asked again.
+You have already completed {% for number in completed %}Part {{ number }}{% if not forloop.last %}, {% endif %}{% endfor %}, so {% if completed|length > 1 %}they are{% else %}it is{% endif %} not asked again.
 {% endif %}
-{% if part_count > 1 %}Open your assessments:{% else %}Open the {{ parts.0.spec.label }} assessment:{% endif %}
+Open your assessment:
 {{ assessment_url }}
 
 Your verification code is: {{ otp }}
 The code is valid for {{ otp_minutes }} minutes. If it expires you can request a
-new one from the same page. The link itself works for {{ link_days }} days{% if part_count > 1 %} and
-covers every assessment{% endif %}.
+new one from the same page. The link works until {{ deadline|date:"j F Y" }}{% if part_count > 1 %} and
+covers every part{% endif %}.
 
 Before you begin, please note:
 
-- The timer starts when you open the questions, not now.{% if part_count > 1 %} Each assessment
+- The timer starts when you open the questions, not now.{% if part_count > 1 %} Each part
   has its own timer that starts only when you begin it.{% endif %} Choose a moment
   when you will not be interrupted.
-- Once you begin, the time cannot be paused. When it is up the assessment
-  closes and whatever you have answered is submitted.
+- Once you begin, the time cannot be paused. When it is up that part closes
+  and whatever you have answered is submitted.
 - Please respond based on your first and most natural reaction. Do not
   overthink the statements. There are no right or wrong answers.
-{% for part in parts %}- {% if part_count > 1 %}{{ part.spec.label }}: {% endif %}{% if part.all_required %}every one of the {{ part.question_count }} statements has to be
+{% for part in parts %}- {% if part_count > 1 %}Part {{ part.number }}: {% endif %}{% if part.all_required %}{% if part_count > 1 %}every{% else %}Every{% endif %} one of the {{ part.question_count }} {{ part.noun_plural }} has to be
   answered. A paper with any left blank cannot be scored and would have to be
-  taken again.{% else %}try to answer every statement. A paper with fewer than
+  taken again.{% else %}{% if part_count > 1 %}try{% else %}Try{% endif %} to answer every statement. A paper with fewer than
   {{ part.minimum }} of {{ part.question_count }} answered cannot be scored and would have to be taken again.{% endif %}
 {% endfor %}
 Your answers are confidential and are used only for this recruitment decision.
+Need help? Write to jobs@sslwireless.com.
 
 Thank you,
 SSL Wireless HR

@@ -77,8 +77,9 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         choices=sei_instruments.choices,
         widget=forms.CheckboxSelectMultiple,
         label='Assessments',
-        help_text='Emailed to a candidate when they are shortlisted, one '
-                  'message each. Leave both clear to send none.',
+        help_text='Emailed to a candidate when they are shortlisted, as one '
+                  'link; the parts open one after another. Leave both clear '
+                  'to send none.',
     )
 
     class Meta:

@@ -1,211 +1,137 @@
-{% extends 'base.html' %}
+{% extends 'sei_assessment/portal.html' %}
 
-{% block title %}Your assessment · SSL Wireless{% endblock %}
-{% block recruiter_nav %}{% endblock %}
-{% block recruiter_logout %}{% endblock %}
-{% block mobile_recruiter_nav %}{% endblock %}
-{% block nav_action %}{% endblock %}
+{% block portal_attrs %}style="{{ spec.accent_style }}"{% endblock %}
 
-{% block content %}
-<style>
-    .lb {
-        --line: #e4e4e7;
-        --ink: #18181b;
-        --ink-2: #52525b;
-        --ink-3: #8b8f98;
-        --paper: #ffffff;
-        --accent: #185FA5;
-        --accent-deep: #042C53;
-        --wash: #E6F1FB;
-        --done: #1D9E75;
-        --done-wash: #E3F5EE;
-        --btn-ink: #ffffff;
-        max-width: 40rem; margin: 0 auto;
-    }
-    html.dark .lb {
-        --line: #2f3238;
-        --ink: #f4f4f5;
-        --ink-2: #a1a1aa;
-        --ink-3: #71757e;
-        --paper: #18181b;
-        --accent: #6fa8e6;
-        --accent-deep: #cfe2f7;
-        --wash: #16283c;
-        --done: #35b98d;
-        --done-wash: #12291f;
-        --btn-ink: #0a2238;
-    }
+{% block portal %}
+<form method="post" action="{% url 'sei_assessment:begin_part' token=invitation.token part=current.token %}"
+      hx-boost="false" novalidate
+      x-data="apLobby('{% if mode == 'transition' %}transition{% elif consent_error %}rules{% else %}welcome{% endif %}', {{ needs_consent|yesno:'true,false' }}, {{ consent_error|yesno:'true,false' }})"
+      @submit="if (!ready()) { $event.preventDefault(); } else { busy = true; }">
+    {% csrf_token %}
 
-    .lb-flash {
-        display: flex; gap: .65rem; align-items: flex-start;
-        padding: .85rem 1rem; border-radius: .75rem; margin-bottom: 1rem;
-        background: var(--done-wash); color: var(--ink); font-size: .875rem; line-height: 1.55;
-    }
-    .lb-flash svg { flex: none; width: 1.15rem; height: 1.15rem; color: var(--done); margin-top: .1rem; }
-    .lb-flash b { font-weight: 600; }
+    <div class="ap-body" tabindex="-1" x-ref="body">
+        <noscript>
+            <p class="ap-alert is-bad"><b>JavaScript is switched off</b>This assessment needs JavaScript to save your answers. Turn it on and reload this page, or open the link in a different browser.</p>
+        </noscript>
 
-    .lb-hero { background: var(--wash); border-radius: .75rem; padding: 1.35rem 1.35rem 1.2rem; }
-    .lb-hero .eyebrow {
-        margin: 0 0 .35rem; font-size: .6875rem; letter-spacing: .08em;
-        text-transform: uppercase; color: var(--accent);
-    }
-    .lb-hero h1 {
-        margin: 0; font-size: clamp(1.15rem, 3.4vw, 1.45rem); font-weight: 600;
-        line-height: 1.25; letter-spacing: -.01em; color: var(--accent-deep);
-    }
-    .lb-hero p { margin: .45rem 0 0; font-size: .875rem; line-height: 1.55; color: var(--accent-deep); opacity: .88; }
-
-    .lb-steps { list-style: none; margin: 1rem 0 0; padding: 0; }
-    .lb-step {
-        position: relative; display: flex; align-items: center; gap: .85rem;
-        padding: .85rem 1rem; border: 1px solid var(--line); border-radius: .6rem;
-        background: var(--paper);
-    }
-    .lb-step + .lb-step { margin-top: .6rem; }
-    .lb-step + .lb-step::before {
-        content: ''; position: absolute; left: 1.95rem; top: -.65rem;
-        width: 2px; height: .6rem; background: var(--line);
-    }
-    .lb-dot {
-        flex: none; width: 2rem; height: 2rem; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums;
-        border: 1.5px solid var(--line); color: var(--ink-3); background: var(--paper);
-    }
-    .lb-dot svg { width: .95rem; height: .95rem; }
-    .lb-body { min-width: 0; flex: 1; }
-    .lb-title { margin: 0; font-size: .9375rem; font-weight: 600; color: var(--ink); }
-    .lb-meta { margin: .1rem 0 0; font-size: .75rem; color: var(--ink-3); }
-    .lb-tag {
-        flex: none; font-size: .6875rem; font-weight: 600; letter-spacing: .02em;
-        padding: .2rem .55rem; border-radius: 999px; color: var(--ink-3); background: transparent;
-    }
-
-    .lb-step.is-done .lb-dot { border-color: var(--done); background: var(--done); color: #fff; }
-    .lb-step.is-done .lb-tag { color: var(--done); background: var(--done-wash); }
-    .lb-step.is-current { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
-    .lb-step.is-current .lb-dot { border-color: var(--accent); background: var(--accent); color: var(--btn-ink); }
-    .lb-step.is-current .lb-tag { color: var(--accent); background: var(--wash); }
-    .lb-step.is-locked .lb-title { color: var(--ink-2); }
-
-    .lb-card {
-        margin-top: 1rem; padding: 1.2rem 1.25rem; border: 1px solid var(--line);
-        border-radius: .75rem; background: var(--paper);
-    }
-    .lb-card h2 { margin: 0 0 .65rem; font-size: .9375rem; font-weight: 600; color: var(--ink); }
-    .lb-card ul { margin: 0; padding-left: 1.1rem; list-style: disc; }
-    .lb-card li { font-size: .875rem; line-height: 1.6; color: var(--ink-2); }
-    .lb-card li + li { margin-top: .35rem; }
-    .lb-card li b { color: var(--ink); font-weight: 600; }
-
-    .lb-go { margin-top: 1.25rem; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; }
-    .lb-btn {
-        display: inline-flex; align-items: center; gap: .5rem;
-        padding: .7rem 1.25rem; border-radius: .6rem; font-size: .9375rem; font-weight: 600;
-        background: var(--accent); color: var(--btn-ink); text-decoration: none;
-        border: 0; cursor: pointer; font-family: inherit;
-    }
-    .lb-btn:hover { filter: brightness(1.06); }
-    .lb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-    .lb-btn[aria-disabled="true"] { opacity: .6; pointer-events: none; }
-    .lb-btn svg { width: 1rem; height: 1rem; }
-    .lb-fine { margin: 0; font-size: .75rem; color: var(--ink-3); }
-
-    @media (max-width: 34rem) {
-        .lb-step { flex-wrap: wrap; }
-        .lb-tag { margin-left: 2.85rem; }
-        .lb-btn { width: 100%; justify-content: center; }
-    }
-</style>
-
-<div class="lb">
-    {% if just_finished %}
-    <div class="lb-flash" role="status">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-        <div>
-            {% if just_finished.auto_submitted %}
-            <b>{{ just_finished.spec.label }} is in.</b> Your time ran out and the answers you had given were submitted.
-            {% else %}
-            <b>{{ just_finished.spec.label }} is done.</b> Your answers have been received.
-            {% endif %}
-            Take a breather if you need one &mdash; the next part&rsquo;s timer has not started.
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="lb-hero">
-        <p class="eyebrow">{{ invitation.resume.job.title }}</p>
-        {% if just_finished %}
-        <h1>Ready for part {{ current_number }}, {{ first_name }}?</h1>
-        <p>{{ remaining_count }} to go &middot; about {{ remaining_minutes }} minutes left in total.</p>
-        {% elif part_count > 1 %}
-        <h1>Hi {{ first_name }}, you have {{ part_count }} short assessments</h1>
-        <p>They open one at a time, in the order below &middot; about {{ remaining_minutes }} minutes in total.</p>
-        {% else %}
-        <h1>Hi {{ first_name }}, one short assessment to go</h1>
-        <p>About {{ remaining_minutes }} minutes once you begin.</p>
-        {% endif %}
-    </div>
-
-    {% if part_count > 1 %}
-    <ol class="lb-steps" aria-label="Your assessments">
-        {% for part in parts %}
-        <li class="lb-step is-{{ part.state }}"{% if part.state == 'current' %} aria-current="step"{% endif %}>
-            <span class="lb-dot" aria-hidden="true">
-                {% if part.state == 'done' %}
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                {% elif part.state == 'locked' %}
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                {% else %}{{ part.number }}{% endif %}
-            </span>
-            <div class="lb-body">
-                <p class="lb-title">
-                    <span class="sr-only">Part {{ part.number }}: </span>{{ part.spec.label }}
-                </p>
-                <p class="lb-meta">{{ part.spec.total_items }} statements &middot; {{ part.spec.time_limit_minutes }} minutes</p>
+        {% if mode == 'welcome' %}
+        <section x-show="step === 'welcome'"{% if consent_error %} x-cloak{% endif %}>
+            <h1 class="ap-h1">Welcome, {{ first_name }}</h1>
+            {% if multi %}
+            <p class="ap-lead">Thank you for your interest in the {{ invitation.resume.job.title }} role. You will complete {% if part_count == 2 %}two{% else %}{{ part_count }}{% endif %} short parts, one after the other.</p>
+            <div class="ap-cards">
+                {% for part in parts %}
+                <div class="ap-pc ap-acc" style="{{ part.spec.accent_style }}">
+                    <b>Part {{ part.number }}</b>
+                    <span>{{ part.spec.total_items }} {{ part.spec.noun_plural }} &middot; {{ part.spec.time_limit_minutes }} minutes</span>
+                    <span class="ap-tag{% if part.state == 'done' %} is-done{% endif %}">{% if part.state == 'done' %}Completed{% elif part.state == 'current' %}Ready to start{% else %}Opens after Part {{ part.number|add:"-1" }}{% endif %}</span>
+                </div>
+                {% endfor %}
             </div>
-            <span class="lb-tag">
-                {% if part.state == 'done' %}Completed{% elif part.state == 'current' %}Up next{% else %}Opens after part {{ part.number|add:"-1" }}{% endif %}
-            </span>
-        </li>
-        {% endfor %}
-    </ol>
-    {% endif %}
-
-    <div class="lb-card">
-        <h2>{% if part_count > 1 %}Before you begin part {{ current_number }}{% else %}Before you begin{% endif %}</h2>
-        <ul>
-            <li><b>{{ current.spec.total_items }} statements, {{ current.spec.time_limit_minutes }} minutes.</b>
-                The timer starts when you press the button below and cannot be paused.</li>
-            <li>When the time is up this part closes and whatever you have answered is submitted.</li>
-            {% if current.spec.minimum_answers >= current.spec.total_items %}
-            <li>Every one of the {{ current.spec.total_items }} statements has to be answered for it to be scored.</li>
+            <ul class="ap-list">
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>The timed parts take {{ total_minutes }} minutes in all. You can take a short break between parts; each timer starts only when you begin that part.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Use a laptop or tablet in a quiet place.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Your progress saves automatically if you lose connection.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Complete {% if part_count == 2 %}both parts{% else %}every part{% endif %} by {{ invitation.token_expires_at|date:"j F" }}.</span></li>
+            </ul>
             {% else %}
-            <li>Answer at least {{ current.spec.minimum_answers }} of the {{ current.spec.total_items }} statements for it to be scored &mdash; try to answer them all.</li>
+            <p class="ap-lead">You are invited to complete a short self-assessment for the {{ invitation.resume.job.title }} role.</p>
+            <div class="ap-stats">
+                <div class="ap-stat" style="--t: #2563eb"><b>{{ spec.total_items }}</b><span>{{ spec.noun_plural|capfirst }}</span></div>
+                <div class="ap-stat" style="--t: #16a34a"><b>{{ spec.time_limit_minutes }} min</b><span>Time limit</span></div>
+                <div class="ap-stat" style="--t: #d97706"><b>{{ invitation.token_expires_at|date:"j M" }}</b><span>Deadline</span></div>
+            </div>
+            <ol class="ap-list">
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">1</span><span>Use a laptop or tablet in a quiet place.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">2</span><span>Your progress saves automatically if you lose connection.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">3</span><span>Your answers are confidential.</span></li>
+            </ol>
             {% endif %}
-            <li>Respond with your first and most natural reaction. There are no right or wrong answers.</li>
-            {% if part_count > 1 %}
-            <li>When you submit, you come back to this page and the next part opens. You can take a break
-                between parts &mdash; each timer starts only when you begin that part. This link works until
-                {{ invitation.token_expires_at|date:"j F Y" }}.</li>
-            {% endif %}
-        </ul>
+        </section>
 
-        <div class="lb-go">
-            <form method="post" action="{% url 'sei_assessment:begin' token=invitation.token instrument=current.instrument %}"
-                  hx-boost="false" onsubmit="this.querySelector('button').setAttribute('aria-disabled', 'true')">
-                {% csrf_token %}
-                <button type="submit" class="lb-btn">
-                    {% if part_count > 1 %}Begin part {{ current_number }}: {{ current.spec.label }}{% else %}Begin the assessment{% endif %}
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-                </button>
-            </form>
-            <p class="lb-fine">Starts the {{ current.spec.time_limit_minutes }}-minute timer.</p>
-        </div>
+        <section x-show="step === 'rules'"{% if not consent_error %} x-cloak{% endif %}>
+            <h1 class="ap-h1">Before you begin</h1>
+            <p class="ap-lead">{% if multi %}Read these instructions carefully. They apply to every part.{% else %}Read each {{ spec.noun }} and choose the option that fits you best.{% endif %}</p>
+            {% include 'sei_assessment/partials/rules.html' %}
+            {% if needs_consent %}{% include 'sei_assessment/partials/consent.html' %}{% endif %}
+        </section>
+        {% else %}
+        <section x-show="step === 'transition'">
+            <div class="ap-center">
+                <div class="ap-ok{% if just_finished.auto_submitted %} is-warn{% endif %}" aria-hidden="true">
+                    {% if just_finished.auto_submitted %}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    {% else %}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                    {% endif %}
+                </div>
+                <h1 class="ap-h1">Part {{ just_finished_number }} complete</h1>
+                <p class="ap-lead">{% if just_finished.auto_submitted %}Your time ran out, and the answers you had given were submitted.{% else %}Your answers are saved.{% endif %} You may take a short break before Part {{ current_number }}. Its timer has not started.</p>
+            </div>
+            <div class="ap-note">
+                <b>Part {{ current_number }} of {{ part_count }}</b><br>
+                {{ spec.total_items }} {{ spec.noun_plural }} &middot; {{ spec.time_limit_minutes }} minutes. {{ spec.prompt }}
+            </div>
+            {% include 'sei_assessment/partials/rules.html' %}
+            {% if needs_consent %}{% include 'sei_assessment/partials/consent.html' %}{% endif %}
+        </section>
+        {% endif %}
+
+        <section x-show="step === 'practice'" x-cloak>
+            <p class="ap-kicker">Practice {{ spec.noun }}, not scored</p>
+            {% if spec.per_page == 1 %}
+            <div class="ap-seg" aria-hidden="true"><span></span></div>
+            {% else %}
+            <div class="ap-bar" aria-hidden="true"><div style="width: 0"></div></div>
+            {% endif %}
+            {% include 'sei_assessment/partials/item.html' with no=0 badge='?' text=spec.practice scale=practice_scale live=False %}
+            <p class="ap-kicker">Select one option to see how answering works. This one is not saved.</p>
+        </section>
     </div>
 
-    <p class="lb-fine" style="margin-top: 1rem; text-align: center;">
-        Your answers are confidential and are used only for this recruitment decision.
-    </p>
-</div>
+    <div class="ap-foot">
+        <button type="button" class="ap-btn g{% if mode == 'transition' or not consent_error %} is-hidden{% endif %}"
+                :class="{ 'is-hidden': step === 'welcome' || step === 'transition' }" @click="back()">Back</button>
+        <span class="ap-hint"><span x-show="step === 'practice'" x-cloak>Starts the {{ spec.time_limit_minutes }}-minute timer</span></span>
+        <button type="button" class="ap-btn" x-show="step === 'welcome'"{% if mode == 'transition' or consent_error %} x-cloak{% endif %} @click="go('rules')">{% if multi %}Get started{% else %}Start{% endif %}</button>
+        <button type="button" class="ap-btn" x-show="step === 'rules' || step === 'transition'"{% if mode == 'welcome' and not consent_error %} x-cloak{% endif %} @click="toPractice()">{% if mode == 'transition' %}Continue{% else %}Begin practice{% endif %}</button>
+        <button type="submit" class="ap-btn" x-show="step === 'practice'" x-cloak :disabled="busy">{% if multi %}Start Part {{ current_number }}{% else %}Start assessment{% endif %}</button>
+    </div>
+</form>
+
+<script>
+    function apLobby(first, needsConsent, consentError) {
+        return {
+            step: first,
+            home: first === 'transition' ? 'transition' : 'rules',
+            consent: false,
+            consentError: consentError,
+            busy: false,
+
+            init() { document.getElementById('ap').classList.add('is-live'); },
+
+            go(step) {
+                this.step = step;
+                window.scrollTo({top: 0});
+                this.$nextTick(() => this.$refs.body.focus({preventScroll: true}));
+            },
+            back() {
+                this.go(this.step === 'practice' ? this.home : 'welcome');
+            },
+            consentGiven() {
+                if (!needsConsent || this.consent) { this.consentError = false; return true; }
+                this.consentError = true;
+                return false;
+            },
+            toPractice() {
+                if (this.consentGiven()) { this.go('practice'); }
+            },
+            ready() {
+                if (this.busy) { return false; }
+                if (!this.consentGiven()) { this.go(this.home); return false; }
+                return this.step === 'practice';
+            },
+        };
+    }
+</script>
 {% endblock %}

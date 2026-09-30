@@ -15,6 +15,9 @@ urlpatterns = [
     path('assessment/<uuid:token>/verify/', views.verify, name='verify'),
     path('assessment/<uuid:token>/resend-code/', views.resend_code,
          name='resend_code'),
+    path('assessment/<uuid:token>/part/<uuid:part>/start/', views.begin, name='begin_part'),
+    path('assessment/<uuid:token>/part/<uuid:part>/save/', views.save, name='save_part'),
+    # Named by instrument: kept so a page loaded before the portal changed still saves.
     path('assessment/<uuid:token>/save/<slug:instrument>/', views.save, name='save'),
     path('assessment/<uuid:token>/save/', views.save, name='save_legacy'),
     path('assessment/<uuid:token>/done/', views.done, name='done'),

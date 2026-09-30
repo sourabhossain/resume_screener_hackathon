@@ -1,0 +1,6 @@
+<label class="ap-consent">
+    <input type="checkbox" name="consent" value="1" x-model="consent"
+           aria-describedby="ap-consent-error" :aria-invalid="consentError ? 'true' : 'false'">
+    <span>I have read the instructions and consent to my responses being processed for recruitment.</span>
+</label>
+<p class="ap-err" id="ap-consent-error" role="alert"><span x-show="consentError"{% if not consent_error %} x-cloak{% endif %}>Accept the consent statement to continue</span></p>

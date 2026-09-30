@@ -1,44 +1,17 @@
-{% extends 'base.html' %}
-{% block title %}Assessment received · SSL Wireless{% endblock %}
-{% block recruiter_nav %}{% endblock %}
-{% block recruiter_logout %}{% endblock %}
-{% block mobile_recruiter_nav %}{% endblock %}
-{% block nav_action %}{% endblock %}
-{% block content %}
-<div class="mx-auto max-w-lg">
-    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white text-center shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
-        <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
-        <div class="p-8 sm:p-12">
-            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                <svg class="h-8 w-8 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-            </div>
-            <h1 class="mt-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Thank you</h1>
-            <p class="mt-2 leading-relaxed text-zinc-500 dark:text-zinc-400">
-                {% if sittings|length == 2 %}
-                Both of your assessments have been received.
-                {% elif sittings|length > 2 %}
-                All {{ sittings|length }} of your assessments have been received.
-                {% else %}
-                Your assessment has been received.
-                {% endif %}
-                {% if auto_submitted %}Where the time ran out, the answers you had given were submitted.{% endif %}
-                There is nothing further to do.
-            </p>
-            {% if sittings|length > 1 %}
-            <ul class="mx-auto mt-6 max-w-sm space-y-2 text-left">
-                {% for sitting in sittings %}
-                <li class="flex items-center gap-2.5 text-sm text-zinc-600 dark:text-zinc-300">
-                    <svg class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                    {{ sitting.instrument_label }}
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-            <p class="mt-6 text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
-                Your answers are treated as confidential and are used only for this
-                recruitment decision. You can close this page.
-            </p>
-        </div>
-    </div>
+{% extends 'sei_assessment/portal.html' %}
+
+{% block portal_title %}Assessment submitted{% endblock %}
+
+{% block portal %}
+<div class="ap-body ap-center">
+    <div class="ap-ok" aria-hidden="true"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div>
+    <h1 class="ap-h1">Assessment submitted</h1>
+    <p class="ap-lead">
+        Thank you, {{ first_name }}.
+        {% if multi %}{% if part_count == 2 %}Both parts are{% else %}All {{ part_count }} parts are{% endif %} recorded.{% else %}Your responses are recorded.{% endif %}
+        {% if auto_submitted %}Where the time ran out, the answers you had given were submitted.{% endif %}
+        There is nothing further to do, and you can close this page.
+    </p>
+    <p class="ap-ref">Reference ID <b>{{ invitation.reference_id }}</b></p>
 </div>
 {% endblock %}

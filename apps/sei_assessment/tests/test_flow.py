@@ -17,9 +17,9 @@ from apps.sei_assessment import instruments, scoring, services
 from apps.sei_assessment.models import SEIAssessment
 
 SEI_MINUTES = instruments.get(instruments.SEI).time_limit_minutes
-# The subject names the instrument, so a candidate sent two can tell the
-# two emails apart in an inbox.
-SEI_SUBJECT = instruments.get(instruments.SEI).label + ' assessment'
+# The subject never names the instrument: a candidate who knows which test
+# they are sitting can rehearse for it.
+SEI_SUBJECT = 'Your assessment for your application'
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def _save(a):   return reverse('sei_assessment:save',
 def _begin(client, a):
     return client.post(reverse('sei_assessment:begin',
                                kwargs={'token': _tok(a), 'instrument': a.instrument}),
-                       follow=True)
+                       {'consent': '1'}, follow=True)
 
 
 def _open(client, sitting):
@@ -449,7 +449,7 @@ def test_the_sitting_is_fifteen_minutes(client, sitting):
 
 @pytest.mark.django_db
 def test_the_page_carries_the_instruction_wording(client, sitting):
-    raw = _begin(_open(client, sitting), sitting).content.decode()
+    raw = _open(client, sitting).get(_entry(sitting)).content.decode()
     body = ' '.join(raw.split())   # the copy wraps across lines in the template
 
     assert 'first and most natural reaction' in body
@@ -457,7 +457,9 @@ def test_the_page_carries_the_instruction_wording(client, sitting):
     # Not "recommended completion time": the server closes the sitting on its
     # own deadline and submits whatever is there, so calling the limit a
     # recommendation told the candidate the opposite of what happens.
-    assert f'{SEI_MINUTES} minutes once you begin' in body
+    assert f'{SEI_MINUTES} min</b><span>Time limit' in body
+    assert f'Starts the {SEI_MINUTES}-minute timer' in body
+    assert 'cannot be paused' in body
     assert 'recommended completion time' not in body.lower()
 
 

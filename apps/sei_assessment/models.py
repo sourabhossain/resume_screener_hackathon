@@ -35,6 +35,10 @@ class AssessmentInvitation(models.Model):
     otp_attempts = models.PositiveSmallIntegerField(default=0)
     otp_verified_at = models.DateTimeField(null=True, blank=True)
 
+    # When the candidate ticked the consent box on the portal. Asked once,
+    # before the first clock starts; a part already running is never blocked.
+    consented_at = models.DateTimeField(null=True, blank=True)
+
     invited_at = models.DateTimeField(null=True, blank=True)
     invite_count = models.PositiveSmallIntegerField(default=0)
     invited_by = models.ForeignKey(
@@ -58,6 +62,19 @@ class AssessmentInvitation(models.Model):
             self.token_expires_at = timezone.now() + timedelta(
                 days=self.TOKEN_VALIDITY_DAYS)
         super().save(*args, **kwargs)
+
+    @property
+    def reference_id(self) -> str:
+        """What the candidate quotes to HR. Never the token, which is the key."""
+        return f'SSLW-ASM-{self.pk:06d}'
+
+    def record_consent(self) -> None:
+        if self.consented_at:
+            return
+        now = timezone.now()
+        AssessmentInvitation.objects.filter(
+            pk=self.pk, consented_at__isnull=True).update(consented_at=now)
+        self.consented_at = now
 
     # ── the sittings, in the order they are taken ────────────────────────
     def ordered_sittings(self):

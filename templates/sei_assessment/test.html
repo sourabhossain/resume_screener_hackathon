@@ -1,298 +1,195 @@
-{% extends 'base.html' %}
+{% extends 'sei_assessment/portal.html' %}
 
-{% block title %}Assessment · SSL Wireless{% endblock %}
-{% block recruiter_nav %}{% endblock %}
-{% block recruiter_logout %}{% endblock %}
-{% block mobile_recruiter_nav %}{% endblock %}
-{% block nav_action %}{% endblock %}
-{% block site_footer %}{% endblock %}
+{% block portal_title %}{% if multi %}Part {{ part_number }}{% else %}Assessment{% endif %}{% endblock %}
 
-{% block content %}
-<style>
-    .q {
-        --line: #e4e4e7;
-        --line-firm: #cbd0d8;
-        --ink: #18181b;
-        --ink-2: #52525b;
-        --ink-3: #8b8f98;
-        --paper: #ffffff;
-        --accent: #185FA5;
-        --accent-deep: #042C53;
-        --wash: #E6F1FB;
-        --done: #1D9E75;
-        --btn-ink: #ffffff;
-        max-width: 52rem; margin: 0 auto; padding-bottom: 7rem;
-    }
-    html.dark .q {
-        --line: #2f3238;
-        --line-firm: #3f434b;
-        --ink: #f4f4f5;
-        --ink-2: #a1a1aa;
-        --ink-3: #71757e;
-        --paper: #18181b;
-        --accent: #6fa8e6;
-        --accent-deep: #cfe2f7;
-        --wash: #16283c;
-        --done: #35b98d;
-        --btn-ink: #0a2238;
-    }
+{% block portal_attrs %}style="{{ instrument.accent_style }}" x-data="apPart()"{% endblock %}
 
-    .q-progress { position: sticky; top: 0; z-index: 20; height: 3px; background: var(--line); }
-    .q-progress i { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+{% block pill %}
+<div class="ap-pill" role="timer" :class="{ 'is-low': secondsLeft <= 60 }">
+    {% if multi %}<span class="ap-pill-part">Part {{ part_number }} &middot; </span>{% endif %}<b x-text="clock()">{{ clock }}</b> left
+</div>
+{% endblock %}
 
-    .q-hero {
-        background: var(--wash); border-radius: .75rem;
-        padding: 1.25rem 1.25rem 1.1rem; margin-top: 1.25rem;
-        display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
-    }
-    .q-hero .eyebrow {
-        font-size: .6875rem; letter-spacing: .08em; text-transform: uppercase;
-        color: var(--accent); margin: 0 0 .35rem;
-    }
-    .q-hero h1 {
-        margin: 0; font-size: clamp(1.15rem, 3.4vw, 1.4rem); font-weight: 600;
-        line-height: 1.25; color: var(--accent-deep); letter-spacing: -.01em;
-    }
-    .q-hero p { margin: .4rem 0 0; font-size: .8125rem; color: var(--accent-deep); opacity: .85; }
-    .q-hero p.q-guide { margin-top: .6rem; max-width: 42em; line-height: 1.55; opacity: .95; }
-    .q-ring {
-        flex: none; width: 3.6rem; height: 3.6rem; border-radius: 50%;
-        background: var(--paper); display: flex; align-items: center; justify-content: center;
-        font-size: .875rem; font-weight: 600; color: var(--accent);
-        font-variant-numeric: tabular-nums;
-    }
-    .q-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
-    .q-chips span {
-        font-size: .75rem; padding: .25rem .6rem; border-radius: 999px;
-        background: var(--paper); color: var(--accent-deep);
-    }
+{% block portal %}
+{{ state|json_script:"ap-state" }}
 
-    .q-card {
-        border: 1px solid var(--line); border-left: 3px solid var(--line-firm);
-        border-radius: .5rem; background: var(--paper); padding: .9rem 1rem;
-        transition: border-left-color .15s;
-    }
-    .q-card.is-done { border-left-color: var(--done); }
-    .q-card + .q-card { margin-top: .75rem; }
-    .q-head { display: flex; gap: .65rem; align-items: flex-start; margin-bottom: .75rem; }
-    .q-head .no {
-        font-size: .75rem; color: var(--ink-3); min-width: 1.15rem;
-        padding-top: .15rem; font-variant-numeric: tabular-nums;
-    }
-    .q-head .text { font-size: .9375rem; line-height: 1.5; color: var(--ink); }
-    .q-tick { margin-left: auto; color: var(--done); flex: none; opacity: 0; transition: opacity .15s; }
-    .q-card.is-done .q-tick { opacity: 1; }
-    .q-tick svg { width: 1.05rem; height: 1.05rem; display: block; }
-
-    .q-scale { display: grid; gap: .375rem; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-    .q-opt { display: block; cursor: pointer; --fill: var(--fl); --fill-ink: var(--fli); }
-    html.dark .q-opt { --fill: var(--fd); --fill-ink: var(--fdi); }
-    .q-opt > span {
-        display: flex; flex-direction: column; align-items: center; gap: .3rem;
-        height: 100%; padding: .5rem .25rem; border-radius: .4rem;
-        border: 1px solid var(--line); background: transparent;
-        font-size: .6875rem; line-height: 1.2; text-align: center;
-        color: var(--ink-2); transition: background-color .15s, border-color .15s, color .15s;
-    }
-    .q-opt > span i { width: .8rem; height: .8rem; border-radius: 50%; display: block; flex: none; background: var(--fill); }
-    .q-opt:hover > span { border-color: var(--line-firm); }
-    .q-opt > input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .q-opt > input:checked + span {
-        border-color: var(--accent-deep); border-width: 1.5px;
-        background: var(--fill); color: var(--fill-ink); font-weight: 600;
-    }
-    .q-opt > input:checked + span i { display: none; }
-
-    .q-step { font-variant-numeric: tabular-nums; }
-    .q-btn {
-        border: 1px solid var(--line-firm); background: var(--paper); color: var(--ink);
-        padding: .5rem 1.1rem; border-radius: .5rem; font-size: .875rem; font-weight: 600;
-        cursor: pointer;
-    }
-    .q-btn:disabled { opacity: .45; cursor: default; }
-    .q-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-ink); }
-
-    .q-dock {
-        position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-        border-top: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 92%, transparent);
-        backdrop-filter: blur(8px);
-    }
-    .q-dock-in {
-        max-width: 52rem; margin: 0 auto; padding: .75rem 1rem;
-        display: flex; align-items: center; gap: .85rem; flex-wrap: wrap;
-    }
-    .q-clock { display: flex; align-items: center; gap: .4rem; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .q-clock.low { color: #c0392b; }
-    .q-status { flex: 1 1 8rem; min-width: 0; font-size: .75rem; color: var(--ink-3); }
-    .q-status b { color: #c0392b; font-weight: 600; }
-
-    .q-stuck {
-        opacity: 0; animation: q-late 0s linear 5s forwards;
-        margin-top: 1.25rem; padding: 1rem 1.15rem; border-radius: .5rem;
-        border: 1px solid #f0c9c2; background: #fdf2f0; color: #7d2c1c;
-        font-size: .875rem; line-height: 1.6;
-    }
-    html.dark .q-stuck { border-color: #5a2f24; background: #2a1712; color: #f0c0b2; }
-    .q.is-live .q-stuck { display: none; }
-    @keyframes q-late { to { opacity: 1; } }
-
-    @media (max-width: 34rem) {
-        .q-scale { grid-auto-flow: row; grid-auto-columns: auto; }
-        .q-opt > span { flex-direction: row; justify-content: flex-start; gap: .55rem; padding: .55rem .7rem; text-align: left; }
-        .q-hero { flex-direction: column; }
-        .q-ring { align-self: flex-start; }
-    }
-</style>
-
-<div class="q" x-data="seiTest({{ seconds_left }}, {{ answered }}, {{ total_items }}, {{ pages|length }})">
-
-    <div class="q-progress" aria-hidden="true"><i :style="`width: ${Math.round(answered / totalItems * 100)}%`"></i></div>
-
-    <div class="q-hero">
-        <div>
-            <p class="eyebrow">{% if part_count > 1 %}Part {{ part_number }} of {{ part_count }} &middot; {% endif %}{{ instrument.label }}</p>
-            <h1>Hi {{ first_name }}, let&rsquo;s get to know you</h1>
-            <p>{{ total_items }} statements &middot; {{ minutes }} minutes once you begin</p>
-            <p class="q-guide">
-                Please respond based on your first and most natural reaction. Do not
-                overthink the statements. There are no right or wrong answers.
-            </p>
-            <div class="q-chips">
-                <span>Saves as you go</span>
-                {% if next_part %}
-                <span>Part {{ part_number|add:1 }} opens after you submit</span>
-                {% endif %}
-                {% if minimum_answers >= total_items %}
-                <span>All {{ total_items }} must be answered</span>
-                {% else %}
-                <span>At least {{ minimum_answers }} of {{ total_items }} must be answered</span>
-                {% endif %}
-            </div>
-        </div>
-        <div class="q-ring"><span x-text="`${answered}/${totalItems}`">{{ answered }}/{{ total_items }}</span></div>
-    </div>
+<div class="ap-body" tabindex="-1" x-ref="body">
+    <h1 class="sr-only">{% if multi %}Part {{ part_number }} of {{ part_count }}{% else %}Assessment{% endif %}</h1>
+    <p class="sr-only" aria-live="polite" x-text="announcement"></p>
 
     <noscript>
-        <div style="margin-top:1.25rem;padding:1rem 1.15rem;border-radius:.5rem;border:1px solid #f0c9c2;background:#fdf2f0;color:#7d2c1c;font-size:.875rem;line-height:1.6;">
-            This assessment needs JavaScript switched on &mdash; without it your
-            answers cannot be saved. Turn it on and reload this page, or open the
-            link in a different browser. Your time has not started running.
-        </div>
+        <p class="ap-alert is-bad"><b>JavaScript is switched off</b>Without it your answers cannot be saved. Turn it on and reload this page, or open the link in a different browser. Your answers so far are kept.</p>
     </noscript>
-
-    <div class="q-stuck">
+    <p class="ap-stuck">
         The questions have not finished loading. Check your connection and reload
-        the page &mdash; your answers so far are already saved, and reloading does
-        not restart the clock. If it keeps happening, reply to the invitation
-        email and we will sort it out.
-    </div>
+        the page. Your answers so far are already saved, and reloading does not
+        restart the clock. If it keeps happening, write to {{ support_email }}.
+    </p>
 
-    <form id="sei-form" class="mt-5" @submit.prevent="finish()" @keydown="hotkey($event)">
-        {% for page in pages %}
-        <div x-show="page === {{ forloop.counter0 }}" x-cloak>
-            {% for item in page %}
-            <fieldset class="q-card{% if item.value is not None %} is-done{% endif %}" data-item="{{ item.no }}"
-                      {% if item.value is not None %}data-answered="1"{% endif %}>
-                <legend class="sr-only">Statement {{ item.no }}: {{ item.text }}</legend>
-                <div class="q-head">
-                    <span class="no">{{ item.no }}</span>
-                    <span class="text">{{ item.text }}</span>
-                    <span class="q-tick" aria-hidden="true">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                    </span>
-                </div>
-                <div class="q-scale">
-                    {% for step in scale %}
-                    <label class="q-opt" style="--fl: {{ step.fill }}; --fli: {{ step.ink }}; --fd: {{ step.dark_fill }}; --fdi: {{ step.dark_ink }};">
-                        <input type="radio" name="q{{ item.no }}" value="{{ step.value }}" class="sr-only"
-                               {% if item.value == step.value %}checked{% endif %}
-                               @change="record({{ item.no }}, {{ step.value }})">
-                        <span><i></i>{{ step.label }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
-            </fieldset>
+    <form id="ap-form" hx-boost="false" @submit.prevent>
+        <div x-show="view === 'questions'">
+            <div class="ap-meta">
+                <span>{% if multi %}<b>Part {{ part_number }} of {{ part_count }}</b> &middot; {% endif %}{% if instrument.per_page == 1 %}{{ instrument.noun|capfirst }}{% else %}Page{% endif %} <span x-text="page + 1">1</span> of {{ pages|length }}</span>
+                <span><span x-text="answered">{{ answered }}</span> of {{ total_items }} answered</span>
+            </div>
+            {% if instrument.per_page == 1 %}
+            <div class="ap-seg" aria-hidden="true">
+                {% for item in items %}<span :class="{ 'is-done': answers[{{ item.no }}] !== undefined, 'is-here': page === {{ forloop.counter0 }} }"></span>{% endfor %}
+            </div>
+            {% else %}
+            <div class="ap-bar" aria-hidden="true"><div :style="`width: ${Math.round(answered / total * 100)}%`" style="width: 0"></div></div>
+            {% endif %}
+            <p class="ap-prompt">{{ instrument.prompt }}</p>
+
+            {% for page in pages %}
+            <div x-show="page === {{ forloop.counter0 }}"{% if not forloop.first %} x-cloak{% endif %}>
+                {% for item in page %}
+                {% include 'sei_assessment/partials/item.html' with spec=instrument no=item.no badge=item.no text=item.text value=item.value live=True %}
+                {% endfor %}
+            </div>
             {% endfor %}
+            <p class="ap-err" role="alert"><span x-show="bad && missingHere().length" x-cloak>Answer every {{ instrument.noun }} on this page to continue</span></p>
         </div>
-        {% endfor %}
-    </form>
 
-    <div class="q-dock">
-        <div class="q-dock-in">
-            <span class="q-clock" :class="secondsLeft <= 60 ? 'low' : ''">
-                <svg style="width:1rem;height:1rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <span x-text="clock()">--:--</span>
-            </span>
-            <span class="q-status">
-                <span x-text="`${answered} of ${totalItems} answered`"></span>
-                <span class="q-step" x-text="` · page ${page + 1} of ${pageCount}`"></span>
-                <span x-show="saving" x-cloak> &middot; saving&hellip;</span>
-                <span x-show="saveFailed" x-cloak> &middot; <b>could not save — check your connection</b></span>
-            </span>
-            <button type="button" class="q-btn" @click="back()" :disabled="page === 0">Back</button>
-            <button type="button" class="q-btn primary" @click="next()"
-                    x-show="page < pageCount - 1">Next</button>
-            <button type="submit" form="sei-form" class="q-btn primary" :disabled="busy">
-                <span x-show="!busy">{% if next_part %}Submit and continue{% else %}Submit{% endif %}</span>
-                <span x-show="busy" x-cloak>Submitting&hellip;</span>
-            </button>
-        </div>
-    </div>
+        <section x-show="view === 'review'" x-cloak aria-labelledby="ap-review-title">
+            <h2 class="ap-h1" id="ap-review-title">Review your answers</h2>
+            <p class="ap-lead">You have answered <span x-text="answered">{{ answered }}</span> of {{ total_items }} {{ instrument.noun_plural }}. Select a number to change an answer. You cannot change answers after you submit.</p>
+            <div class="ap-grid{% if instrument.per_page == 1 %} is-wide{% endif %}">
+                {% for item in items %}
+                <button type="button" class="ap-gc" :class="{ 'is-un': answers[{{ item.no }}] === undefined }"
+                        @click="jump({{ item.no }})"
+                        :aria-label="'{{ instrument.noun|capfirst }} {{ item.no }}, ' + (answers[{{ item.no }}] === undefined ? 'not answered' : 'answered')">{{ item.no }}</button>
+                {% endfor %}
+            </div>
+            <p class="ap-status is-warn" x-show="answered < total">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span><span x-text="total - answered"></span> unanswered. Complete every {{ instrument.noun }} to submit.</span>
+            </p>
+            <p class="ap-status is-ok" x-show="answered >= total">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <span>All {{ instrument.noun_plural }} answered. You are ready to submit.</span>
+            </p>
+        </section>
+    </form>
+</div>
+
+<div class="ap-foot">
+    <button type="button" class="ap-btn g is-hidden" :class="{ 'is-hidden': view === 'questions' && page === 0 }" @click="back()">Back</button>
+    <span class="ap-hint" aria-live="polite">
+        <span x-show="saveFailed" x-cloak><b>Could not save. Check your connection.</b></span>
+        <span x-show="!saveFailed && saving" x-cloak>Saving&hellip;</span>
+        <span class="ap-idle" x-show="!saveFailed && !saving">Auto-saved</span>
+    </span>
+    <button type="button" class="ap-btn" x-show="view === 'questions'" @click="next()">
+        <span x-show="page < pageCount - 1">{% if instrument.per_page == 1 %}Next {{ instrument.noun }}{% else %}Next page{% endif %}</span>
+        <span x-show="page >= pageCount - 1" x-cloak>Review answers</span>
+    </button>
+    <button type="button" class="ap-btn" x-show="view === 'review'" x-cloak @click="submit()" :disabled="busy || answered < total">
+        <span x-show="!busy">{% if is_last_part %}Submit assessment{% else %}Submit Part {{ part_number }}{% endif %}</span>
+        <span x-show="busy" x-cloak>Submitting&hellip;</span>
+    </button>
 </div>
 
 <script>
     // The countdown is a courtesy, not the rule: the server holds deadline_at
-    // and closes the sitting whatever the browser does. This keeps the page
-    // honest about the time and makes sure the answers already picked are on
-    // the server before the clock runs out.
-    function seiTest(secondsLeft, answered, totalItems, pageCount) {
+    // and closes the part whatever the browser does.
+    function apPart() {
+        const state = JSON.parse(document.getElementById('ap-state').textContent);
         return {
-            secondsLeft: secondsLeft,
-            answered: answered,
-            totalItems: totalItems,
-            pageCount: pageCount,
+            answers: state.answers,
+            items: state.items,
+            perPage: state.perPage,
+            pageCount: Math.ceil(state.items.length / state.perPage),
+            total: state.items.length,
+            secondsLeft: state.secondsLeft,
+            endsAt: Date.now() + state.secondsLeft * 1000,
             page: 0,
+            view: 'questions',
+            bad: false,
             pending: {},
             saving: false,
             saveFailed: false,
             busy: false,
             done: false,
+            announcement: '',
+
+            get answered() { return Object.keys(this.answers).length; },
 
             init() {
-                this.$root.classList.add('is-live');
-                this.tick = setInterval(() => {
-                    this.secondsLeft = Math.max(0, this.secondsLeft - 1);
-                    if (this.secondsLeft === 0 && !this.done) { this.finish(true); }
-                }, 1000);
-                // Flush anything picked but not yet stored, every few seconds.
+                document.getElementById('ap').classList.add('is-live');
+                const firstGap = this.items.findIndex((no) => this.answers[no] === undefined);
+                if (firstGap > 0) { this.page = Math.floor(firstGap / this.perPage); }
+                if (firstGap === -1 && this.total) { this.view = 'review'; }
+                this.tick = setInterval(() => this.countDown(), 1000);
                 this.flusher = setInterval(() => this.flush(), 5000);
-                // A closed laptop still leaves a scoreable paper.
                 window.addEventListener('beforeunload', () => this.flush(true));
+                window.addEventListener('keydown', (event) => this.hotkey(event));
+            },
+
+            countDown() {
+                const before = this.secondsLeft;
+                this.secondsLeft = Math.max(0, Math.round((this.endsAt - Date.now()) / 1000));
+                if (before > 300 && this.secondsLeft <= 300) { this.announcement = '5 minutes left.'; }
+                if (before > 60 && this.secondsLeft <= 60) { this.announcement = '1 minute left.'; }
+                if (this.secondsLeft === 0 && !this.done) { this.finish(); }
             },
 
             clock() {
                 const m = Math.floor(this.secondsLeft / 60);
                 const s = this.secondsLeft % 60;
-                return m + ':' + String(s).padStart(2, '0');
+                return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
             },
 
-            // Paging is presentation only: every statement is already in the
-            // DOM, so moving between pages never touches the server and never
-            // risks an answer.
-            go(to) {
-                this.page = Math.min(Math.max(to, 0), this.pageCount - 1);
-                window.scrollTo({top: 0, behavior: 'smooth'});
+            pageItems(page) {
+                return this.items.slice(page * this.perPage, (page + 1) * this.perPage);
             },
-            next() { this.flush(); this.go(this.page + 1); },
-            back() { this.go(this.page - 1); },
+            missingHere() {
+                return this.pageItems(this.page).filter((no) => this.answers[no] === undefined);
+            },
+            focusItem(no) {
+                this.$nextTick(() => {
+                    const card = document.querySelector('fieldset[data-item="' + no + '"]');
+                    const radio = card && (card.querySelector('input:checked') || card.querySelector('input'));
+                    if (radio) { radio.focus({preventScroll: true}); card.scrollIntoView({block: 'center'}); }
+                });
+            },
+            show(page, view) {
+                this.page = page;
+                this.view = view;
+                this.bad = false;
+                window.scrollTo({top: 0});
+                this.$nextTick(() => this.$refs.body.focus({preventScroll: true}));
+            },
 
-            // Number keys answer the statement the focus is inside, so a
-            // keyboard user never has to reach for the mouse.
+            next() {
+                const missing = this.missingHere();
+                if (missing.length) { this.bad = true; this.focusItem(missing[0]); return; }
+                this.flush();
+                if (this.page < this.pageCount - 1) { this.show(this.page + 1, 'questions'); }
+                else { this.show(this.page, 'review'); }
+            },
+            back() {
+                if (this.view === 'review') { this.show(this.pageCount - 1, 'questions'); }
+                else if (this.page > 0) { this.show(this.page - 1, 'questions'); }
+            },
+            jump(no) {
+                this.show(Math.floor(this.items.indexOf(no) / this.perPage), 'questions');
+                this.focusItem(no);
+            },
+
+            // Number keys answer the statement in focus; on a one-question
+            // screen they, and the option letters, answer the one on show.
             hotkey(event) {
-                const card = event.target.closest('fieldset[data-item]');
-                if (!card || event.metaKey || event.ctrlKey || event.altKey) { return; }
-                const option = card.querySelector(
-                    'input[type=radio][value="' + (Number(event.key) - 1) + '"]');
+                if (this.view !== 'questions' || event.metaKey || event.ctrlKey || event.altKey) { return; }
+                let card = event.target.closest && event.target.closest('fieldset[data-item]');
+                if (!card && this.perPage === 1) {
+                    card = document.querySelector('fieldset[data-item="' + this.items[this.page] + '"]');
+                }
+                if (!card) { return; }
+                const key = event.key.toUpperCase();
+                let index = '123456789'.indexOf(key);
+                if (index < 0 && this.perPage === 1) { index = 'ABCDEFGHI'.indexOf(key); }
+                const option = index >= 0 && card.querySelectorAll('input[type=radio]')[index];
                 if (!option) { return; }
                 event.preventDefault();
                 option.checked = true;
@@ -300,20 +197,15 @@
                 option.focus();
             },
 
-            record(item, value) {
-                const card = document.querySelector('fieldset[data-item="' + item + '"]');
-                const isNew = !card.dataset.answered;
-                card.dataset.answered = '1';
-                card.classList.add('is-done');
-                if (isNew) { this.answered = Math.min(this.totalItems, this.answered + 1); }
-                this.pending[item] = value;
+            record(no, value) {
+                this.answers[no] = value;
+                this.pending[no] = value;
             },
 
             async post(body, keepalive) {
-                return fetch('{% url "sei_assessment:save" token=invitation.token instrument=assessment.instrument %}', {
+                return fetch(state.saveUrl, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json',
-                              'X-CSRFToken': window.CSRF_TOKEN},
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
                     body: JSON.stringify(body),
                     keepalive: !!keepalive,
                 });
@@ -321,19 +213,19 @@
 
             async flush(keepalive) {
                 const batch = this.pending;
-                if (!Object.keys(batch).length) { return; }
+                if (!Object.keys(batch).length || this.done) { return; }
                 this.pending = {};
                 this.saving = true;
                 try {
                     const r = await this.post({answers: batch}, keepalive);
                     if (!r.ok) { throw new Error('save failed'); }
-                    const state = await r.json();
-                    if (state.status === 'closed') { this.close(); return; }
-                    if (typeof state.answered === 'number') { this.answered = state.answered; }
-                    if (typeof state.seconds_left === 'number') { this.secondsLeft = state.seconds_left; }
+                    const reply = await r.json();
+                    if (reply.status === 'closed') { this.close(); return; }
+                    if (typeof reply.seconds_left === 'number') {
+                        this.endsAt = Date.now() + reply.seconds_left * 1000;
+                    }
                     this.saveFailed = false;
                 } catch (err) {
-                    // Put them back so the next flush retries rather than losing them.
                     this.pending = Object.assign({}, batch, this.pending);
                     this.saveFailed = true;
                 } finally {
@@ -341,7 +233,12 @@
                 }
             },
 
-            async finish(automatic) {
+            submit() {
+                if (this.answered < this.total) { return; }
+                this.finish();
+            },
+
+            async finish() {
                 if (this.done) { return; }
                 this.done = true;
                 this.busy = true;
@@ -350,7 +247,7 @@
                 try {
                     await this.post({answers: batch, finish: true});
                 } catch (err) {
-                    // The server closes the sitting on its own deadline anyway.
+                    // The server closes the part on its own deadline anyway.
                 }
                 this.close();
             },
@@ -358,7 +255,7 @@
             close() {
                 clearInterval(this.tick);
                 clearInterval(this.flusher);
-                window.location = '{% url "sei_assessment:entry" token=invitation.token %}';
+                window.location = state.entryUrl;
             },
         };
     }

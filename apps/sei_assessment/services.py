@@ -26,6 +26,7 @@ def assessment_url(invitation) -> str:
 
 
 def _labels(sittings) -> str:
+    """Instrument names joined for a recruiter-facing message. Never the candidate's."""
     names = [s.instrument_label for s in sittings]
     return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
@@ -65,14 +66,16 @@ def send_invite(invitation, *, otp: str) -> None:
         raise InviteError(
             f'{resume.candidate_name} has already completed every assessment.')
 
+    # Numbered over every sitting, so "Part 2" in the email is "Part 2" on the
+    # portal even when Part 1 is already done. Never named: see instruments.
     parts = [{
         'number': i,
-        'spec': s.spec,
+        'noun_plural': s.spec.noun_plural,
         'minutes': s.spec.time_limit_minutes,
         'question_count': s.spec.total_items,
         'minimum': s.spec.minimum_answers,
         'all_required': s.spec.minimum_answers >= s.spec.total_items,
-    } for i, s in enumerate(pending, start=1)]
+    } for i, s in enumerate(sittings, start=1) if not s.is_submitted]
     context = {
         'invitation': invitation,
         'candidate_name': resume.candidate_name,
@@ -81,16 +84,17 @@ def send_invite(invitation, *, otp: str) -> None:
         'otp': otp,
         'otp_minutes': AssessmentInvitation.OTP_VALIDITY_MINUTES,
         'link_days': AssessmentInvitation.TOKEN_VALIDITY_DAYS,
+        'deadline': invitation.token_expires_at,
         'parts': parts,
         'part_count': len(parts),
+        'multi': len(sittings) > 1,
         'total_minutes': sum(p['minutes'] for p in parts),
-        'completed': [s.spec for s in sittings if s.is_submitted],
+        'completed': [i for i, s in enumerate(sittings, start=1) if s.is_submitted],
     }
-    if len(pending) == 1:
-        subject = (f'{pending[0].spec.label} assessment for your application '
-                   f'— {resume.job.title}')
-    else:
+    if len(sittings) > 1:
         subject = f'Your assessments for your application — {resume.job.title}'
+    else:
+        subject = f'Your assessment for your application — {resume.job.title}'
     message = EmailMultiAlternatives(
         subject=subject,
         body=render_to_string('sei_assessment/email/invite.txt', context),

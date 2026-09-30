@@ -17,6 +17,9 @@
         {% else %}
         Link works until {{ assessment_invitation.token_expires_at|date:"j M Y" }}.
         {% endif %}
+        <span class="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+            Reference {{ assessment_invitation.reference_id }}{% if assessment_invitation.consented_at %} · consent given {{ assessment_invitation.consented_at|date:"j M Y, g:i A" }}{% endif %}
+        </span>
         {% elif assessment_invitation %}
         Prepared but not emailed yet. The invitation is queued; if it keeps saying this, send it again.
         {% else %}

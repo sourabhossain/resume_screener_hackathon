@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
@@ -18,6 +19,8 @@ from . import instruments, services
 from .models import AssessmentInvitation, SEIAssessment
 
 logger = logging.getLogger(__name__)
+
+SUPPORT_EMAIL = 'jobs@sslwireless.com'
 
 
 # ── candidate side ───────────────────────────────────────────────────────
@@ -50,7 +53,8 @@ def _candidate_page(view_fn):
             return view_fn(request, token, *args, **kwargs)
         except InvalidLink:
             # Says nothing about whether the token ever existed.
-            return render(request, 'sei_assessment/invalid_link.html', status=404)
+            return render(request, 'sei_assessment/invalid_link.html',
+                          {'support_email': SUPPORT_EMAIL}, status=404)
     return wrapper
 
 
@@ -91,19 +95,39 @@ def _first_name(invitation) -> str:
     return full_name.split()[0].title() if full_name else 'there'
 
 
+def _stepper(sittings, active):
+    """Instructions, Part 1..n, Submit, each marked done, active or ahead."""
+    labels = ['Instructions', *[f'Part {n}' for n in range(1, len(sittings) + 1)], 'Submit']
+    return [{'number': i + 1, 'label': label,
+             'state': 'done' if i < active else 'active' if i == active else ''}
+            for i, label in enumerate(labels)]
+
+
+def _portal(invitation, sittings, active):
+    """What every candidate page shares: the name, the parts, the stepper."""
+    return {
+        'invitation': invitation,
+        'first_name': _first_name(invitation),
+        'part_count': len(sittings),
+        'multi': len(sittings) > 1,
+        'steps': _stepper(sittings, active) if len(sittings) > 1 else [],
+        'support_email': SUPPORT_EMAIL,
+    }
+
+
 def _closed_response(request, invitation, sittings):
     """Whatever page applies when nothing is left to answer. None if something is."""
     if not sittings:
-        return render(request, 'sei_assessment/invalid_link.html', status=404)
+        return render(request, 'sei_assessment/invalid_link.html',
+                      {'support_email': SUPPORT_EMAIL}, status=404)
     if all(s.is_submitted for s in sittings):
         return render(request, 'sei_assessment/done.html', {
-            'invitation': invitation,
-            'sittings': sittings,
+            **_portal(invitation, sittings, len(sittings) + 2),
             'auto_submitted': any(s.auto_submitted for s in sittings),
         })
     if invitation.is_expired:
         return render(request, 'sei_assessment/expired.html',
-                      {'invitation': invitation})
+                      _portal(invitation, sittings, 0))
     return None
 
 
@@ -120,6 +144,28 @@ def _parts(sittings, current):
         parts.append({'number': number, 'sitting': sitting,
                       'spec': sitting.spec, 'state': state})
     return parts
+
+
+def _lobby(request, invitation, sittings, *, consent_error=False):
+    """Welcome and instructions before Part 1, or the break before the next part."""
+    current = invitation.current_sitting(sittings)
+    number = sittings.index(current) + 1
+    before = [s for s in sittings[:number - 1] if s.is_submitted]
+    spec = current.spec
+    return render(request, 'sei_assessment/lobby.html', {
+        **_portal(invitation, sittings, number if before else 0),
+        'mode': 'transition' if before else 'welcome',
+        'parts': _parts(sittings, current),
+        'current': current,
+        'spec': spec,
+        'current_number': number,
+        'just_finished': before[-1] if before else None,
+        'just_finished_number': sittings.index(before[-1]) + 1 if before else None,
+        'total_minutes': sum(s.spec.time_limit_minutes for s in sittings if not s.is_submitted),
+        'needs_consent': not invitation.consented_at,
+        'consent_error': consent_error,
+        'practice_scale': spec.scale,
+    })
 
 
 @_candidate_page
@@ -139,20 +185,7 @@ def entry(request, token):
     current = invitation.current_sitting(sittings)
     if current.has_started:
         return redirect('sei_assessment:test', token=token)
-
-    finished = [s for s in sittings if s.is_submitted]
-    remaining = [s for s in sittings if not s.is_submitted]
-    return render(request, 'sei_assessment/lobby.html', {
-        'invitation': invitation,
-        'first_name': _first_name(invitation),
-        'parts': _parts(sittings, current),
-        'part_count': len(sittings),
-        'current': current,
-        'current_number': sittings.index(current) + 1,
-        'just_finished': finished[-1] if finished else None,
-        'remaining_count': len(remaining),
-        'remaining_minutes': sum(s.spec.time_limit_minutes for s in remaining),
-    })
+    return _lobby(request, invitation, sittings)
 
 
 @ratelimit(key='ip', rate='300/h', method='POST', block=True)
@@ -180,8 +213,7 @@ def verify(request, token):
                      f'{invitation.otp_attempts_left} attempt(s) left.')
 
     return render(request, 'sei_assessment/verify.html', {
-        'invitation': invitation,
-        'part_count': len(sittings),
+        **_portal(invitation, sittings, 0),
         'error': error,
     })
 
@@ -205,9 +237,18 @@ def resend_code(request, token):
     return redirect('sei_assessment:verify', token=invitation.token)
 
 
+def _sitting_named(invitation, instrument=None, part=None):
+    """The sitting a URL names: by its opaque part key, or by the old slug."""
+    if part is not None:
+        return invitation.sittings.filter(token=part).first()
+    if instrument is not None:
+        return invitation.sittings.filter(instrument=instrument).first()
+    return None
+
+
 @require_POST
 @_candidate_page
-def begin(request, token, instrument):
+def begin(request, token, instrument=None, part=None):
     """Start the named part's clock, only if it is the part now open."""
     invitation = _get(token)
     sittings = _settle(invitation)
@@ -218,8 +259,13 @@ def begin(request, token, instrument):
         return redirect('sei_assessment:verify', token=invitation.token)
 
     current = invitation.current_sitting(sittings)
-    if current.instrument != instrument:
+    named = _sitting_named(invitation, instrument, part)
+    if named is None or current.pk != named.pk:
         return redirect('sei_assessment:entry', token=invitation.token)
+    if not current.has_started and not invitation.consented_at:
+        if request.POST.get('consent') != '1':
+            return _lobby(request, invitation, sittings, consent_error=True)
+        invitation.record_consent()
     if current.start_clock():
         logger.info('sei.started assessment=%s instrument=%s',
                     current.pk, current.instrument)
@@ -243,21 +289,31 @@ def test(request, token):
 
     spec = assessment.spec
     number = sittings.index(assessment) + 1
+    pages = spec.paginate(assessment.answers)
+    seconds_left = assessment.seconds_left
     return render(request, 'sei_assessment/test.html', {
-        'invitation': invitation,
+        **_portal(invitation, sittings, number),
         'assessment': assessment,
         'instrument': spec,
         'part_number': number,
-        'part_count': len(sittings),
-        'next_part': sittings[number] if number < len(sittings) else None,
-        'first_name': _first_name(invitation),
-        'pages': spec.paginate(assessment.answers),
+        'is_last_part': number == len(sittings),
+        'pages': pages,
+        'items': [item for page in pages for item in page],
         'scale': spec.scale,
-        'seconds_left': assessment.seconds_left,
-        'minutes': spec.time_limit_minutes,
+        'seconds_left': seconds_left,
+        'clock': f'{seconds_left // 60:02d}:{seconds_left % 60:02d}',
         'answered': assessment.answered_count,
         'total_items': spec.total_items,
-        'minimum_answers': spec.minimum_answers,
+        'state': {
+            'answers': {str(item['no']): item['value'] for page in pages
+                        for item in page if item['value'] is not None},
+            'items': [no for no, _ in spec.sorted_items],
+            'perPage': spec.per_page,
+            'secondsLeft': seconds_left,
+            'saveUrl': reverse('sei_assessment:save_part', kwargs={
+                'token': invitation.token, 'part': assessment.token}),
+            'entryUrl': reverse('sei_assessment:entry', kwargs={'token': invitation.token}),
+        },
     })
 
 
@@ -269,7 +325,7 @@ def test(request, token):
 # answers cannot be re-entered.
 @ratelimit(key=_rate_key, rate='900/h', method='POST', block=True)
 @_candidate_page
-def save(request, token, instrument=None):
+def save(request, token, instrument=None, part=None):
     """Autosave from the page, and the final submit.
 
     Answers are written as they are picked so a closed laptop still leaves a
@@ -281,8 +337,8 @@ def save(request, token, instrument=None):
     if not _is_verified(request, invitation):
         return JsonResponse({'status': 'unverified'}, status=403)
 
-    if instrument is not None:
-        assessment = invitation.sittings.filter(instrument=instrument).first()
+    if instrument is not None or part is not None:
+        assessment = _sitting_named(invitation, instrument, part)
     elif legacy is not None:
         assessment = legacy
     else:

@@ -87,9 +87,10 @@ def test_two_assessments_arrive_as_one_email_with_one_link(
     assert len(sent) == 1
     body = ' '.join(sent[0].body.split())
     for spec in instruments.all_instruments():
-        assert spec.label in body, spec.key
-    assert body.index(instruments.get(instruments.SEI).label) < body.index(
-        instruments.get(instruments.PE).label)
+        assert spec.label not in body, spec.key
+        assert spec.short_label not in body.split(), spec.key
+    assert body.index('Part 1 — 15 questions, 8 minutes') < body.index(
+        'Part 2 — 48 statements, 15 minutes')
 
     sittings = SEIAssessment.objects.filter(resume=resume)
     assert {s.invitation_id for s in sittings} == {resume.assessment_invitation.pk}
@@ -253,7 +254,7 @@ def test_a_four_is_a_valid_answer_on_pe_and_not_on_sei(
 
     def answer(sitting, payload):
         client.post(reverse('sei_assessment:begin', kwargs={
-                        'token': token, 'instrument': sitting.instrument}))
+                        'token': token, 'instrument': sitting.instrument}), {'consent': '1'})
         client.post(reverse('sei_assessment:save', kwargs={
                         'token': token, 'instrument': sitting.instrument}),
                     data=json.dumps(payload), content_type='application/json')

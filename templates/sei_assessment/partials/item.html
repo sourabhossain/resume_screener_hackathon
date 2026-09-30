@@ -1,0 +1,29 @@
+{% if spec.per_page == 1 %}
+<fieldset class="ap-qwrap" data-item="{{ no }}"{% if live %} :class="{ 'is-bad': bad && answers[{{ no }}] === undefined }"{% endif %}>
+    <legend class="ap-q"><span class="ap-qn" aria-hidden="true">{{ badge }}</span><span class="ap-qt"><span class="sr-only">{% if live %}{{ spec.noun|capfirst }} {{ no }}{% else %}Practice {{ spec.noun }}{% endif %}: </span>{{ text }}</span></legend>
+    <div class="ap-rows">
+        {% for step in scale %}
+        <label class="ap-row">
+            <input type="radio" name="{% if live %}q{{ no }}{% else %}practice{% endif %}" value="{{ step.value }}" class="sr-only"
+                   {% if value == step.value %}checked{% endif %}
+                   {% if live %}@change="record({{ no }}, {{ step.value }})"{% endif %}>
+            <span><b class="ap-b" aria-hidden="true">{{ step.letter }}</b>{{ step.full }}</span>
+        </label>
+        {% endfor %}
+    </div>
+</fieldset>
+{% else %}
+<fieldset class="ap-it" data-item="{{ no }}"{% if live %} :class="{ 'is-bad': bad && answers[{{ no }}] === undefined }"{% endif %}>
+    <legend class="ap-s"><span class="ap-n" aria-hidden="true">{{ badge }}</span><span><span class="sr-only">{% if live %}{{ spec.noun|capfirst }} {{ no }}{% else %}Practice {{ spec.noun }}{% endif %}: </span>{{ text }}</span></legend>
+    <div class="ap-opts">
+        {% for step in scale %}
+        <label class="ap-o">
+            <input type="radio" name="{% if live %}q{{ no }}{% else %}practice{% endif %}" value="{{ step.value }}" class="sr-only"
+                   {% if value == step.value %}checked{% endif %}
+                   {% if live %}@change="record({{ no }}, {{ step.value }})"{% endif %}>
+            <span>{{ step.full }}</span>
+        </label>
+        {% endfor %}
+    </div>
+</fieldset>
+{% endif %}

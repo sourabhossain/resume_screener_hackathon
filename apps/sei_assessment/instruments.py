@@ -28,11 +28,6 @@ from . import pe_scoring, scoring
 SEI = 'sei'
 PE = 'pe'
 
-# How many statements a candidate sees at once. One long scroll of 48 is where
-# people lose their place; five to a screen keeps the page short enough to
-# check before moving on. The clock is unaffected -- it belongs to the sitting,
-# not the page.
-QUESTIONS_PER_PAGE = 5
 
 # One hue at rising intensity, so the scale reads as "more of this", not as
 # good versus bad. `ink` is the text colour that clears the fill it sits on.
@@ -72,6 +67,14 @@ class Instrument:
     score: Callable[[dict], dict]
     answered_items: Callable[[dict], int]
     report_template: str
+    # What the candidate sees. They are never shown `label`: a named test
+    # invites rehearsed answers, so the portal only ever says "Part 1".
+    per_page: int
+    noun: str
+    noun_plural: str
+    prompt: str
+    practice: str
+    accent: tuple
 
     @property
     def total_items(self) -> int:
@@ -85,23 +88,35 @@ class Instrument:
     def scale(self):
         """One row of the response scale: value, what the candidate reads, and
         the fill plus the text colour that clears it, in both themes."""
+        letters = 'ABCDEFGHIJ'
         return [
-            {'value': value, 'label': label,
+            {'value': value, 'label': label, 'full': full, 'letter': letters[i],
              'fill': fill, 'ink': ink, 'dark_fill': dfill, 'dark_ink': dink}
-            for (value, label), (fill, ink), (dfill, dink)
-            in zip(self.rating_short, self.ramp, self.dark_ramp)
+            for i, ((value, label), (_, full), (fill, ink), (dfill, dink))
+            in enumerate(zip(self.rating_short, self.rating_labels,
+                             self.ramp, self.dark_ramp))
         ]
 
+    @property
+    def accent_style(self) -> str:
+        """CSS custom properties for this part's colour, light and dark."""
+        fill, ink, dark_fill, dark_ink = self.accent
+        return f'--c:{fill};--ci:{ink};--cd:{dark_fill};--cdi:{dark_ink};'
+
+    def page_of(self, item_no: int) -> int:
+        """The zero-based screen an item is shown on."""
+        return (item_no - 1) // self.per_page
+
     def paginate(self, answers: dict):
-        """The statements in screens of QUESTIONS_PER_PAGE, each carrying the
-        answer already stored for it so a resumed sitting comes back filled."""
+        """The statements in screens of `per_page`, each carrying the answer
+        already stored for it so a resumed sitting comes back filled."""
         answers = answers or {}
         items = [
             {'no': no, 'text': text, 'value': answers.get(str(no))}
             for no, text in self.sorted_items
         ]
-        return [items[i:i + QUESTIONS_PER_PAGE]
-                for i in range(0, len(items), QUESTIONS_PER_PAGE)]
+        return [items[i:i + self.per_page]
+                for i in range(0, len(items), self.per_page)]
 
 
 REGISTRY = {
@@ -123,6 +138,12 @@ REGISTRY = {
         score=scoring.score,
         answered_items=scoring.answered_items,
         report_template='sei_assessment/report.html',
+        per_page=5,
+        noun='statement',
+        noun_plural='statements',
+        prompt='Select how true each statement is about you.',
+        practice='I enjoy learning new things.',
+        accent=('#0f766e', '#ffffff', '#2dd4bf', '#042f2e'),
     ),
     PE: Instrument(
         key=PE,
@@ -142,12 +163,19 @@ REGISTRY = {
         score=pe_scoring.score,
         answered_items=pe_scoring.answered_items,
         report_template='sei_assessment/report_pe.html',
+        per_page=1,
+        noun='question',
+        noun_plural='questions',
+        prompt='Select how characteristic each statement is of you.',
+        practice='I enjoy meeting new people.',
+        accent=('#284699', '#ffffff', '#8ba6f2', '#0b1633'),
     ),
 }
 
-# Order matters: it is the order a candidate is emailed them and the order the
-# checkboxes appear on the job form.
-ORDER = (SEI, PE)
+# Order matters: it is the order a candidate takes them (Part 1, Part 2) and
+# the order the checkboxes appear on the job form. The shorter one goes first
+# so a candidate settles in before the long one.
+ORDER = (PE, SEI)
 
 
 def get(key: str) -> Instrument:
