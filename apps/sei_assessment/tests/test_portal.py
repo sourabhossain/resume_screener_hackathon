@@ -439,3 +439,30 @@ def test_a_submit_the_timer_sent_is_recorded_as_time_expired(client, both):
     _save(client, both, PE, {'answers': {'1': 1}, 'finish': True, 'timed_out': True})
 
     assert _part(both, PE).auto_submitted
+
+
+@pytest.mark.django_db
+def test_the_hr_report_explains_the_category_as_the_recruiter_guide_does(client, django_user_model, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+    # Worked example on the score sheet: 11 / 12 / 13 reads Low / High / High.
+    answers = {'1': 2, '4': 2, '7': 3, '10': 2, '13': 2,
+               '2': 2, '5': 2, '8': 2, '11': 2, '14': 4,
+               '3': 1, '6': 1, '9': 3, '12': 1, '15': 1}
+    _save(client, both, PE, {'answers': answers, 'finish': True})
+    django_user_model.objects.create_user(username='portal-hr3', password='p', is_staff=True)
+    hr = type(client)()
+    hr.login(username='portal-hr3', password='p')
+
+    response = hr.get(reverse('sei_assessment:report', kwargs={'uuid': both.resume.uuid, 'instrument': PE}))
+    html = ' '.join(response.content.decode().split())
+
+    result = response.context['result']
+    assert result['category'] == 'Secretive' and result['pattern'] == 'Low / High / High'
+    assert 'shares very little about themselves. Colleagues may find them hard to know.' in html
+    assert 'Interpersonal Effectiveness Profile' in html
+    assert 'Note for recruiters' in html
+    assert 'Share these labels with recruiters only, not with candidates.' in html
+    assert html.count('This candidate') == 1
+    for name in ('Effective', 'Insensitive', 'Egocentric', 'Dogmatic', 'Task-Obsessed', 'Lonely-Empathic', 'Ineffective'):
+        assert name in html

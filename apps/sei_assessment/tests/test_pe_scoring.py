@@ -112,8 +112,8 @@ def test_the_category_table_matches_the_sheet():
     assert pe.CATEGORIES[('H', 'L', 'L')] == 'Egocentric'
     assert pe.CATEGORIES[('H', 'L', 'H')] == 'Dogmatic'
     assert pe.CATEGORIES[('L', 'H', 'H')] == 'Secretive'
-    assert pe.CATEGORIES[('L', 'H', 'L')] == 'Task-obsessed'
-    assert pe.CATEGORIES[('L', 'L', 'H')] == 'Lonely-empathic'
+    assert pe.CATEGORIES[('L', 'H', 'L')] == 'Task-Obsessed'
+    assert pe.CATEGORIES[('L', 'L', 'H')] == 'Lonely-Empathic'
     assert pe.CATEGORIES[('L', 'L', 'L')] == 'Ineffective'
 
 
@@ -165,3 +165,30 @@ def test_a_full_paper_is_complete():
     assert result['validity'] == pe.COMPLETE
     assert result['answered'] == 15
     assert result['minimum'] == 15
+
+
+# Word for word from the client's "Recruiter guide to the 8 result categories".
+RECRUITER_GUIDE = {
+    'Effective': ('High / High / High', 'Open about their own views, welcomes feedback, and reads people well. Communicates clearly and builds trust easily.'),
+    'Insensitive': ('High / High / Low', 'Speaks openly and accepts feedback, but often misses how others are reacting. May say the wrong thing without realising.'),
+    'Egocentric': ('High / Low / Low', "Talks a lot about themselves, does not seek feedback, and does not notice others' reactions. May dominate conversations."),
+    'Dogmatic': ('High / Low / High', 'States opinions strongly and notices reactions, but rarely changes their view. Can be rigid in discussions.'),
+    'Secretive': ('Low / High / High', 'Listens well, accepts feedback, and reads people accurately, but shares very little about themselves. Colleagues may find them hard to know.'),
+    'Task-Obsessed': ('Low / High / Low', "Focused on the work and open to correction, but shares little and can overlook people's feelings. Strong on tasks, weaker on relationships."),
+    'Lonely-Empathic': ('Low / Low / High', "Understands others' feelings well, but keeps to themselves and does not seek feedback. May stay on the edge of the team."),
+    'Ineffective': ('Low / Low / Low', "Shares little, does not use feedback, and rarely picks up on others' signals. Likely to need support in teamwork and communication."),
+}
+
+
+def test_the_categories_read_exactly_as_the_recruiter_guide():
+    table = {row['name']: (row['pattern'], row['meaning']) for row in pe.category_table()}
+    assert table == RECRUITER_GUIDE
+    assert [row['name'] for row in pe.category_table()] == list(RECRUITER_GUIDE)
+
+
+def test_the_three_scores_are_explained_as_the_guide_explains_them():
+    assert [(d['label'], d['short'], d['meaning']) for d in pe.DIMENSIONS] == [
+        ('Self-Disclosure', 'SD', 'How openly the candidate shares their own thoughts and feelings.'),
+        ('Openness to Feedback', 'OF', "How willing they are to hear and use others' views about them."),
+        ('Perceptiveness', 'P', "How well they notice others' feelings and reactions."),
+    ]

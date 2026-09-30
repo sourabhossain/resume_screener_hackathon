@@ -90,29 +90,72 @@ ITEMS = {
 # Starred (R) on the score sheet. Reversal on this instrument is 4 - x.
 REVERSED = frozenset({1, 3, 4, 5, 6, 10, 11, 12, 15})
 
-# One column of the score sheet each, five items apiece.
+# One column of the score sheet each, five items apiece. Names, short forms
+# and meanings are the recruiter guide's own wording.
 DIMENSIONS = (
-    {'key': 'self_disclosure', 'label': 'Self-disclosure',
+    {'key': 'self_disclosure', 'label': 'Self-Disclosure', 'short': 'SD',
+     'meaning': 'How openly the candidate shares their own thoughts and feelings.',
      'items': (1, 4, 7, 10, 13)},
-    {'key': 'openness', 'label': 'Openness to feedback',
+    {'key': 'openness', 'label': 'Openness to Feedback', 'short': 'OF',
+     'meaning': "How willing they are to hear and use others' views about them.",
      'items': (2, 5, 8, 11, 14)},
-    {'key': 'perceptiveness', 'label': 'Perceptiveness',
+    {'key': 'perceptiveness', 'label': 'Perceptiveness', 'short': 'P',
+     'meaning': "How well they notice others' feelings and reactions.",
      'items': (3, 6, 9, 12, 15)},
 )
 
 DIMENSION_MAX = ITEMS_PER_DIMENSION * MAX_RATING
 
-# The sheet's own table, keyed by the three letters in column order.
+# The sheet's own table, keyed by the three letters in column order, spelt as
+# the recruiter guide spells them.
 CATEGORIES = {
     ('H', 'H', 'H'): 'Effective',
     ('H', 'H', 'L'): 'Insensitive',
     ('H', 'L', 'L'): 'Egocentric',
     ('H', 'L', 'H'): 'Dogmatic',
     ('L', 'H', 'H'): 'Secretive',
-    ('L', 'H', 'L'): 'Task-obsessed',
-    ('L', 'L', 'H'): 'Lonely-empathic',
+    ('L', 'H', 'L'): 'Task-Obsessed',
+    ('L', 'L', 'H'): 'Lonely-Empathic',
     ('L', 'L', 'L'): 'Ineffective',
 }
+
+# "What the recruiter should understand", word for word from the recruiter
+# guide. For HR only: the guide says these labels are never shared with the
+# candidate.
+CATEGORY_MEANINGS = {
+    'Effective': 'Open about their own views, welcomes feedback, and reads people '
+                 'well. Communicates clearly and builds trust easily.',
+    'Insensitive': 'Speaks openly and accepts feedback, but often misses how others '
+                   'are reacting. May say the wrong thing without realising.',
+    'Egocentric': "Talks a lot about themselves, does not seek feedback, and does not "
+                  "notice others' reactions. May dominate conversations.",
+    'Dogmatic': 'States opinions strongly and notices reactions, but rarely changes '
+                'their view. Can be rigid in discussions.',
+    'Secretive': 'Listens well, accepts feedback, and reads people accurately, but '
+                 'shares very little about themselves. Colleagues may find them hard '
+                 'to know.',
+    'Task-Obsessed': "Focused on the work and open to correction, but shares little and "
+                     "can overlook people's feelings. Strong on tasks, weaker on "
+                     "relationships.",
+    'Lonely-Empathic': "Understands others' feelings well, but keeps to themselves and "
+                       "does not seek feedback. May stay on the edge of the team.",
+    'Ineffective': "Shares little, does not use feedback, and rarely picks up on others' "
+                   "signals. Likely to need support in teamwork and communication.",
+}
+
+WORDS = {'H': 'High', 'L': 'Low'}
+
+
+def pattern(marks) -> str:
+    """The letters as the guide writes them: "Low / High / High"."""
+    return ' / '.join(WORDS[m] for m in marks)
+
+
+def category_table():
+    """Every category with its pattern and meaning, in the guide's order."""
+    return [{'marks': marks, 'name': name, 'pattern': pattern(marks),
+             'meaning': CATEGORY_MEANINGS[name]}
+            for marks, name in CATEGORIES.items()]
 
 
 def reversed_value(item: int, raw: int) -> int:
@@ -172,6 +215,8 @@ def score(answers: dict) -> dict:
         dimensions.append({
             'key': spec['key'],
             'label': spec['label'],
+            'short': spec['short'],
+            'meaning': spec['meaning'],
             'items': spec['items'],
             'raw': raw,
             'max': DIMENSION_MAX,
@@ -189,6 +234,8 @@ def score(answers: dict) -> dict:
         'dimensions': dimensions,
         'marks': tuple(marks),
         'category': CATEGORIES[tuple(marks)],
+        'category_meaning': CATEGORY_MEANINGS[CATEGORIES[tuple(marks)]],
+        'pattern': pattern(marks),
         'answered': answered,
         'total_items': total_items,
         'minimum': total_items,

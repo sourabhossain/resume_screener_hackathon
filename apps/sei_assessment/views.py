@@ -495,7 +495,7 @@ def report(request, uuid, instrument):
         from . import pe_scoring
         # The sheet prints all eight so a reader can see where this one sits
         # among them, rather than being handed a bare label.
-        context['categories'] = list(pe_scoring.CATEGORIES.items())
+        context['categories'] = pe_scoring.category_table()
     return render(request, spec.report_template, context)
 
 

@@ -92,19 +92,38 @@
     .pe-key i.lo { background: var(--zone-lo); }
     .pe-key i.hi { background: var(--zone-hi); }
 
-    .pe-grid { display: grid; gap: .5rem; margin-top: 1.5rem; }
-    @media (min-width: 40rem) { .pe-grid { grid-template-columns: repeat(2, 1fr); } }
-    .pe-opt {
-        display: flex; align-items: baseline; gap: .6rem; padding: .55rem .75rem;
-        border: 1px solid var(--rule); border-radius: .5rem;
-        font-size: .875rem; color: var(--ink-2);
+    .pe-kicker { margin: 0 0 1rem; font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--high); }
+    .pe-label { margin: 0 0 .4rem; font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+    .pe-row-name small { margin-left: .35rem; font-size: .75rem; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
+    .pe-row-mean { margin: .15rem 0 0; font-size: .8125rem; color: var(--ink-2); }
+
+    .pe-table { width: 100%; margin-top: 1.5rem; border-collapse: separate; border-spacing: 0; font-size: .875rem; }
+    .pe-table th {
+        padding: .65rem .85rem; text-align: left; font-size: .75rem; font-weight: 600;
+        letter-spacing: .02em; color: var(--ink-3); border-bottom: 1px solid var(--rule-firm);
     }
-    .pe-opt.is-this { border-color: var(--high); color: var(--ink); font-weight: 600; }
-    .pe-opt b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink-3); letter-spacing: .06em; }
-    .pe-opt.is-this b { color: var(--high); }
+    .pe-table td { padding: .75rem .85rem; vertical-align: top; border-bottom: 1px solid var(--rule); color: var(--ink-2); line-height: 1.5; }
+    .pe-table td:first-child { font-weight: 600; color: var(--ink); white-space: nowrap; }
+    .pe-table td:nth-child(2), .pe-table th:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .pe-table tr.is-this td { background: color-mix(in srgb, var(--high) 9%, transparent); color: var(--ink); }
+    .pe-table tr.is-this td:first-child { box-shadow: inset 3px 0 0 var(--high); color: var(--high); }
+    .pe-this {
+        display: inline-block; margin-left: .45rem; padding: .05rem .45rem; border-radius: 999px;
+        font-size: .6875rem; font-weight: 600; background: var(--high); color: var(--paper); vertical-align: .1em;
+    }
+    @media (max-width: 40rem) {
+        .pe-table thead { display: none; }
+        .pe-table tr { display: block; padding: .75rem 0; border-bottom: 1px solid var(--rule); }
+        .pe-table td { display: block; padding: .15rem .75rem; border: 0; white-space: normal; }
+        .pe-table tr.is-this td { background: transparent; }
+        .pe-table tr.is-this { background: color-mix(in srgb, var(--high) 9%, transparent); box-shadow: inset 3px 0 0 var(--high); }
+        .pe-table tr.is-this td:first-child { box-shadow: none; }
+    }
 
     .pe-foot { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
-    .pe-foot p { margin: 0; max-width: 44em; font-size: .8125rem; line-height: 1.6; color: var(--ink-3); }
+    .pe-foot h2 { margin: 0 0 .45rem; font-size: .9375rem; font-weight: 600; }
+    .pe-foot p { margin: 0; max-width: 44em; font-size: .875rem; line-height: 1.6; color: var(--ink-2); }
+    .pe-foot p + p { margin-top: .5rem; font-style: italic; color: var(--ink-3); }
 
     .pe-blocked { padding: 2.5rem 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
     .pe-blocked h2 { margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--low); }
@@ -169,38 +188,38 @@
     {% else %}
     <hr class="pe-rule">
 
+    <p class="pe-kicker">Interpersonal Effectiveness Profile</p>
     <div class="pe-lede">
         <div class="pe-cat">
             <b>{{ result.category }}</b>
-            <i>{% for m in result.marks %}{{ m }}{% endfor %} &middot;
+            <i>{{ result.pattern }} &middot;
                {% for d in result.dimensions %}{{ d.raw }}{% if not forloop.last %} / {% endif %}{% endfor %}
-               of {{ result.dimension_max }} each</i>
+               of {{ result.dimension_max }} &middot; SD / OF / P</i>
         </div>
         <div>
-            <p class="pe-say">
-                The three column totals read
-                {% for d in result.dimensions %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{% if d.is_high %}High{% else %}Low{% endif %} on {{ d.label|lower }}{% endfor %},
-                which the sheet names <strong>{{ result.category }}</strong>.
-            </p>
+            <p class="pe-label">What the recruiter should understand</p>
+            <p class="pe-say">{{ result.category_meaning }}</p>
         </div>
     </div>
 
     <hr class="pe-rule">
 
-    <h2 class="pe-h">Each column against the High/Low line</h2>
+    <h2 class="pe-h">How to read the three scores</h2>
     <p>
-        Every column is five statements scored 0 to 4, so each runs 0 to
-        {{ result.dimension_max }}. A total above {{ result.dimensions.0.high_above }}
-        reads High; {{ result.dimensions.0.high_above }} itself or below reads Low.
+        Each score is the total of {{ result.dimensions.0.items|length }} statements.
+        A total above {{ result.dimensions.0.high_above }} is High and
+        {{ result.dimensions.0.high_above }} or below is Low. The three High/Low
+        results together give the category.
     </p>
 
     <div class="pe-rows">
         {% for dim in result.dimensions %}
         <div class="pe-row {% if dim.is_high %}is-high{% else %}is-low{% endif %}">
             <div class="pe-row-top">
-                <span class="pe-row-name">{{ dim.label }}</span>
+                <span class="pe-row-name">{{ dim.label }}<small>({{ dim.short }})</small></span>
                 <span class="pe-row-val">{{ dim.raw }} of {{ dim.max }}<u>{% if dim.is_high %}High{% else %}Low{% endif %}</u></span>
             </div>
+            <p class="pe-row-mean">{{ dim.meaning }}</p>
             <div class="pe-track" aria-hidden="true">
                 <div class="pe-zone lo" style="width: {{ dim.cut_percent }}%;"></div>
                 <div class="pe-zone hi" style="left: {{ dim.cut_percent }}%;"></div>
@@ -223,29 +242,31 @@
 
     <hr class="pe-rule">
 
-    <h2 class="pe-h">The sheet's eight categories</h2>
-    <p>
-        Each is one combination of the three letters, in column order:
-        self-disclosure, openness to feedback, perceptiveness.
-    </p>
-    <div class="pe-grid">
-        {% for combo, name in categories %}
-        <div class="pe-opt{% if combo == result.marks %} is-this{% endif %}">
-            <b>{% for m in combo %}{{ m }}{% endfor %}</b>
-            <span>{{ name }}</span>
-        </div>
-        {% endfor %}
-    </div>
+    <h2 class="pe-h">The 8 categories</h2>
+    <p>The three High/Low results, in the order SD / OF / P, give one of eight categories.</p>
+    <table class="pe-table">
+        <thead>
+            <tr><th scope="col">Category</th><th scope="col">Score pattern (SD / OF / P)</th><th scope="col">What the recruiter should understand</th></tr>
+        </thead>
+        <tbody>
+            {% for row in categories %}
+            <tr{% if row.marks == result.marks %} class="is-this" aria-current="true"{% endif %}>
+                <td>{{ row.name }}{% if row.marks == result.marks %}<span class="pe-this">This candidate</span>{% endif %}</td>
+                <td>{{ row.pattern }}</td>
+                <td>{{ row.meaning }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
     <div class="pe-foot">
+        <h2>Note for recruiters</h2>
         <p>
-            A self-report questionnaire, not a clinical instrument. It records how
-            {{ resume.candidate_name|title }} described themselves in
-            {{ instrument.time_limit_minutes }} minutes on one day. The sheet names a
-            category; it does not rank one above another, and it says nothing about
-            hiring. Read it alongside the interview and the rest of the file, never on
-            its own.
+            This result shows a tendency based on the candidate&rsquo;s own answers. It is
+            not a final judgement and should not be the only basis for a hiring decision.
+            Confirm it through the interview and reference checks before deciding.
         </p>
+        <p>Share these labels with recruiters only, not with candidates.</p>
     </div>
     {% endif %}
 </div>
