@@ -261,6 +261,17 @@ class SEIAssessment(models.Model):
             return self.TIME_LIMIT_MINUTES * 60
         return max(0, int((self.deadline_at - timezone.now()).total_seconds()))
 
+    # The page submits itself at zero with whatever it had not flushed yet, so
+    # that request always lands just after the deadline. Without a grace the
+    # last answers would be thrown away -- and PE needs every one of them.
+    SAVE_GRACE_SECONDS = 10
+
+    @property
+    def past_grace(self) -> bool:
+        """The deadline and the grace for the page's final save have both passed."""
+        return bool(self.deadline_at and timezone.now() >= self.deadline_at + timedelta(
+            seconds=self.SAVE_GRACE_SECONDS))
+
     @property
     def time_is_up(self) -> bool:
         return bool(self.deadline_at and timezone.now() >= self.deadline_at)

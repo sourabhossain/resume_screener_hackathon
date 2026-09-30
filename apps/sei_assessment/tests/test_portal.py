@@ -292,3 +292,150 @@ def test_hr_sees_the_reference_and_when_consent_was_given(client, django_user_mo
 
     assert both.reference_id in html
     assert 'consent given' in html
+
+
+@pytest.mark.django_db
+def test_a_part_finished_under_the_old_order_is_counted_as_done(client, both):
+    from django.utils import timezone
+    SEIAssessment.objects.filter(invitation=both, instrument=SEI).update(
+        answers={str(i): 1 for i in range(1, 49)}, started_at=timezone.now(),
+        deadline_at=timezone.now(), is_submitted=True, submitted_at=timezone.now())
+    _enter(client, both)
+
+    response = client.get(_url('entry', both))
+    html = ' '.join(response.content.decode().split())
+
+    assert response.context['mode'] == 'welcome'
+    assert 'You have one part left to complete.' in html
+    assert 'Complete the remaining part by' in html
+    assert [s['state'] for s in response.context['steps']] == ['active', '', 'done', '']
+
+
+# ── found in the pre-live review ─────────────────────────────────────────
+def _move_deadline(invitation, key, seconds):
+    from datetime import timedelta
+    from django.utils import timezone
+    SEIAssessment.objects.filter(invitation=invitation, instrument=key).update(
+        deadline_at=timezone.now() + timedelta(seconds=seconds))
+
+
+@pytest.mark.django_db
+def test_the_final_save_sent_at_zero_is_kept(client, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+    _save(client, both, PE, {'answers': {str(i): 2 for i in range(1, 15)}})
+    _move_deadline(both, PE, -1)
+
+    reply = _save(client, both, PE, {'answers': {'15': 4}, 'finish': True}).json()
+
+    part = _part(both, PE)
+    assert reply['status'] == 'submitted'
+    assert part.answers['15'] == 4 and part.is_valid_result
+    assert part.auto_submitted
+
+
+@pytest.mark.django_db
+def test_nothing_is_written_once_the_grace_is_over(client, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+    _move_deadline(both, PE, -(SEIAssessment.SAVE_GRACE_SECONDS + 1))
+
+    reply = _save(client, both, PE, {'answers': {'1': 4}}).json()
+
+    part = _part(both, PE)
+    assert reply['status'] == 'closed'
+    assert part.is_submitted and part.auto_submitted and part.answers == {}
+
+
+@pytest.mark.django_db
+def test_the_sweep_leaves_a_part_alone_during_the_grace(client, both):
+    from apps.sei_assessment.tasks import close_expired_sittings
+    _enter(client, both)
+    _begin(client, both, PE)
+    _move_deadline(both, PE, -1)
+
+    assert close_expired_sittings() == 0
+    _move_deadline(both, PE, -(SEIAssessment.SAVE_GRACE_SECONDS + 1))
+    assert close_expired_sittings() == 1
+
+
+@pytest.mark.django_db
+def test_a_running_part_outlives_the_link_expiring(client, both):
+    from datetime import timedelta
+    from django.utils import timezone
+    _enter(client, both)
+    _begin(client, both, PE)
+    AssessmentInvitation.objects.filter(pk=both.pk).update(
+        token_expires_at=timezone.now() - timedelta(minutes=1))
+
+    assert client.get(_url('test', both)).status_code == 200
+    reply = _save(client, both, PE, {'answers': {str(i): 1 for i in range(1, 16)},
+                                     'finish': True}).json()
+    assert reply['status'] == 'submitted'
+    assert 'This link has expired' in client.get(_url('entry', both)).content.decode()
+    assert not _part(both, SEI).has_started
+
+
+@pytest.mark.django_db
+def test_without_the_code_the_closed_pages_do_not_name_the_candidate(client, both):
+    _enter(client, both)
+    _finish(client, both, PE)
+    _finish(client, both, SEI)
+
+    stranger = type(client)()
+    html = stranger.get(_url('done', both)).content.decode()
+
+    assert 'Assessment submitted' in html
+    assert 'Tania' not in html
+    assert both.reference_id not in html
+
+
+@pytest.mark.django_db
+def test_the_second_part_running_first_is_not_called_the_last(client, both):
+    from django.utils import timezone
+    _enter(client, both)
+    _part(both, SEI).start_clock()
+
+    response = client.get(_url('test', both))
+
+    assert response.context['part_number'] == 2
+    assert response.context['is_last_part'] is False
+    assert 'Submit Part 2' in response.content.decode()
+    assert [s['state'] for s in response.context['steps']] == ['done', '', 'active', '']
+
+
+@pytest.mark.django_db
+def test_an_old_part_token_shares_the_invitation_code_allowance(rf, both):
+    from django.urls import resolve
+    from apps.sei_assessment.views import _rate_key
+    legacy = reverse('sei_assessment:verify', kwargs={'token': _part(both, SEI).token})
+    request = rf.post(legacy)
+    request.resolver_match = resolve(legacy)
+
+    assert _rate_key(None, request) == str(both.token)
+
+
+@pytest.mark.django_db
+def test_hr_numbers_the_parts_as_the_candidate_sees_them(client, django_user_model, sample_job, both):
+    _enter(client, both)
+    _finish(client, both, PE)
+    sample_job.assessments = [SEI]
+    sample_job.save(update_fields=['assessments'])
+    django_user_model.objects.create_user(username='portal-hr2', password='p', is_staff=True)
+    hr = type(client)()
+    hr.login(username='portal-hr2', password='p')
+
+    response = hr.get(reverse('core:resume_detail', kwargs={'uuid': both.resume.uuid}))
+
+    rows = response.context['job_assessments']
+    assert [(r['spec'].key, r['part']) for r in rows] == [(PE, 1), (SEI, 2)]
+
+
+@pytest.mark.django_db
+def test_a_submit_the_timer_sent_is_recorded_as_time_expired(client, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+
+    _save(client, both, PE, {'answers': {'1': 1}, 'finish': True, 'timed_out': True})
+
+    assert _part(both, PE).auto_submitted

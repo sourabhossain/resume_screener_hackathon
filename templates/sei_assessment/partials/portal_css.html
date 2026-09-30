@@ -10,6 +10,8 @@
         --ok: #15803d;
         --warn: #b45309;
         --bad: #b42335;
+        --ok-ink: #14532d;
+        --warn-ink: #7c2d12;
         max-width: 51.25rem; margin: 0 auto;
         color: var(--text); font-size: .9375rem; line-height: 1.6;
     }
@@ -23,6 +25,8 @@
         --ok: #4ade80;
         --warn: #fbbf24;
         --bad: #f87171;
+        --ok-ink: #4ade80;
+        --warn-ink: #fbbf24;
     }
     .ap-acc { --a: var(--c, var(--brand)); --ai: var(--ci, #fff); }
     html.dark .ap-acc { --a: var(--cd, #8ba6f2); --ai: var(--cdi, #0b1633); }
@@ -94,7 +98,7 @@
     .ap-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .625rem; margin-bottom: 1.125rem; }
     .ap-stat {
         border-radius: .75rem; padding: .75rem;
-        background: color-mix(in srgb, var(--t) 14%, var(--card)); color: color-mix(in srgb, var(--t) 70%, var(--text));
+        background: color-mix(in srgb, var(--t) 14%, var(--card)); color: color-mix(in srgb, var(--t) 60%, var(--text));
     }
     .ap-stat b { display: block; font-size: 1.375rem; line-height: 1.35; }
     .ap-stat span { font-size: .75rem; }
@@ -194,10 +198,11 @@
     .ap-grid.is-wide { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
     .ap-gc {
         border: 0; font-family: inherit; text-align: center; padding: .375rem 0; border-radius: .375rem; font-weight: 600; font-size: .75rem; cursor: pointer;
-        background: color-mix(in srgb, var(--ok) 14%, var(--card)); color: var(--ok);
+        background: color-mix(in srgb, var(--ok) 14%, var(--card)); color: var(--ok-ink);
+        border: 1.5px solid transparent;
     }
     .ap-grid.is-wide .ap-gc { padding: .5625rem 0; font-size: .875rem; border-radius: .625rem; }
-    .ap-gc.is-un { background: color-mix(in srgb, var(--warn) 20%, var(--card)); color: var(--warn); }
+    .ap-gc.is-un { background: color-mix(in srgb, var(--warn) 20%, var(--card)); color: var(--warn-ink); border-style: dashed; border-color: currentColor; }
     .ap-status { display: flex; gap: .5rem; align-items: flex-start; font-size: .875rem; margin: 0; }
     .ap-status svg { flex: none; width: 1.125rem; height: 1.125rem; margin-top: .125rem; }
     .ap-status.is-warn { color: var(--warn); }

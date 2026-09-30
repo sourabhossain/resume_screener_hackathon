@@ -46,6 +46,11 @@
         {% block portal %}{% endblock %}
     </div>
 
+    <script>
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) { window.location.reload(); }
+        });
+    </script>
     <p class="ap-legal">
         Confidential. Your responses are used only for recruitment purposes.
         Need help? Contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>

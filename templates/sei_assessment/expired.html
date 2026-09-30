@@ -7,10 +7,10 @@
     <div class="ap-ok is-warn" aria-hidden="true"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
     <h1 class="ap-h1">This link has expired</h1>
     <p class="ap-lead">
-        The assessment link was open until {{ invitation.token_expires_at|date:"j F Y" }} and has now closed.
+        The assessment link was open until {{ invitation.token_expires_at|date:"j F Y, g:i A" }} and has now closed.
         If you would still like to take it, write to <a href="mailto:{{ support_email }}">{{ support_email }}</a>
         and we will send a fresh link.
     </p>
-    <p class="ap-ref">Reference ID <b>{{ invitation.reference_id }}</b></p>
+    {% if verified %}<p class="ap-ref">Reference ID <b>{{ invitation.reference_id }}</b></p>{% endif %}
 </div>
 {% endblock %}

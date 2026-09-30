@@ -17,9 +17,9 @@
         </div>
 
         {% if invitation.otp_is_locked %}
-        <p class="ap-alert is-bad" role="alert"><b>Too many incorrect attempts</b>Request a new code below to continue.</p>
+        <p class="ap-alert is-bad" role="alert" id="ap-code-error"><b>Too many incorrect attempts</b>Request a new code below to continue.</p>
         {% elif error %}
-        <p class="ap-alert is-bad" role="alert">{{ error }}</p>
+        <p class="ap-alert is-bad" role="alert" id="ap-code-error">{{ error }}</p>
         {% endif %}
 
         <form method="post" hx-boost="false" class="ap-stack" style="margin-top: 1.25rem">
@@ -28,7 +28,7 @@
                 <input type="text" name="code" id="id_code" class="ap-code"
                        inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
                        maxlength="{{ invitation.OTP_DIGITS }}" required
-                       {% if error %}aria-invalid="true"{% endif %}>
+                       {% if error or invitation.otp_is_locked %}aria-invalid="true" aria-describedby="ap-code-error"{% endif %}>
             </label>
             <button type="submit" class="ap-btn is-block" {% if invitation.otp_is_locked %}disabled{% endif %}>Continue</button>
         </form>

@@ -7,11 +7,11 @@
     <div class="ap-ok" aria-hidden="true"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div>
     <h1 class="ap-h1">Assessment submitted</h1>
     <p class="ap-lead">
-        Thank you, {{ first_name }}.
+        Thank you{% if verified %}, {{ first_name }}{% endif %}.
         {% if multi %}{% if part_count == 2 %}Both parts are{% else %}All {{ part_count }} parts are{% endif %} recorded.{% else %}Your responses are recorded.{% endif %}
         {% if auto_submitted %}Where the time ran out, the answers you had given were submitted.{% endif %}
         There is nothing further to do, and you can close this page.
     </p>
-    <p class="ap-ref">Reference ID <b>{{ invitation.reference_id }}</b></p>
+    {% if verified %}<p class="ap-ref">Reference ID <b>{{ invitation.reference_id }}</b></p>{% endif %}
 </div>
 {% endblock %}

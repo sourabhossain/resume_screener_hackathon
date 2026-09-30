@@ -10,6 +10,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
@@ -50,17 +51,29 @@ def _candidate_page(view_fn):
     @wraps(view_fn)
     def wrapper(request, token, *args, **kwargs):
         try:
-            return view_fn(request, token, *args, **kwargs)
+            response = view_fn(request, token, *args, **kwargs)
         except InvalidLink:
             # Says nothing about whether the token ever existed.
-            return render(request, 'sei_assessment/invalid_link.html',
-                          {'support_email': SUPPORT_EMAIL}, status=404)
+            response = render(request, 'sei_assessment/invalid_link.html',
+                              {'support_email': SUPPORT_EMAIL}, status=404)
+        # Never from the browser's cache: Back must not bring up a page whose
+        # clock or Start button no longer matches the server.
+        add_never_cache_headers(response)
+        return response
     return wrapper
 
 
 def _rate_key(group, request) -> str:
-    """Rate-limit per link, not per IP: candidates may share a connection."""
-    return str(request.resolver_match.kwargs.get('token', ''))
+    """Rate-limit per invitation, not per IP: candidates may share a connection.
+
+    Resolved, because an old per-part token reaches the same invitation and must
+    not bring a second allowance of code guesses with it.
+    """
+    token = str(request.resolver_match.kwargs.get('token', ''))
+    try:
+        return str(_resolve(token)[0].token)
+    except InvalidLink:
+        return token
 
 
 def _session_key(invitation) -> str:
@@ -96,10 +109,23 @@ def _first_name(invitation) -> str:
 
 
 def _stepper(sittings, active):
-    """Instructions, Part 1..n, Submit, each marked done, active or ahead."""
-    labels = ['Instructions', *[f'Part {n}' for n in range(1, len(sittings) + 1)], 'Submit']
-    return [{'number': i + 1, 'label': label,
-             'state': 'done' if i < active else 'active' if i == active else ''}
+    """Instructions, Part 1..n, Submit, each marked done, active or ahead.
+
+    A part is done once submitted even if it comes after the active step: a
+    retake, or a part finished before the order changed, can leave one behind.
+    """
+    count = len(sittings)
+    labels = ['Instructions', *[f'Part {n}' for n in range(1, count + 1)], 'Submit']
+    submitted = {n for n, s in enumerate(sittings, start=1) if s.is_submitted}
+
+    def state(i):
+        if i == active:
+            return 'active'
+        if i in submitted or (i == 0 and active > 0) or (i == count + 1 and active > i):
+            return 'done'
+        return ''
+
+    return [{'number': i + 1, 'label': label, 'state': state(i)}
             for i, label in enumerate(labels)]
 
 
@@ -116,18 +142,26 @@ def _portal(invitation, sittings, active):
 
 
 def _closed_response(request, invitation, sittings):
-    """Whatever page applies when nothing is left to answer. None if something is."""
+    """Whatever page applies when nothing is left to answer. None if something is.
+
+    Anyone holding the link sees these, code or not, so the candidate's name and
+    reference only appear to a verified session.
+    """
     if not sittings:
         return render(request, 'sei_assessment/invalid_link.html',
                       {'support_email': SUPPORT_EMAIL}, status=404)
+    verified = _is_verified(request, invitation)
     if all(s.is_submitted for s in sittings):
         return render(request, 'sei_assessment/done.html', {
             **_portal(invitation, sittings, len(sittings) + 2),
+            'verified': verified,
             'auto_submitted': any(s.auto_submitted for s in sittings),
         })
-    if invitation.is_expired:
+    # A part already running keeps its own clock even if the link lapses mid-way.
+    running = any(s.has_started and not s.is_submitted for s in sittings)
+    if invitation.is_expired and not running:
         return render(request, 'sei_assessment/expired.html',
-                      _portal(invitation, sittings, 0))
+                      {**_portal(invitation, sittings, 0), 'verified': verified})
     return None
 
 
@@ -162,6 +196,7 @@ def _lobby(request, invitation, sittings, *, consent_error=False):
         'just_finished': before[-1] if before else None,
         'just_finished_number': sittings.index(before[-1]) + 1 if before else None,
         'total_minutes': sum(s.spec.time_limit_minutes for s in sittings if not s.is_submitted),
+        'remaining_count': sum(1 for s in sittings if not s.is_submitted),
         'needs_consent': not invitation.consented_at,
         'consent_error': consent_error,
         'practice_scale': spec.scale,
@@ -296,7 +331,7 @@ def test(request, token):
         'assessment': assessment,
         'instrument': spec,
         'part_number': number,
-        'is_last_part': number == len(sittings),
+        'is_last_part': all(s.is_submitted for s in sittings if s.pk != assessment.pk),
         'pages': pages,
         'items': [item for page in pages for item in page],
         'scale': spec.scale,
@@ -374,22 +409,33 @@ def save(request, token, instrument=None, part=None):
     finish = bool(incoming.get('finish'))
     # Locked, because two tabs answering at once would otherwise each merge onto
     # the copy they loaded and the later write would drop the earlier answers.
-    # In a timed sitting there is no chance to enter them again.
+    # In a timed sitting there is no chance to enter them again. Re-checked
+    # under the lock: a submit or the sweep may have closed it meanwhile.
     with transaction.atomic():
         locked = SEIAssessment.objects.select_for_update().get(pk=assessment.pk)
-        locked.answers = {**(locked.answers or {}), **cleaned}
-        fields = ['answers', 'updated_at']
-        if finish:
-            locked.is_submitted = True
-            locked.submitted_at = timezone.now()
-            locked.auto_submitted = False
-            fields += ['is_submitted', 'submitted_at', 'auto_submitted']
-        locked.save(update_fields=fields)
+        if locked.is_submitted or locked.past_grace:
+            closed = locked
+        else:
+            closed = None
+            locked.answers = {**(locked.answers or {}), **cleaned}
+            fields = ['answers', 'updated_at']
+            if finish:
+                locked.is_submitted = True
+                locked.submitted_at = timezone.now()
+                # The page's clock runs up to a second ahead of the server's, so
+                # it says when the timer, not the candidate, ended the part.
+                locked.auto_submitted = locked.time_is_up or bool(incoming.get('timed_out'))
+                fields += ['is_submitted', 'submitted_at', 'auto_submitted']
+            locked.save(update_fields=fields)
+    if closed is not None:
+        services.finalise_if_time_is_up(closed)
+        return JsonResponse({'status': 'closed',
+                             'reason': 'auto' if closed.auto_submitted else 'done'})
     assessment = locked
 
     if finish:
-        logger.info('sei.submitted assessment=%s answered=%s',
-                    assessment.pk, assessment.answered_count)
+        logger.info('sei.submitted assessment=%s answered=%s auto=%s',
+                    assessment.pk, assessment.answered_count, assessment.auto_submitted)
     return JsonResponse({
         'status': 'submitted' if finish else 'saved',
         'answered': assessment.answered_count,

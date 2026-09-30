@@ -211,7 +211,7 @@ def test_a_part_whose_time_ran_out_unlocks_the_next_without_the_sweep(
     _begin(client, invited, FIRST)
     _save(client, invited, FIRST, {'answers': {'1': 2}})
     SEIAssessment.objects.filter(invitation=invited, instrument=FIRST).update(
-        deadline_at=timezone.now() - timedelta(seconds=1))
+        deadline_at=timezone.now() - timedelta(seconds=SEIAssessment.SAVE_GRACE_SECONDS + 1))
 
     page = _flat(client.get(_url('entry', invited)))
 
@@ -412,7 +412,7 @@ def test_reloading_after_part_one_times_out_does_not_start_part_two(client, invi
     _verify(client, invited)
     _begin(client, invited, FIRST)
     SEIAssessment.objects.filter(invitation=invited, instrument=FIRST).update(
-        deadline_at=timezone.now() - timedelta(seconds=1))
+        deadline_at=timezone.now() - timedelta(seconds=SEIAssessment.SAVE_GRACE_SECONDS + 1))
 
     response = client.get(_url('test', invited))
 

@@ -211,7 +211,7 @@ def test_answers_are_refused_once_the_clock_runs_out(client, sitting):
     _begin(_open(client, sitting), sitting)
     _post(client, sitting, {'answers': {'1': 3}})
     SEIAssessment.objects.filter(pk=sitting.pk).update(
-        deadline_at=timezone.now() - timedelta(seconds=1))
+        deadline_at=timezone.now() - timedelta(seconds=SEIAssessment.SAVE_GRACE_SECONDS + 1))
 
     response = _post(client, sitting, {'answers': {'2': 3}})
 

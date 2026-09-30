@@ -6,6 +6,7 @@
 <form method="post" action="{% url 'sei_assessment:begin_part' token=invitation.token part=current.token %}"
       hx-boost="false" novalidate
       x-data="apLobby('{% if mode == 'transition' %}transition{% elif consent_error %}rules{% else %}welcome{% endif %}', {{ needs_consent|yesno:'true,false' }}, {{ consent_error|yesno:'true,false' }})"
+      @keydown.enter="if ($event.target.tagName === 'INPUT') { $event.preventDefault(); }"
       @submit="if (!ready()) { $event.preventDefault(); } else { busy = true; }">
     {% csrf_token %}
 
@@ -18,7 +19,7 @@
         <section x-show="step === 'welcome'"{% if consent_error %} x-cloak{% endif %}>
             <h1 class="ap-h1">Welcome, {{ first_name }}</h1>
             {% if multi %}
-            <p class="ap-lead">Thank you for your interest in the {{ invitation.resume.job.title }} role. You will complete {% if part_count == 2 %}two{% else %}{{ part_count }}{% endif %} short parts, one after the other.</p>
+            <p class="ap-lead">Thank you for your interest in the {{ invitation.resume.job.title }} role. {% if remaining_count == part_count %}You will complete {% if part_count == 2 %}two{% else %}{{ part_count }}{% endif %} short parts, one after the other.{% elif remaining_count == 1 %}You have one part left to complete.{% else %}You have {{ remaining_count }} parts left to complete.{% endif %}</p>
             <div class="ap-cards">
                 {% for part in parts %}
                 <div class="ap-pc ap-acc" style="{{ part.spec.accent_style }}">
@@ -29,10 +30,10 @@
                 {% endfor %}
             </div>
             <ul class="ap-list">
-                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>The timed parts take {{ total_minutes }} minutes in all. You can take a short break between parts; each timer starts only when you begin that part.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>{% if remaining_count > 1 %}The timed parts take {{ total_minutes }} minutes in all. You can take a short break between parts; each timer starts only when you begin that part.{% else %}It takes {{ total_minutes }} minutes, and the timer starts only when you begin.{% endif %}</span></li>
                 <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Use a laptop or tablet in a quiet place.</span></li>
                 <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Your progress saves automatically if you lose connection.</span></li>
-                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Complete {% if part_count == 2 %}both parts{% else %}every part{% endif %} by {{ invitation.token_expires_at|date:"j F" }}.</span></li>
+                <li class="ap-li"><span class="ap-dot" aria-hidden="true">&bull;</span><span>Complete {% if remaining_count < part_count %}{% if remaining_count == 1 %}the remaining part{% else %}the remaining parts{% endif %}{% elif part_count == 2 %}both parts{% else %}every part{% endif %} by {{ invitation.token_expires_at|date:"j F, g:i A" }}.</span></li>
             </ul>
             {% else %}
             <p class="ap-lead">You are invited to complete a short self-assessment for the {{ invitation.resume.job.title }} role.</p>

@@ -214,7 +214,7 @@ def finalise_if_time_is_up(assessment) -> bool:
     """
     if assessment.is_submitted or not assessment.has_started:
         return False
-    if not assessment.time_is_up:
+    if not assessment.past_grace:
         return False
 
     closed = SEIAssessment.objects.filter(

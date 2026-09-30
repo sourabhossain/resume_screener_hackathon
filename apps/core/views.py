@@ -411,6 +411,14 @@ def _candidate_forms_context(request, resume) -> dict:
         for key, sitting in sittings.items()
         if key not in set(resume.job.assessments or ()) and key in instruments.REGISTRY
     ]
+    # In the order the candidate takes them, numbered as the portal numbers
+    # them ("Part 2"), so the number a candidate quotes finds the right row.
+    rank = {key: i for i, key in enumerate(instruments.ORDER)}
+    job_assessments.sort(key=lambda row: rank[row['spec'].key])
+    part_numbers = {s.pk: n for n, s in enumerate(
+        invitation.ordered_sittings() if invitation else [], start=1)}
+    for row in job_assessments:
+        row['part'] = part_numbers.get(row['sitting'].pk) if row['sitting'] else None
 
     return {
         'resume': resume,

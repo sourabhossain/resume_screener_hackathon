@@ -39,8 +39,8 @@
         <div class="px-6 py-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3">
-                    {% if job_assessments|length > 1 %}
-                    <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{{ forloop.counter }}</span>
+                    {% if job_assessments|length > 1 and entry.part %}
+                    <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" title="Part {{ entry.part }} for the candidate">{{ entry.part }}</span>
                     {% endif %}
                     <h3 class="font-semibold text-zinc-900 dark:text-white">{{ entry.spec.label }}</h3>
                     {% if entry.sitting %}

@@ -20,7 +20,7 @@ Open your assessment:
 
 Your verification code is: {{ otp }}
 The code is valid for {{ otp_minutes }} minutes. If it expires you can request a
-new one from the same page. The link works until {{ deadline|date:"j F Y" }}{% if part_count > 1 %} and
+new one from the same page. The link works until {{ deadline|date:"j F Y, g:i A" }} (Bangladesh time){% if part_count > 1 %} and
 covers every part{% endif %}.
 
 Before you begin, please note:

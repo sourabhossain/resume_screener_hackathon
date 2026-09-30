@@ -75,14 +75,16 @@
 
 <div class="ap-foot">
     <button type="button" class="ap-btn g is-hidden" :class="{ 'is-hidden': view === 'questions' && page === 0 }" @click="back()">Back</button>
-    <span class="ap-hint" aria-live="polite">
-        <span x-show="saveFailed" x-cloak><b>Could not save. Check your connection.</b></span>
-        <span x-show="!saveFailed && saving" x-cloak>Saving&hellip;</span>
-        <span class="ap-idle" x-show="!saveFailed && !saving">Auto-saved</span>
+    <span class="ap-hint">
+        <span x-show="submitFailed" x-cloak><b>Could not submit. Check your connection; trying again.</b></span>
+        <span x-show="!submitFailed && saveFailed" x-cloak><b>Could not save. Check your connection.</b></span>
+        <span x-show="!submitFailed && !saveFailed && saving" x-cloak>Saving&hellip;</span>
+        <span class="ap-idle" x-show="!submitFailed && !saveFailed && !saving">Auto-saved</span>
     </span>
     <button type="button" class="ap-btn" x-show="view === 'questions'" @click="next()">
-        <span x-show="page < pageCount - 1">{% if instrument.per_page == 1 %}Next {{ instrument.noun }}{% else %}Next page{% endif %}</span>
-        <span x-show="page >= pageCount - 1" x-cloak>Review answers</span>
+        <span x-show="toReview()" x-cloak>Back to review</span>
+        <span x-show="!toReview() && page < pageCount - 1">{% if instrument.per_page == 1 %}Next {{ instrument.noun }}{% else %}Next page{% endif %}</span>
+        <span x-show="!toReview() && page >= pageCount - 1" x-cloak>Review answers</span>
     </button>
     <button type="button" class="ap-btn" x-show="view === 'review'" x-cloak @click="submit()" :disabled="busy || answered < total">
         <span x-show="!busy">{% if is_last_part %}Submit assessment{% else %}Submit Part {{ part_number }}{% endif %}</span>
@@ -105,10 +107,14 @@
             endsAt: Date.now() + state.secondsLeft * 1000,
             page: 0,
             view: 'questions',
+            fromReview: false,
             bad: false,
-            pending: {},
+            dirty: false,
+            inflight: null,
             saving: false,
             saveFailed: false,
+            submitFailed: false,
+            retryAt: 0,
             busy: false,
             done: false,
             announcement: '',
@@ -122,7 +128,7 @@
                 if (firstGap === -1 && this.total) { this.view = 'review'; }
                 this.tick = setInterval(() => this.countDown(), 1000);
                 this.flusher = setInterval(() => this.flush(), 5000);
-                window.addEventListener('beforeunload', () => this.flush(true));
+                window.addEventListener('pagehide', () => this.flushOnLeave());
                 window.addEventListener('keydown', (event) => this.hotkey(event));
             },
 
@@ -131,7 +137,7 @@
                 this.secondsLeft = Math.max(0, Math.round((this.endsAt - Date.now()) / 1000));
                 if (before > 300 && this.secondsLeft <= 300) { this.announcement = '5 minutes left.'; }
                 if (before > 60 && this.secondsLeft <= 60) { this.announcement = '1 minute left.'; }
-                if (this.secondsLeft === 0 && !this.done) { this.finish(); }
+                if (this.secondsLeft === 0 && !this.done && Date.now() >= this.retryAt) { this.finish(true); }
             },
 
             clock() {
@@ -146,6 +152,9 @@
             missingHere() {
                 return this.pageItems(this.page).filter((no) => this.answers[no] === undefined);
             },
+            toReview() {
+                return this.fromReview && this.answered >= this.total;
+            },
             focusItem(no) {
                 this.$nextTick(() => {
                     const card = document.querySelector('fieldset[data-item="' + no + '"]');
@@ -157,6 +166,9 @@
                 this.page = page;
                 this.view = view;
                 this.bad = false;
+                if (view === 'review') { this.fromReview = false; }
+                this.announcement = view === 'review' ? 'Review your answers.'
+                    : (this.perPage === 1 ? 'Question ' : 'Page ') + (page + 1) + ' of ' + this.pageCount + '.';
                 window.scrollTo({top: 0});
                 this.$nextTick(() => this.$refs.body.focus({preventScroll: true}));
             },
@@ -165,8 +177,8 @@
                 const missing = this.missingHere();
                 if (missing.length) { this.bad = true; this.focusItem(missing[0]); return; }
                 this.flush();
-                if (this.page < this.pageCount - 1) { this.show(this.page + 1, 'questions'); }
-                else { this.show(this.page, 'review'); }
+                if (this.toReview() || this.page >= this.pageCount - 1) { this.show(this.page, 'review'); }
+                else { this.show(this.page + 1, 'questions'); }
             },
             back() {
                 if (this.view === 'review') { this.show(this.pageCount - 1, 'questions'); }
@@ -174,6 +186,7 @@
             },
             jump(no) {
                 this.show(Math.floor(this.items.indexOf(no) / this.perPage), 'questions');
+                this.fromReview = true;
                 this.focusItem(no);
             },
 
@@ -199,38 +212,50 @@
 
             record(no, value) {
                 this.answers[no] = value;
-                this.pending[no] = value;
+                this.dirty = true;
             },
 
-            async post(body, keepalive) {
+            // Every save carries the whole answer sheet, one request at a time,
+            // so a slow reply can never land after a newer one and undo it.
+            post(body, keepalive) {
                 return fetch(state.saveUrl, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
-                    body: JSON.stringify(body),
+                    body: JSON.stringify(Object.assign({answers: Object.assign({}, this.answers)}, body || {})),
                     keepalive: !!keepalive,
                 });
             },
 
-            async flush(keepalive) {
-                const batch = this.pending;
-                if (!Object.keys(batch).length || this.done) { return; }
-                this.pending = {};
+            flush() {
+                if (this.inflight || !this.dirty || this.done) { return this.inflight; }
+                this.dirty = false;
                 this.saving = true;
-                try {
-                    const r = await this.post({answers: batch}, keepalive);
-                    if (!r.ok) { throw new Error('save failed'); }
-                    const reply = await r.json();
-                    if (reply.status === 'closed') { this.close(); return; }
-                    if (typeof reply.seconds_left === 'number') {
-                        this.endsAt = Date.now() + reply.seconds_left * 1000;
+                this.inflight = (async () => {
+                    try {
+                        const r = await this.post();
+                        if (r.status === 403) { this.close(); return; }
+                        if (!r.ok) { throw new Error('save failed'); }
+                        const reply = await r.json();
+                        if (reply.status === 'closed') { this.close(); return; }
+                        if (typeof reply.seconds_left === 'number') {
+                            this.endsAt = Date.now() + reply.seconds_left * 1000;
+                        }
+                        if (this.saveFailed) { this.announcement = 'Your answers are saved again.'; }
+                        this.saveFailed = false;
+                    } catch (err) {
+                        this.dirty = true;
+                        if (!this.saveFailed) { this.announcement = 'Could not save. Check your connection.'; }
+                        this.saveFailed = true;
+                    } finally {
+                        this.saving = false;
+                        this.inflight = null;
                     }
-                    this.saveFailed = false;
-                } catch (err) {
-                    this.pending = Object.assign({}, batch, this.pending);
-                    this.saveFailed = true;
-                } finally {
-                    this.saving = false;
-                }
+                })();
+                return this.inflight;
+            },
+
+            flushOnLeave() {
+                if (this.dirty && !this.done) { this.post({}, true).catch(() => {}); }
             },
 
             submit() {
@@ -238,21 +263,31 @@
                 this.finish();
             },
 
-            async finish() {
+            // Waits for any save still on its way, then sends the whole sheet
+            // with the submit. Leaves the page only once the server has it.
+            async finish(timedOut) {
                 if (this.done) { return; }
                 this.done = true;
                 this.busy = true;
-                const batch = this.pending;
-                this.pending = {};
+                if (this.inflight) { await this.inflight; }
                 try {
-                    await this.post({answers: batch, finish: true});
+                    const r = await this.post({finish: true, timed_out: !!timedOut || this.secondsLeft === 0});
+                    if (r.status === 403) { this.close(); return; }
+                    const reply = r.ok ? await r.json() : {};
+                    if (reply.status === 'submitted' || reply.status === 'closed') { this.close(); return; }
+                    throw new Error('submit failed');
                 } catch (err) {
-                    // The server closes the part on its own deadline anyway.
+                    this.done = false;
+                    this.busy = false;
+                    this.retryAt = Date.now() + 3000;
+                    if (!this.submitFailed) { this.announcement = 'Could not submit. Check your connection.'; }
+                    this.submitFailed = true;
+                    if (this.secondsLeft > 0) { setTimeout(() => this.finish(), 3000); }
                 }
-                this.close();
             },
 
             close() {
+                this.done = true;
                 clearInterval(this.tick);
                 clearInterval(this.flusher);
                 window.location = state.entryUrl;
