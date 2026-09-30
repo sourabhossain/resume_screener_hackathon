@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 # interviewing, so the gate has to stay open past it -- otherwise moving a
 # candidate to "Offer Extended" would lock HR out of the section that records
 # the offer.
-STATUSES_ALLOWING_START = frozenset({'interviewing', 'offer_extended', 'hired'})
+# From Selected on (see apps.core.status).
+from apps.core.status import POST_SELECTION as STATUSES_ALLOWING_START  # noqa: E402
 
 
 def _hr_admin_required(view_fn):
@@ -211,6 +212,10 @@ def step(request, uuid, step_key):
                 'hr_verification.section_saved verification=%s section=%s by=%s',
                 verification.pk, step_key, request.user.pk,
             )
+            if (verification.answers or {}).get('offer_letter_issued') == 'yes':
+                from apps.core.status import advance
+                advance(verification.resume, 'offer_extended',
+                        reason='Offer letter recorded as issued', user=request.user)
 
             saved = schema.get_step(step_key)['title']
             next_key = schema.next_step_key(step_key)
@@ -304,5 +309,9 @@ def submit(request, uuid):
         'hr_verification.signed_off verification=%s resume=%s by=%s',
         verification.pk, resume.pk, request.user.pk,
     )
+    from apps.core.status import advance
+    advance(resume, 'bgv_completed', reason='HR verification signed off', user=request.user)
+    if (verification.answers or {}).get('offer_letter_issued') == 'yes':
+        advance(resume, 'offer_extended', reason='Offer letter recorded as issued', user=request.user)
     messages.success(request, 'HR background verification signed off.')
     return redirect('hr_verification:detail', uuid=uuid)

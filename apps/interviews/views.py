@@ -37,6 +37,8 @@ def interview_create(request, resume_uuid):
                 interview = form.save(commit=False)
                 interview.resume = resume
                 interview.save()
+                from apps.core.status import advance
+                advance(resume, 'interviewing', reason='Interview scheduled', user=request.user)
                 messages.success(request, 'Interview scheduled.')
                 return redirect('interviews:detail', pk=interview.pk)
         if form.errors:

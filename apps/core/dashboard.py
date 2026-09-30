@@ -22,10 +22,15 @@ DEFAULT_RANGE = '90d'
 FUNNEL_STAGES = [
     ('applied', 'Applications'),
     ('shortlisted', 'Shortlisted'),
-    ('phone_screen', 'Phone screen'),
+    ('phone_screen', 'Phone screening'),
+    ('assessment', 'Assessment / test'),
     ('interviewing', 'Interviewing'),
-    ('offer_extended', 'Offer extended'),
-    ('hired', 'Hired'),
+    ('selected', 'Selected'),
+    ('info_received', 'Information received'),
+    ('bgv_completed', 'Verification completed'),
+    ('offer_extended', 'Offer letter sent'),
+    ('pre_onboarding', 'Pre-onboarding'),
+    ('hired', 'Onboarded'),
 ]
 STAGE_RANK = {key: rank for rank, (key, _) in enumerate(FUNNEL_STAGES)}
 STAGE_RANK['new'] = 0
@@ -104,28 +109,44 @@ def hr_answers(resumes):
 def furthest_stages(resumes, hr=None):
     """{resume_id: stage rank}, from the current status plus what has happened since.
 
-    A rejected candidate keeps the furthest stage their records prove: an
-    information form means shortlisted, a held interview means interviewing,
-    and (HR view only) an issued offer letter means an offer went out.
+    A rejected candidate keeps the furthest stage their records prove: the
+    status history, an information form (sent, then submitted), an assessment
+    sent, a held interview, and (HR view only) a signed-off verification and an
+    issued offer letter.
     """
+    from apps.core.models import StatusChange
     from apps.employee_form.models import EmployeeForm
     from apps.interviews.models import Interview
+    from apps.sei_assessment.models import AssessmentInvitation
 
-    shortlisted = set(EmployeeForm.objects.filter(resume__in=resumes)
-                      .values_list('resume_id', flat=True))
-    interviewed = set(Interview.objects.filter(resume__in=resumes).exclude(status='cancelled')
-                      .values_list('resume_id', flat=True))
-    offered = {pk for pk, a in (hr or {}).items() if (a or {}).get('offer_letter_issued') == 'yes'}
+    evidence = {}
+
+    def reach(pks, stage):
+        for pk in pks:
+            evidence[pk] = max(evidence.get(pk, 0), STAGE_RANK[stage])
+
+    for pk, to_status in StatusChange.objects.filter(resume__in=resumes).values_list(
+            'resume_id', 'to_status'):
+        if to_status in STAGE_RANK:
+            evidence[pk] = max(evidence.get(pk, 0), STAGE_RANK[to_status])
+    forms = EmployeeForm.objects.filter(resume__in=resumes)
+    reach(forms.values_list('resume_id', flat=True), 'shortlisted')
+    reach(forms.filter(is_submitted=True).values_list('resume_id', flat=True), 'info_received')
+    reach(AssessmentInvitation.objects.filter(resume__in=resumes, invited_at__isnull=False)
+          .values_list('resume_id', flat=True), 'assessment')
+    reach(Interview.objects.filter(resume__in=resumes).exclude(status='cancelled')
+          .values_list('resume_id', flat=True), 'interviewing')
+    # HR-only evidence only for an HR view: a recruiter's funnel must not reveal
+    # which candidates cleared background verification.
+    if hr:
+        from apps.hr_verification.models import HRVerification
+        reach(HRVerification.objects.filter(resume__in=resumes, is_submitted=True)
+              .values_list('resume_id', flat=True), 'bgv_completed')
+        reach([pk for pk, a in hr.items() if (a or {}).get('offer_letter_issued') == 'yes'],
+              'offer_extended')
     ranks = {}
     for pk, status in resumes.values_list('id', 'recruiter_status'):
-        rank = STAGE_RANK.get(status, 0)
-        if pk in shortlisted:
-            rank = max(rank, STAGE_RANK['shortlisted'])
-        if pk in interviewed:
-            rank = max(rank, STAGE_RANK['interviewing'])
-        if pk in offered:
-            rank = max(rank, STAGE_RANK['offer_extended'])
-        ranks[pk] = rank
+        ranks[pk] = max(STAGE_RANK.get(status, 0), evidence.get(pk, 0))
     return ranks
 
 
@@ -441,12 +462,19 @@ def attention_items(*, hr_view):
         is_submitted=False, token_expires_at__gte=now, token_expires_at__lte=now + timedelta(days=3),
         interview__resume__in=live).exclude(interview__status='cancelled').count()
 
+    rejection_pending = live.filter(recruiter_status='rejected',
+                                    rejection_email_sent_at__isnull=True).count()
+    checklists_open = sum(1 for r in live.filter(recruiter_status='pre_onboarding').only(
+        'onboarding_checklist') if not r.onboarding_complete)
+
     items = [
         ('critical', stats['failed'], 'Screening failed', reverse('core:screening_failed')),
         ('warning', stats['review'], 'Needs review', reverse('core:needs_review')),
         ('critical', invite_failures, 'Invites failed to send', None),
         ('warning', expiring, 'Evaluation links expiring in 3 days', None),
         ('warning', stalled_forms, 'Information forms waiting over 3 days', None),
+        ('warning', rejection_pending, 'Rejection emails not sent', None),
+        ('info', checklists_open, 'Pre-onboarding checklists open', None),
         ('info', stats['unseen'], 'Unseen candidates', reverse('core:job_list')),
         ('info', stats['pool'], 'Talent pool candidates', reverse('core:talent_pool')),
     ]
@@ -456,6 +484,8 @@ def attention_items(*, hr_view):
         items.insert(3, ('warning', flagged, 'Reference replies flagged', None))
         awaiting = HRVerification.objects.filter(is_submitted=False, **on_live).count()
         items.append(('info', awaiting, 'Background checks awaiting sign-off', None))
+        not_started = live.filter(recruiter_status='info_received', hr_verification__isnull=True).count()
+        items.append(('warning', not_started, 'Information received, verification not started', None))
     return [{'tone': tone, 'count': count, 'label': label, 'url': url}
             for tone, count, label, url in items if count]
 
@@ -493,8 +523,8 @@ def build(user, params):
          'spark': series['spark']},
         {'key': 'shortlisted', 'label': 'Shortlisted', 'value': shortlisted, 'format': 'int',
          'caption': f'{_fmt_pct(_pct(shortlisted, total))} of candidates'},
-        {'key': 'hire_conversion', 'label': 'Hire conversion', 'value': _pct(hired, shortlisted),
-         'format': 'pct', 'caption': f'{hired} hired of {shortlisted} shortlisted'},
+        {'key': 'hire_conversion', 'label': 'Onboard conversion', 'value': _pct(hired, shortlisted),
+         'format': 'pct', 'caption': f'{hired} onboarded of {shortlisted} shortlisted'},
     ]
     if hr_view:
         offers = _offer_stats(hr)

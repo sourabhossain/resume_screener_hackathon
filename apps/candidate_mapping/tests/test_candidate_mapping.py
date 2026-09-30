@@ -22,7 +22,7 @@ def candidate(db, sample_job):
         job=sample_job,
         candidate_name='Ayesha Rahman',
         email='ayesha@example.com',
-        recruiter_status='interviewing',
+        recruiter_status='selected',
     )
 
 
@@ -122,8 +122,8 @@ def test_the_signature_is_not_served_to_a_recruiter(authenticated_client):
 
 
 # ── When it opens ────────────────────────────────────────────────────────
-@pytest.mark.parametrize('status', ['interviewing', 'offer_extended', 'hired'])
-def test_can_start_from_interviewing_onwards(hr_client, candidate, status):
+@pytest.mark.parametrize('status', ['selected', 'info_received', 'bgv_completed', 'offer_extended', 'pre_onboarding', 'hired'])
+def test_can_start_from_selected_onwards(hr_client, candidate, status):
     candidate.recruiter_status = status
     candidate.save()
 
@@ -132,8 +132,8 @@ def test_can_start_from_interviewing_onwards(hr_client, candidate, status):
     assert CandidateMapping.objects.filter(resume=candidate).exists()
 
 
-@pytest.mark.parametrize('status', ['new', 'shortlisted', 'phone_screen'])
-def test_cannot_start_before_interviewing(hr_client, candidate, status):
+@pytest.mark.parametrize('status', ['new', 'shortlisted', 'phone_screen', 'assessment', 'interviewing'])
+def test_cannot_start_before_selected(hr_client, candidate, status):
     candidate.recruiter_status = status
     candidate.save()
 

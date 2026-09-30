@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 # These open with the two HR instruments, once the candidate is actually being
 # interviewed. Asking a former employer about someone you have not met yet is
 # both premature and a disclosure the candidate would not expect.
-STATUSES_ALLOWING_SEND = frozenset({'interviewing', 'offer_extended', 'hired'})
+# From Selected on (see apps.core.status).
+from apps.core.status import POST_SELECTION as STATUSES_ALLOWING_SEND  # noqa: E402
 
 
 # ── HR side ──────────────────────────────────────────────────────────────

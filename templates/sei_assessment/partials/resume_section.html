@@ -23,7 +23,7 @@
         {% elif assessment_invitation %}
         Prepared but not emailed yet. The invitation is queued; if it keeps saying this, send it again.
         {% else %}
-        Sent when the candidate is shortlisted, as one email with one link{% if job_assessments|length > 1 %}. The assessments open one after another{% endif %}.
+        Sent when the candidate is moved to Assessment / Test, as one email with one link{% if job_assessments|length > 1 %}. The assessments open one after another{% endif %}.
         {% endif %}
 
         {% if assessment_invitation.last_error %}

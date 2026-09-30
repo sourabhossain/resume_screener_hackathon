@@ -35,7 +35,7 @@ def job(sample_job):
 def candidate(db, job):
     return Resume.objects.create(
         job=job, candidate_name='Farhan Kabir',
-        email='farhan@example.com', recruiter_status='shortlisted')
+        email='farhan@example.com', recruiter_status='assessment')
 
 
 @pytest.fixture
@@ -122,16 +122,16 @@ def test_a_single_assessment_keeps_its_own_subject(job, candidate):
 
 
 @pytest.mark.django_db
-def test_shortlisting_twice_does_not_send_twice(authenticated_client, job):
+def test_moving_to_assessment_twice_does_not_send_twice(authenticated_client, job):
     resume = Resume.objects.create(
         job=job, candidate_name='Rafi', email='rafi@example.com',
         recruiter_status='new')
     url = reverse('core:resume_status_update', kwargs={'uuid': resume.uuid})
     mail.outbox = []
 
-    authenticated_client.post(url, {'recruiter_status': 'shortlisted'})
+    authenticated_client.post(url, {'recruiter_status': 'assessment'})
     authenticated_client.post(url, {'recruiter_status': 'phone_screen'})
-    authenticated_client.post(url, {'recruiter_status': 'shortlisted'})
+    authenticated_client.post(url, {'recruiter_status': 'assessment'})
 
     assert len(_assessment_mail()) == 1
 

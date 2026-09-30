@@ -51,6 +51,8 @@ urlpatterns = [
     path('resumes/<uuid:uuid>/seen-update/', views.resume_seen_update, name='resume_seen_update'),
     # Re-rendered after a status change; see views.resume_forms.
     path('resumes/<uuid:uuid>/forms/', views.resume_forms, name='resume_forms'),
+    path('resumes/<uuid:uuid>/onboarding/', views.resume_onboarding_toggle, name='resume_onboarding_toggle'),
+    path('resumes/<uuid:uuid>/rejection-email/', views.resume_rejection_send, name='resume_rejection_send'),
 
     # Talent pool
     path('talent-pool/', views.talent_pool, name='talent_pool'),

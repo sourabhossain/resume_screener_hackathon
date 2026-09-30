@@ -1,4 +1,4 @@
-"""Which assessments a job sends, and what a candidate gets when shortlisted.
+"""Which assessments a job sends, and what a candidate gets on Assessment / Test.
 
 The rule is that the job decides. Nothing goes out that the job did not ask
 for, and a job that asks for nothing sends nothing -- which is what every job
@@ -17,9 +17,10 @@ from apps.sei_assessment.models import SEIAssessment
 
 
 def _shortlist(client, resume):
+    """Move the candidate to Assessment / Test, the status that sends the tests."""
     return client.post(
         reverse('core:resume_status_update', kwargs={'uuid': resume.uuid}),
-        {'recruiter_status': 'shortlisted'})
+        {'recruiter_status': 'assessment'})
 
 
 @pytest.fixture

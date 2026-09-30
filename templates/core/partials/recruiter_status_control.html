@@ -47,7 +47,8 @@
                 {% for opt in resume.recruiter_status_options %}{% if not opt.outcome %}
                 <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
                         aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
-                        title="{{ opt.hint }}"
+                        {% if opt.blocked %}disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"{% endif %}
+                        title="{% if opt.blocked %}Complete the Pre-Onboarding checklist first{% else %}{{ opt.hint }}{% endif %}"
                         x-on:click="open = false"
                         class="status-picker__option{% if opt.current %} status-picker__option--active status-picker__option--{{ opt.tone }}{% endif %}">
                     <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
@@ -68,7 +69,8 @@
                 {% for opt in resume.recruiter_status_options %}{% if opt.outcome %}
                 <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
                         aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
-                        title="{{ opt.hint }}"
+                        {% if opt.blocked %}disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"{% endif %}
+                        title="{% if opt.blocked %}Complete the Pre-Onboarding checklist first{% else %}{{ opt.hint }}{% endif %}"
                         x-on:click="open = false"
                         class="status-picker__option{% if opt.current %} status-picker__option--active status-picker__option--{{ opt.tone }}{% endif %}">
                     <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">

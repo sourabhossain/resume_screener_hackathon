@@ -1,7 +1,7 @@
 {% comment %}
 The three form cards, re-rendered in place when the recruiter status changes --
-shortlisting sends the information form, and Interviewing opens the two HR
-instruments, so the cards go stale the moment the status control is swapped.
+Selected sends the information form and opens the HR instruments, so the
+cards go stale the moment the status control is swapped.
 
 hx-target and hx-select are set explicitly, not left to inherit: <body> carries
 hx-boost with hx-target="#main-content" and hx-select="#main-content", and
@@ -20,6 +20,7 @@ instead of navigating.
      hx-swap="outerHTML"
      hx-select="unset"
      hx-disinherit="hx-target hx-select hx-swap hx-trigger">
+    {% include 'core/partials/recruitment_progress.html' %}
     {% include 'employee_form/partials/resume_section.html' with resume=resume form_obj=employee_form %}
 
     {% if hr_verification_visible %}

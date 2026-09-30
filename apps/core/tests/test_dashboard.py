@@ -37,8 +37,9 @@ def test_the_funnel_counts_the_furthest_stage_a_rejected_candidate_reached(sampl
     ranks = dashboard.furthest_stages(resumes, dashboard.hr_answers(resumes))
     counts = {s['key']: s['count'] for s in dashboard.funnel(ranks)['stages']}
 
-    assert counts == {'applied': 5, 'shortlisted': 4, 'phone_screen': 3,
-                      'interviewing': 3, 'offer_extended': 2, 'hired': 1}
+    assert counts == {'applied': 5, 'shortlisted': 4, 'phone_screen': 3, 'assessment': 3,
+                      'interviewing': 3, 'selected': 2, 'info_received': 2, 'bgv_completed': 2,
+                      'offer_extended': 2, 'pre_onboarding': 1, 'hired': 1}
 
 
 @pytest.mark.django_db

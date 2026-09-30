@@ -56,7 +56,7 @@ def test_the_invite_toast_still_rides_along(hr_client, candidate):
 
     response = hr_client.post(
         _status_url(candidate),
-        {'recruiter_status': 'shortlisted', 'context': 'card'},
+        {'recruiter_status': 'selected', 'context': 'card'},
         HTTP_HX_REQUEST='true',
     )
 
@@ -65,12 +65,14 @@ def test_the_invite_toast_still_rides_along(hr_client, candidate):
     assert triggers['toast']['level'] == 'success'
 
 
-def test_the_cards_open_at_interviewing(hr_client, candidate):
+def test_the_cards_open_at_selected(hr_client, candidate):
+    candidate.recruiter_status = 'interviewing'
+    candidate.save()
     before = hr_client.get(_forms_url(candidate)).content.decode()
     assert 'Start verification' not in before
     assert 'Start mapping' not in before
 
-    candidate.recruiter_status = 'interviewing'
+    candidate.recruiter_status = 'selected'
     candidate.save()
 
     after = hr_client.get(_forms_url(candidate)).content.decode()
@@ -141,7 +143,7 @@ def test_the_block_does_not_hand_its_wiring_to_the_links_inside(hr_client, candi
 
 def test_the_cards_do_contain_boosted_links(hr_client, candidate):
     """Guards the test above: it only means something while the links exist."""
-    candidate.recruiter_status = 'interviewing'
+    candidate.recruiter_status = 'selected'
     candidate.save()
 
     body = hr_client.get(_forms_url(candidate)).content.decode()

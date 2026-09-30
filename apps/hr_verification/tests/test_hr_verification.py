@@ -3,6 +3,7 @@ prefill from the Employee Information Form, sign-off validation and review."""
 import re
 
 import pytest
+from django.utils import timezone
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -30,7 +31,7 @@ def candidate(db, sample_job):
         candidate_name='Ayesha Rahman',
         email='ayesha@example.com',
         phone='+8801711123456',
-        recruiter_status='interviewing',
+        recruiter_status='selected',
     )
 
 
@@ -1159,16 +1160,16 @@ def test_hr_sees_the_card(hr_client, candidate):
     assert 'HR Background Verification' in body
 
 
-@pytest.mark.parametrize('status', ['interviewing', 'offer_extended', 'hired'])
-def test_can_start_from_interviewing_onwards(hr_client, candidate, status):
+@pytest.mark.parametrize('status', ['selected', 'info_received', 'bgv_completed', 'offer_extended', 'pre_onboarding', 'hired'])
+def test_can_start_from_selected_onwards(hr_client, candidate, status):
     candidate.recruiter_status = status
     candidate.save()
     hr_client.post(_url('start', candidate))
     assert HRVerification.objects.filter(resume=candidate).exists()
 
 
-@pytest.mark.parametrize('status', ['new', 'shortlisted', 'phone_screen'])
-def test_cannot_start_before_interviewing(hr_client, candidate, status):
+@pytest.mark.parametrize('status', ['new', 'shortlisted', 'phone_screen', 'assessment', 'interviewing'])
+def test_cannot_start_before_selected(hr_client, candidate, status):
     candidate.recruiter_status = status
     candidate.save()
     hr_client.post(_url('start', candidate))
@@ -1349,7 +1350,7 @@ def test_hr_pages_warn_when_the_candidate_declined_consent(client, django_user_m
     django_user_model.objects.create_user(username='hr-consent', password='p', is_staff=True)
     client.login(username='hr-consent', password='p')
     resume = Resume.objects.create(job=sample_job, candidate_name='No Consent',
-                                   email='nc@example.com', recruiter_status='interviewing')
+                                   email='nc@example.com', recruiter_status='selected')
     EmployeeForm.objects.create(resume=resume, is_submitted=True,
                                 answers={'verification_consent': 'no'})
     HRVerification.objects.create(resume=resume)
@@ -1358,3 +1359,28 @@ def test_hr_pages_warn_when_the_candidate_declined_consent(client, django_user_m
                 reverse('hr_verification:step', kwargs={'uuid': resume.uuid,
                                                         'step_key': 'hr_review'})):
         assert 'did not consent to background verification' in client.get(url).content.decode()
+
+
+def test_sign_off_moves_the_candidate_to_verification_completed(hr_client, candidate):
+    candidate.recruiter_status = 'info_received'
+    candidate.save(update_fields=['recruiter_status'])
+    _fill_everything(hr_client, candidate)
+
+    hr_client.post(_url('submit', candidate))
+
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == 'bgv_completed'
+
+
+def test_recording_the_offer_letter_moves_the_candidate_to_offer_letter_sent(hr_client, candidate):
+    candidate.recruiter_status = 'bgv_completed'
+    candidate.save(update_fields=['recruiter_status'])
+    verification = _fill_everything(hr_client, candidate)
+    HRVerification.objects.filter(pk=verification.pk).update(
+        answers={**verification.answers, 'offer_letter_issued': 'yes',
+                 'offer_letter_issue_date': timezone.localdate().isoformat()})
+
+    hr_client.post(_url('submit', candidate))
+
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == 'offer_extended'

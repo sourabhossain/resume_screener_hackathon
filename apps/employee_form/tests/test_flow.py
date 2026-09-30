@@ -44,9 +44,9 @@ def _otp_from_outbox():
 
 
 # ── Invitation ───────────────────────────────────────────────────────────
-def test_shortlisting_sends_invite_with_link_and_otp(authenticated_client, candidate):
+def test_selecting_sends_invite_with_link_and_otp(authenticated_client, candidate):
     url = reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid})
-    response = authenticated_client.post(url, {'recruiter_status': 'shortlisted'})
+    response = authenticated_client.post(url, {'recruiter_status': 'selected'})
 
     assert response.status_code == 302
     form = EmployeeForm.objects.get(resume=candidate)
@@ -62,7 +62,7 @@ def test_shortlisting_sends_invite_with_link_and_otp(authenticated_client, candi
 def test_otp_is_never_stored_in_plaintext(authenticated_client, candidate):
     authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted'},
+        {'recruiter_status': 'selected'},
     )
     form = EmployeeForm.objects.get(resume=candidate)
     otp = _otp_from_outbox()
@@ -72,11 +72,11 @@ def test_otp_is_never_stored_in_plaintext(authenticated_client, candidate):
     assert form.check_otp(otp) is True
 
 
-def test_shortlisting_again_does_not_resend(authenticated_client, candidate):
+def test_selecting_again_does_not_resend(authenticated_client, candidate):
     url = reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid})
-    authenticated_client.post(url, {'recruiter_status': 'shortlisted'})
-    authenticated_client.post(url, {'recruiter_status': 'phone_screen'})
-    authenticated_client.post(url, {'recruiter_status': 'shortlisted'})
+    authenticated_client.post(url, {'recruiter_status': 'selected'})
+    authenticated_client.post(url, {'recruiter_status': 'interviewing'})
+    authenticated_client.post(url, {'recruiter_status': 'selected'})
 
     assert len(_form_emails()) == 1
     assert EmployeeForm.objects.get(resume=candidate).invite_count == 1
@@ -85,7 +85,7 @@ def test_shortlisting_again_does_not_resend(authenticated_client, candidate):
 def test_recruiter_can_explicitly_resend(authenticated_client, candidate):
     authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted'},
+        {'recruiter_status': 'selected'},
     )
     authenticated_client.post(
         reverse('employee_form:send', kwargs={'uuid': candidate.uuid})

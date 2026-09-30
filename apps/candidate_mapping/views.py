@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 # The mapping is drawn from the CV and the interview, so it opens when the
 # candidate reaches interviewing and stays open afterwards -- an assessment
 # finished during offer stage must still be recordable.
-STATUSES_ALLOWING_START = frozenset({'interviewing', 'offer_extended', 'hired'})
+# From Selected on (see apps.core.status).
+from apps.core.status import POST_SELECTION as STATUSES_ALLOWING_START  # noqa: E402
 
 
 def _hr_admin_required(view_fn):

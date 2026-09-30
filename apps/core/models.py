@@ -265,13 +265,21 @@ class Resume(SoftDeleteModel):
     verification_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     verified_at = models.DateTimeField(null=True, blank=True)
 
+    # In pipeline order. Keys already stored in the database keep their value
+    # (new, phone_screen, offer_extended, hired) under the client's labels, so
+    # no stored row changes meaning.
     RECRUITER_STATUS_CHOICES = [
-        ('new', 'New'),
+        ('new', 'New CV'),
         ('shortlisted', 'Shortlisted'),
-        ('phone_screen', 'Phone Screen'),
+        ('phone_screen', 'Phone Screening'),
+        ('assessment', 'Assessment / Test'),
         ('interviewing', 'Interviewing'),
-        ('offer_extended', 'Offer Extended'),
-        ('hired', 'Hired'),
+        ('selected', 'Selected'),
+        ('info_received', 'Candidate Information Received'),
+        ('bgv_completed', 'Background Verification Completed'),
+        ('offer_extended', 'Offer Letter Sent'),
+        ('pre_onboarding', 'Pre-Onboarding'),
+        ('hired', 'Onboarded'),
         ('rejected', 'Rejected'),
         ('withdrawn', 'Withdrawn'),
     ]
@@ -281,6 +289,15 @@ class Resume(SoftDeleteModel):
         default='new',
         blank=True,
     )
+    # Pre-Onboarding checklist: item key -> {'at': ISO time, 'by': user id, 'by_name': name}.
+    onboarding_checklist = models.JSONField(default=dict, blank=True)
+    # The rejection email, sent from the candidate page once status is Rejected.
+    rejection_email_sent_at = models.DateTimeField(null=True, blank=True)
+    rejection_email_sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='rejection_emails_sent')
+    rejection_email_error = models.CharField(max_length=500, blank=True)
+
     # Tracks whether a recruiter manually changed AI-generated scores.
     score_manually_edited = models.BooleanField(default=False)
     score_edited_at = models.DateTimeField(null=True, blank=True)
@@ -326,30 +343,52 @@ class Resume(SoftDeleteModel):
     def __str__(self):
         return f"{self.candidate_name} - {self.job.title}"
 
-    # Colour tone for the recruiter-status badge. Kept in sync with the tone()
-    # map in static/js/status-picker.js so the picker and the table chip match.
+    # Colour tone for the recruiter-status badge, grouped by phase: screening,
+    # interview, after selection, onboarding. The picker reads these from the
+    # options it is given (see recruiter_status_options).
     RECRUITER_STATUS_TONES = {
         'new': 'zinc',
         'shortlisted': 'sky',
         'phone_screen': 'cyan',
+        'assessment': 'cyan',
         'interviewing': 'indigo',
+        'selected': 'indigo',
+        'info_received': 'violet',
+        'bgv_completed': 'violet',
         'offer_extended': 'violet',
+        'pre_onboarding': 'emerald',
         'hired': 'emerald',
         'rejected': 'rose',
         'withdrawn': 'amber',
     }
-    # Mirrors hint()/isOutcome() in static/js/status-picker.js.
     RECRUITER_STATUS_HINTS = {
         'new': 'Recently added to pipeline',
         'shortlisted': 'Passed initial screening',
-        'phone_screen': 'Phone interview stage',
-        'interviewing': 'Active interview process',
-        'offer_extended': 'Offer has been extended',
-        'hired': 'Successfully placed',
+        'phone_screen': 'Phone screening call',
+        'assessment': 'Sends the assessment link',
+        'interviewing': 'Interview process under way',
+        'selected': 'Sends the information form',
+        'info_received': 'Information form submitted',
+        'bgv_completed': 'HR verification signed off',
+        'offer_extended': 'Offer letter issued',
+        'pre_onboarding': 'Joining checklist in progress',
+        'hired': 'Joined the company',
         'rejected': 'Not proceeding',
         'withdrawn': 'Candidate withdrew',
     }
     RECRUITER_STATUS_OUTCOMES = {'hired', 'rejected', 'withdrawn'}
+    # Forward order for automatic updates; outcomes are never moved by the system.
+    PIPELINE_ORDER = [key for key, _ in RECRUITER_STATUS_CHOICES
+                      if key not in ('rejected', 'withdrawn')]
+
+    ONBOARDING_CHECKLIST = [
+        ('id_card', 'ID Card Requisition'),
+        ('visiting_card', 'Visiting Card Requisition'),
+        ('laptop', 'Laptop Requisition'),
+        ('documents_printed', 'Required Documents Printed'),
+        ('nda_appointment', 'NDA / Appointment Documents Prepared'),
+        ('joining_documents', 'Joining Documents Completed'),
+    ]
 
     @property
     def is_seen(self) -> bool:
@@ -373,6 +412,29 @@ class Resume(SoftDeleteModel):
     def recruiter_status_tone(self) -> str:
         return self.RECRUITER_STATUS_TONES.get(self.recruiter_status or 'new', 'zinc')
 
+    @property
+    def onboarding_items(self):
+        """The checklist with each item's done state, for the candidate page."""
+        done = self.onboarding_checklist or {}
+        return [{'key': key, 'label': label, 'done': key in done, **done.get(key, {})}
+                for key, label in self.ONBOARDING_CHECKLIST]
+
+    @property
+    def onboarding_done_count(self) -> int:
+        done = self.onboarding_checklist or {}
+        return sum(1 for key, _ in self.ONBOARDING_CHECKLIST if key in done)
+
+    @property
+    def onboarding_complete(self) -> bool:
+        return self.onboarding_done_count == len(self.ONBOARDING_CHECKLIST)
+
+    @property
+    def rejection_email_status(self) -> str:
+        """'sent', 'pending' (rejected, not yet sent) or '' when not rejected."""
+        if self.rejection_email_sent_at:
+            return 'sent'
+        return 'pending' if self.recruiter_status == 'rejected' else ''
+
     def recruiter_status_options(self):
         """Choices annotated with tone + current flag for the status dropdown.
         Django templates can't index a dict by a loop variable, so the per-option
@@ -386,6 +448,8 @@ class Resume(SoftDeleteModel):
                 'hint': self.RECRUITER_STATUS_HINTS.get(value, ''),
                 'outcome': value in self.RECRUITER_STATUS_OUTCOMES,
                 'current': value == current,
+                # Onboarded waits for the whole Pre-Onboarding checklist.
+                'blocked': value == 'hired' and value != current and not self.onboarding_complete,
             }
             for value, label in self.RECRUITER_STATUS_CHOICES
         ]
@@ -409,6 +473,37 @@ class Resume(SoftDeleteModel):
     def save(self, *args, **kwargs):
         self.assign_tier_and_recommendation_from_final_score()
         super().save(*args, **kwargs)
+
+
+class StatusChange(models.Model):
+    """One change of a candidate's recruiter status: who, when, from what, to what."""
+
+    MANUAL, AUTO = 'manual', 'auto'
+    SOURCE_CHOICES = [(MANUAL, 'Changed by a recruiter'), (AUTO, 'Updated automatically')]
+
+    resume = models.ForeignKey(Resume, on_delete=models.CASCADE, related_name='status_changes')
+    from_status = models.CharField(max_length=20, blank=True)
+    to_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=MANUAL)
+    reason = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f'{self.resume_id}: {self.from_status or "-"} -> {self.to_status}'
+
+    @property
+    def from_label(self) -> str:
+        return dict(Resume.RECRUITER_STATUS_CHOICES).get(self.from_status, self.from_status)
+
+    @property
+    def to_label(self) -> str:
+        return dict(Resume.RECRUITER_STATUS_CHOICES).get(self.to_status, self.to_status)
 
 
 class ResumeNote(models.Model):

@@ -70,7 +70,7 @@ def test_every_eif_key_services_reads_is_real():
 def candidate(db, sample_job):
     resume = Resume.objects.create(
         job=sample_job, candidate_name='Ayesha Rahman',
-        email='ayesha@example.com', recruiter_status='interviewing',
+        email='ayesha@example.com', recruiter_status='selected',
     )
     EmployeeForm.objects.create(
         resume=resume, is_submitted=True, answers=dict(CANDIDATE_ANSWERS))
@@ -81,7 +81,7 @@ def candidate(db, sample_job):
 def fresher(db, sample_job):
     resume = Resume.objects.create(
         job=sample_job, candidate_name='Tanvir Ahmed',
-        email='tanvir@example.com', recruiter_status='interviewing',
+        email='tanvir@example.com', recruiter_status='selected',
     )
     EmployeeForm.objects.create(resume=resume, is_submitted=True, answers={
         'has_employment': 'no',
@@ -561,8 +561,9 @@ def test_sending_twice_resends_to_the_same_row(hr_client, candidate):
     assert check.check_otp(first) is False
 
 
-def test_nothing_is_sent_before_interviewing(hr_client, candidate):
-    candidate.recruiter_status = 'shortlisted'
+@pytest.mark.parametrize('status', ['shortlisted', 'assessment', 'interviewing'])
+def test_nothing_is_sent_before_selected(hr_client, candidate, status):
+    candidate.recruiter_status = status
     candidate.save()
     _send(hr_client, candidate, 'employer_1')
     assert not ReferenceCheck.objects.exists()

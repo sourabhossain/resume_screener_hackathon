@@ -30,6 +30,7 @@ app.conf.task_routes = {
     'apps.sei_assessment.tasks.send_assessment_invite': {'queue': 'notifications'},
     'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'notifications'},
     'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'notifications'},
+    'apps.core.tasks.send_rejection_email': {'queue': 'notifications'},
 }
 app.conf.task_default_queue = 'screening'
 

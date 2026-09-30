@@ -141,7 +141,7 @@ def test_failed_send_can_be_retried(authenticated_client, candidate, monkeypatch
 
     authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted'})
+        {'recruiter_status': 'selected'})
 
     # Recruiter presses Resend; it must actually go out this time.
     authenticated_client.post(
@@ -156,7 +156,7 @@ def test_failed_send_can_be_retried(authenticated_client, candidate, monkeypatch
 def test_htmx_status_change_carries_a_toast(authenticated_client, candidate):
     response = authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted', 'context': 'cell'},
+        {'recruiter_status': 'selected', 'context': 'cell'},
         HTTP_HX_REQUEST='true')
 
     assert response.status_code == 200

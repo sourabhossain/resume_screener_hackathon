@@ -1,6 +1,6 @@
 {% autoescape off %}Dear {{ candidate_name|title }},
 
-Congratulations — you have been shortlisted for the position of {{ job_title }} at SSL Wireless.
+Congratulations — you have been selected to move forward for the position of {{ job_title }} at SSL Wireless.
 
 To continue, please complete our Employee Information Form:
 

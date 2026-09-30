@@ -302,10 +302,10 @@ def test_no_page_the_candidate_can_reach_shows_a_result(client, sitting):
 
 # ── invitation ───────────────────────────────────────────────────────────
 @pytest.mark.django_db
-def test_shortlisting_sends_the_assessment(authenticated_client, candidate):
+def test_moving_to_assessment_sends_the_assessment(authenticated_client, candidate):
     authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted'})
+        {'recruiter_status': 'assessment'})
 
     assessment = SEIAssessment.objects.get(resume=candidate)
     assert assessment.invitation.invite_count == 1
@@ -320,7 +320,7 @@ def test_the_invitation_says_the_clock_has_not_started(authenticated_client, can
     tell that reading it costs them nothing."""
     authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted'})
+        {'recruiter_status': 'assessment'})
 
     body = [m for m in mail.outbox
             if SEI_SUBJECT in m.subject][0].body
@@ -558,7 +558,7 @@ def test_the_invitation_tells_the_candidate_what_makes_a_paper_count(
     it, so that cannot be a rule they only discover afterwards."""
     authenticated_client.post(
         reverse('core:resume_status_update', kwargs={'uuid': candidate.uuid}),
-        {'recruiter_status': 'shortlisted'})
+        {'recruiter_status': 'assessment'})
 
     raw = [m for m in mail.outbox
            if SEI_SUBJECT in m.subject][0].body

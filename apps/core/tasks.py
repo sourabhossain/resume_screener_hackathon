@@ -213,3 +213,48 @@ def draft_job_description_task(token: str, title: str, brief: str = '',
 
     job_description.store_result(token, text=text, archetype=used)
     return 'done'
+
+
+@shared_task(name='apps.core.tasks.send_rejection_email', soft_time_limit=60, time_limit=90)
+def send_rejection_email(resume_id: int, user_id=None) -> str:
+    """Email a rejected candidate once, and record who sent it and when.
+
+    Not retried: a retry after an SMTP timeout could send the same letter twice.
+    A failure is kept on the row and shown on the candidate page.
+    """
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.utils import timezone
+    from apps.core.models import Resume
+
+    resume = Resume.objects.select_related('job').filter(pk=resume_id).first()
+    if resume is None:
+        return 'missing'
+    if resume.rejection_email_sent_at:
+        return 'already_sent'
+    if resume.recruiter_status != 'rejected':
+        Resume.all_objects.filter(pk=resume_id).update(
+            rejection_email_error='Not sent: the candidate is no longer marked Rejected.')
+        return 'not_rejected'
+
+    context = {'candidate_name': ' '.join((resume.candidate_name or '').split()).title() or 'Candidate',
+               'job_title': resume.job.title}
+    message = EmailMultiAlternatives(
+        subject=' '.join(f'Your application for {resume.job.title} at SSL Wireless'.split()),
+        body=render_to_string('core/email/rejection.txt', context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[resume.email],
+    )
+    message.attach_alternative(render_to_string('core/email/rejection.html', context), 'text/html')
+    try:
+        message.send(fail_silently=False)
+    except Exception as exc:
+        Resume.all_objects.filter(pk=resume_id).update(rejection_email_error=str(exc)[:500])
+        logger.exception('rejection_email.failed resume=%s', resume_id)
+        return 'failed'
+    Resume.all_objects.filter(pk=resume_id).update(
+        rejection_email_sent_at=timezone.now(), rejection_email_sent_by_id=user_id,
+        rejection_email_error='')
+    logger.info('rejection_email.sent resume=%s by=%s', resume_id, user_id)
+    return 'sent'

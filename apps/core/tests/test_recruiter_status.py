@@ -1,175 +1,264 @@
-"""
-Tests for inline recruiter-status editing (resume_status_update).
+"""The client's thirteen recruiter statuses: what each sends, blocks and records."""
+from datetime import timedelta
+from unittest import mock
 
-Auth model here is the app's actual one (Option A): @login_required only, no
-tenant/owner scoping — a recruiter may triage candidates on jobs they did not
-post. See views.resume_status_update.
-"""
 import pytest
+from django.core import mail
 from django.urls import reverse
+from django.utils import timezone
 
-from apps.core.models import Job, Resume
+from apps.core import status as pipeline
+from apps.core.models import Resume, StatusChange
 
-HX = {'HTTP_HX_REQUEST': 'true'}
+CLIENT_LIST = [
+    'New CV', 'Shortlisted', 'Phone Screening', 'Assessment / Test', 'Interviewing', 'Selected',
+    'Candidate Information Received', 'Background Verification Completed', 'Offer Letter Sent',
+    'Pre-Onboarding', 'Onboarded', 'Rejected', 'Withdrawn',
+]
+
+
+@pytest.fixture
+def candidate(db, sample_job):
+    sample_job.assessments = ['pe']
+    sample_job.save(update_fields=['assessments'])
+    return Resume.objects.create(job=sample_job, candidate_name='Mahin Chowdhury',
+                                 email='mahin@example.com', screening_status='completed',
+                                 verification_status='completed')
+
+
+def _move(client, resume, status, htmx=False):
+    extra = {'HTTP_HX_REQUEST': 'true'} if htmx else {}
+    return client.post(reverse('core:resume_status_update', kwargs={'uuid': resume.uuid}),
+                       {'recruiter_status': status, 'context': 'card'}, **extra)
+
+
+def _subjects():
+    return [m.subject.lower() for m in mail.outbox]
+
+
+def test_the_statuses_are_the_clients_list_in_order():
+    assert [label for _, label in Resume.RECRUITER_STATUS_CHOICES] == CLIENT_LIST
+
+
+def test_stored_keys_keep_their_meaning():
+    labels = dict(Resume.RECRUITER_STATUS_CHOICES)
+    assert labels['new'] == 'New CV'
+    assert labels['phone_screen'] == 'Phone Screening'
+    assert labels['offer_extended'] == 'Offer Letter Sent'
+    assert labels['hired'] == 'Onboarded'
+
+
+def test_every_status_has_a_tone_that_has_css_and_a_hint():
+    known_tones = {'zinc', 'sky', 'cyan', 'indigo', 'violet', 'emerald', 'rose', 'amber'}
+    for key, _ in Resume.RECRUITER_STATUS_CHOICES:
+        assert Resume.RECRUITER_STATUS_TONES[key] in known_tones, key
+        assert Resume.RECRUITER_STATUS_HINTS[key], key
+
+
+# ── what each status sends ───────────────────────────────────────────────
+@pytest.mark.django_db
+def test_shortlisting_sends_nothing(authenticated_client, candidate):
+    mail.outbox = []
+    _move(authenticated_client, candidate, 'shortlisted')
+    assert mail.outbox == []
 
 
 @pytest.mark.django_db
-class TestRecruiterStatusUpdate:
-    def _url(self, resume):
-        return reverse('core:resume_status_update', args=[resume.uuid])
-
-    def test_successful_status_change(self, authenticated_client, sample_resume):
-        assert sample_resume.recruiter_status == 'new'
-        before = sample_resume.updated_at
-
-        response = authenticated_client.post(
-            self._url(sample_resume), {'recruiter_status': 'shortlisted', 'context': 'cell'}, **HX
-        )
-
-        assert response.status_code == 200
-        sample_resume.refresh_from_db()
-        assert sample_resume.recruiter_status == 'shortlisted'
-        # auto_now bumped because we passed it in update_fields
-        assert sample_resume.updated_at > before
-        assert b'Shortlisted' in response.content
-
-    def test_invalid_status_rejected_with_400(self, authenticated_client, sample_resume):
-        response = authenticated_client.post(
-            self._url(sample_resume), {'recruiter_status': 'not_a_real_status'}, **HX
-        )
-
-        assert response.status_code == 400
-        sample_resume.refresh_from_db()
-        assert sample_resume.recruiter_status == 'new'
-
-    def test_unauthenticated_request_rejected(self, client, sample_resume):
-        response = client.post(
-            self._url(sample_resume), {'recruiter_status': 'hired'}, **HX
-        )
-
-        assert response.status_code == 302
-        assert 'login' in response.url
-        sample_resume.refresh_from_db()
-        assert sample_resume.recruiter_status == 'new'
-
-    def test_non_owner_recruiter_may_update(self, client, django_user_model, sample_resume):
-        """The job owner is the poster, not an ACL. A different logged-in
-        recruiter must still be able to triage the candidate."""
-        other = django_user_model.objects.create_user(
-            username='other', email='other@example.com', password='pw12345678'
-        )
-        assert sample_resume.job.owner != other
-        client.login(username='other', password='pw12345678')
-
-        response = client.post(
-            self._url(sample_resume), {'recruiter_status': 'interviewing', 'context': 'cell'}, **HX
-        )
-
-        assert response.status_code == 200
-        sample_resume.refresh_from_db()
-        assert sample_resume.recruiter_status == 'interviewing'
-
-    def test_get_not_allowed(self, authenticated_client, sample_resume):
-        response = authenticated_client.get(self._url(sample_resume))
-        assert response.status_code == 405
+def test_assessment_status_sends_the_assessment_only(authenticated_client, candidate):
+    mail.outbox = []
+    _move(authenticated_client, candidate, 'assessment')
+    assert any('assessment' in s for s in _subjects())
+    assert not any('information form' in s for s in _subjects())
 
 
 @pytest.mark.django_db
-class TestRecruiterStatusColumnQueries:
-    """The Recruiter Status column reads only local Resume fields, so adding it
-    must not introduce an N+1 on the pipeline table."""
-
-    def _make_resumes(self, job, n):
-        for i in range(n):
-            Resume.objects.create(
-                job=job,
-                candidate_name=f'Cand {i}',
-                recruiter_status='shortlisted',
-                screening_status='completed',
-                final_score=70 + i,
-                skills_score=70, experience_score=70, education_score=70,
-            )
-
-    def _count(self, authenticated_client, job):
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
-        # recruiter_status=all so the shortlisted rows actually render — the
-        # default 'new' filter would hide them and trivialise the guard.
-        url = reverse('core:job_detail', args=[job.slug]) + '?recruiter_status=all'
-        with CaptureQueriesContext(connection) as ctx:
-            resp = authenticated_client.get(url)
-            assert resp.status_code == 200
-        return len(ctx.captured_queries)
-
-    def test_no_n_plus_one_from_status_column(self, authenticated_client, sample_job):
-        self._make_resumes(sample_job, 3)
-        few = self._count(authenticated_client, sample_job)
-        self._make_resumes(sample_job, 5)
-        more = self._count(authenticated_client, sample_job)
-        assert few == more, f'query count grew with rows: {few} -> {more} (N+1)'
+def test_selected_sends_the_information_form(authenticated_client, candidate):
+    mail.outbox = []
+    _move(authenticated_client, candidate, 'selected')
+    assert any('information form' in s for s in _subjects())
+    assert candidate.employee_form.invite_count == 1
 
 
 @pytest.mark.django_db
-class TestRecruiterStatusFilter:
-    """Pipeline table filter on job_detail / pipeline_search. Defaults to the
-    untriaged ('new') queue; 'all' shows everyone."""
+def test_jumping_past_selected_still_sends_the_information_form_once(authenticated_client, candidate):
+    mail.outbox = []
+    _move(authenticated_client, candidate, 'bgv_completed')
+    _move(authenticated_client, candidate, 'interviewing')
+    _move(authenticated_client, candidate, 'offer_extended')
+    assert sum('information form' in s for s in _subjects()) == 1
 
-    @pytest.fixture
-    def mixed_resumes(self, sample_job):
-        new = Resume.objects.create(
-            job=sample_job, candidate_name='Newton Fresh',
-            screening_status='completed', final_score=60,
-        )
-        shortlisted = Resume.objects.create(
-            job=sample_job, candidate_name='Shorty Listed',
-            recruiter_status='shortlisted',
-            screening_status='completed', final_score=80,
-        )
-        return new, shortlisted
 
-    def _detail(self, client, job, query=''):
-        return client.get(reverse('core:job_detail', args=[job.slug]) + query)
+# ── history ──────────────────────────────────────────────────────────────
+@pytest.mark.django_db
+def test_every_change_is_recorded_with_who_and_from_what(authenticated_client, user, candidate):
+    _move(authenticated_client, candidate, 'shortlisted')
+    _move(authenticated_client, candidate, 'phone_screen')
 
-    def test_default_shows_only_new(self, authenticated_client, sample_job, mixed_resumes):
-        response = self._detail(authenticated_client, sample_job)
-        assert response.status_code == 200
-        assert b'Newton Fresh' in response.content
-        assert b'Shorty Listed' not in response.content
+    changes = list(candidate.status_changes.order_by('id'))
+    assert [(c.from_status, c.to_status) for c in changes] == [('new', 'shortlisted'),
+                                                               ('shortlisted', 'phone_screen')]
+    assert all(c.changed_by == user and c.source == 'manual' for c in changes)
 
-    def test_all_shows_everyone(self, authenticated_client, sample_job, mixed_resumes):
-        response = self._detail(authenticated_client, sample_job, '?recruiter_status=all')
-        assert b'Newton Fresh' in response.content
-        assert b'Shorty Listed' in response.content
 
-    def test_specific_status_filters(self, authenticated_client, sample_job, mixed_resumes):
-        response = self._detail(authenticated_client, sample_job, '?recruiter_status=shortlisted')
-        assert b'Shorty Listed' in response.content
-        assert b'Newton Fresh' not in response.content
+@pytest.mark.django_db
+def test_the_same_status_twice_records_nothing(authenticated_client, candidate):
+    _move(authenticated_client, candidate, 'shortlisted')
+    _move(authenticated_client, candidate, 'shortlisted')
+    assert candidate.status_changes.count() == 1
 
-    def test_invalid_value_falls_back_to_new(self, authenticated_client, sample_job, mixed_resumes):
-        response = self._detail(authenticated_client, sample_job, '?recruiter_status=bogus')
-        assert response.status_code == 200
-        assert b'Newton Fresh' in response.content
-        assert b'Shorty Listed' not in response.content
 
-    def test_stats_cards_ignore_filter(self, authenticated_client, sample_job, mixed_resumes):
-        response = self._detail(authenticated_client, sample_job)
-        assert response.context['pipeline_stats']['total'] == 2
+# ── automatic updates ────────────────────────────────────────────────────
+@pytest.mark.django_db
+def test_automatic_updates_only_move_forward(candidate):
+    candidate.recruiter_status = 'offer_extended'
+    candidate.save()
+    assert pipeline.advance(candidate, 'info_received', reason='form') is False
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == 'offer_extended'
 
-    def test_filtered_empty_state_keeps_table(self, authenticated_client, sample_job, mixed_resumes):
-        response = self._detail(authenticated_client, sample_job, '?recruiter_status=hired')
-        assert response.status_code == 200
-        assert b'No candidates with this recruiter status' in response.content
-        assert b'No applicants yet' not in response.content
 
-    def test_pipeline_search_respects_filter(self, authenticated_client, sample_job, mixed_resumes):
-        url = reverse('core:pipeline_search', args=[sample_job.slug])
-        response = authenticated_client.get(url, {'q': 'o', 'recruiter_status': 'shortlisted'})
-        assert b'Shorty Listed' in response.content
-        assert b'Newton Fresh' not in response.content
+@pytest.mark.django_db
+@pytest.mark.parametrize('outcome', ['rejected', 'withdrawn', 'hired'])
+def test_automatic_updates_never_touch_an_outcome(candidate, outcome):
+    Resume.objects.filter(pk=candidate.pk).update(recruiter_status=outcome)
+    assert pipeline.advance(candidate, 'bgv_completed', reason='signed off') is False
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == outcome
 
-    def test_pipeline_search_all(self, authenticated_client, sample_job, mixed_resumes):
-        url = reverse('core:pipeline_search', args=[sample_job.slug])
-        response = authenticated_client.get(url, {'q': '', 'recruiter_status': 'all'})
-        assert b'Newton Fresh' in response.content
-        assert b'Shorty Listed' in response.content
+
+@pytest.mark.django_db
+def test_an_automatic_update_is_marked_as_such(candidate):
+    candidate.recruiter_status = 'selected'
+    candidate.save()
+    assert pipeline.advance(candidate, 'info_received', reason='Information form submitted')
+    change = candidate.status_changes.first()
+    assert change.source == StatusChange.AUTO and change.changed_by is None
+    assert change.reason == 'Information form submitted'
+
+
+@pytest.mark.django_db
+def test_scheduling_an_interview_moves_the_candidate_to_interviewing(authenticated_client, candidate):
+    candidate.recruiter_status = 'assessment'
+    candidate.save()
+    authenticated_client.post(reverse('interviews:create', kwargs={'resume_uuid': candidate.uuid}),
+                              {'phase': '1', 'scheduled_date': timezone.localdate().isoformat()})
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == 'interviewing'
+
+
+# ── Pre-Onboarding checklist and Onboarded ───────────────────────────────
+def _tick_all(client, resume):
+    for key, _ in Resume.ONBOARDING_CHECKLIST:
+        client.post(reverse('core:resume_onboarding_toggle', kwargs={'uuid': resume.uuid}),
+                    {'item': key}, HTTP_HX_REQUEST='true')
+
+
+@pytest.mark.django_db
+def test_onboarded_is_refused_until_the_checklist_is_done(authenticated_client, candidate):
+    candidate.recruiter_status = 'pre_onboarding'
+    candidate.save()
+
+    response = _move(authenticated_client, candidate, 'hired', htmx=True)
+
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == 'pre_onboarding'
+    assert 'Pre-Onboarding checklist' in response['HX-Trigger']
+
+    _tick_all(authenticated_client, candidate)
+    _move(authenticated_client, candidate, 'hired')
+    candidate.refresh_from_db()
+    assert candidate.recruiter_status == 'hired'
+
+
+@pytest.mark.django_db
+def test_ticking_an_item_records_who_and_when(authenticated_client, user, candidate):
+    candidate.recruiter_status = 'pre_onboarding'
+    candidate.save()
+
+    authenticated_client.post(reverse('core:resume_onboarding_toggle', kwargs={'uuid': candidate.uuid}),
+                              {'item': 'laptop'}, HTTP_HX_REQUEST='true')
+
+    candidate.refresh_from_db()
+    assert candidate.onboarding_checklist['laptop']['by'] == user.pk
+    assert candidate.onboarding_done_count == 1
+
+
+@pytest.mark.django_db
+def test_the_checklist_is_locked_once_onboarded(authenticated_client, candidate):
+    candidate.recruiter_status = 'pre_onboarding'
+    candidate.save()
+    _tick_all(authenticated_client, candidate)
+    _move(authenticated_client, candidate, 'hired')
+
+    authenticated_client.post(reverse('core:resume_onboarding_toggle', kwargs={'uuid': candidate.uuid}),
+                              {'item': 'laptop'}, HTTP_HX_REQUEST='true')
+
+    candidate.refresh_from_db()
+    assert candidate.onboarding_complete
+
+
+@pytest.mark.django_db
+def test_the_onboarded_option_is_shown_disabled_until_the_checklist_is_done(authenticated_client, candidate):
+    candidate.recruiter_status = 'pre_onboarding'
+    candidate.save()
+    html = authenticated_client.get(reverse('core:resume_detail', kwargs={'uuid': candidate.uuid})).content.decode()
+    assert 'Complete the Pre-Onboarding checklist first' in html
+    assert 'Pre-Onboarding checklist' in html
+
+
+# ── rejection email ──────────────────────────────────────────────────────
+@pytest.mark.django_db
+def test_a_rejected_candidate_shows_a_pending_rejection_email(authenticated_client, candidate):
+    _move(authenticated_client, candidate, 'rejected')
+    candidate.refresh_from_db()
+    assert candidate.rejection_email_status == 'pending'
+    html = authenticated_client.get(reverse('core:resume_detail', kwargs={'uuid': candidate.uuid})).content.decode()
+    assert 'Send rejection email' in html
+
+
+@pytest.mark.django_db
+def test_sending_the_rejection_email_marks_it_sent_once(authenticated_client, user, candidate):
+    _move(authenticated_client, candidate, 'rejected')
+    mail.outbox = []
+
+    authenticated_client.post(reverse('core:resume_rejection_send', kwargs={'uuid': candidate.uuid}))
+    authenticated_client.post(reverse('core:resume_rejection_send', kwargs={'uuid': candidate.uuid}))
+
+    candidate.refresh_from_db()
+    assert candidate.rejection_email_status == 'sent'
+    assert candidate.rejection_email_sent_by == user
+    sent = [m for m in mail.outbox if 'your application for' in m.subject.lower()]
+    assert len(sent) == 1
+    assert sent[0].to == ['mahin@example.com']
+    assert 'not to move forward' in sent[0].body
+
+
+@pytest.mark.django_db
+def test_no_rejection_email_for_a_candidate_not_rejected(authenticated_client, candidate):
+    mail.outbox = []
+    authenticated_client.post(reverse('core:resume_rejection_send', kwargs={'uuid': candidate.uuid}))
+    candidate.refresh_from_db()
+    assert candidate.rejection_email_sent_at is None and mail.outbox == []
+
+
+@pytest.mark.django_db
+def test_a_failed_rejection_email_is_shown_and_stays_pending(authenticated_client, candidate):
+    _move(authenticated_client, candidate, 'rejected')
+    with mock.patch('django.core.mail.EmailMultiAlternatives.send', side_effect=OSError('smtp down')):
+        authenticated_client.post(reverse('core:resume_rejection_send', kwargs={'uuid': candidate.uuid}))
+    candidate.refresh_from_db()
+    assert candidate.rejection_email_status == 'pending'
+    assert 'smtp down' in candidate.rejection_email_error
+
+
+# ── dashboard ────────────────────────────────────────────────────────────
+@pytest.mark.django_db
+def test_the_dashboard_flags_pending_rejection_emails_and_open_checklists(candidate, sample_job):
+    from apps.core import dashboard
+    Resume.objects.filter(pk=candidate.pk).update(recruiter_status='rejected')
+    Resume.objects.create(job=sample_job, candidate_name='Joining Soon', recruiter_status='pre_onboarding')
+
+    labels = {i['label'] for i in dashboard.attention_items(hr_view=False)}
+
+    assert 'Rejection emails not sent' in labels
+    assert 'Pre-onboarding checklists open' in labels

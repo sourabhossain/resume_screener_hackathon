@@ -565,7 +565,7 @@
                         <span class="dash-bar-track">
                             <span class="dash-bar" style="display:block;width: {{ row.width|floatformat:2 }}%"
                                   data-tip-value="{{ row.count }} candidate{{ row.count|pluralize }}"
-                                  data-tip-label="{{ row.job.title }} · {{ row.hired }} hired" aria-label="{{ row.count }} candidate{{ row.count|pluralize }}, {{ row.job.title }} · {{ row.hired }} hired"></span>
+                                  data-tip-label="{{ row.job.title }} · {{ row.hired }} onboarded" aria-label="{{ row.count }} candidate{{ row.count|pluralize }}, {{ row.job.title }} · {{ row.hired }} onboarded"></span>
                             <span class="dash-bar-value">{{ row.count }}</span>
                         </span>
                     </a>
@@ -586,7 +586,7 @@
                 {% if recruiters %}
                 <div class="dash-scroll">
                     <table class="dash-table">
-                        <thead><tr><th>Recruiter</th><th class="num">Jobs</th><th class="num">Candidates</th><th class="num">Shortlisted</th><th class="num">Hired</th><th class="num">Hire rate</th></tr></thead>
+                        <thead><tr><th>Recruiter</th><th class="num">Jobs</th><th class="num">Candidates</th><th class="num">Shortlisted</th><th class="num">Onboarded</th><th class="num">Onboard rate</th></tr></thead>
                         <tbody>
                             {% for r in recruiters %}
                             <tr>
@@ -601,7 +601,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p class="dash-foot-note">Hire rate is hired ÷ shortlisted.</p>
+                <p class="dash-foot-note">Onboard rate is onboarded ÷ shortlisted.</p>
                 {% else %}
                 <p class="dash-empty">No candidates in this period.</p>
                 {% endif %}

@@ -337,6 +337,10 @@ def step(request, token, step_key):
                     logger.info(
                         'employee_form.submitted form=%s resume=%s', form.pk, form.resume_id
                     )
+                    from apps.core.status import advance
+                    advance(form.resume, 'info_received', reason=(
+                        'Information form submitted (consent declined)'
+                        if form.consent_declined else 'Information form submitted'))
                     return redirect('employee_form:done', token=token)
             else:
                 form.current_step = next_key

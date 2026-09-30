@@ -333,3 +333,16 @@ def test_upload_is_not_required_again_when_revisiting(verified):
 
     assert response.status_code == 302
     assert form.files.filter(question_key='nid_copy').count() == 1
+
+
+def test_submitting_the_form_moves_the_candidate_to_information_received(verified):
+    client, form = verified
+    form.resume.recruiter_status = 'selected'
+    form.resume.save(update_fields=['recruiter_status'])
+
+    _walk(client, form)
+
+    form.resume.refresh_from_db()
+    assert form.resume.recruiter_status == 'info_received'
+    change = form.resume.status_changes.first()
+    assert change.source == 'auto' and change.from_status == 'selected'

@@ -396,11 +396,9 @@ def _candidate_forms_context(request, resume) -> dict:
     from apps.reference_checks import services as reference_services
     from apps.sei_assessment import instruments
 
-    # Once shortlisted the assessments have been sent, and they stay resendable
-    # through the rest of the pipeline rather than vanishing at the next stage.
-    SEI_STATUSES_ALLOWING_SEND = {
-        'shortlisted', 'phone_screen', 'interviewing', 'offer_extended',
-    }
+    # The assessment goes out on Assessment / Test and stays resendable through
+    # the rest of the pipeline rather than vanishing at the next stage.
+    from apps.core.status import ASSESSMENT_OPEN as SEI_STATUSES_ALLOWING_SEND
 
     # One row per assessment the job asks for, whether or not it has been sent
     # yet, so the recruiter sees the whole set rather than only what exists.
@@ -433,6 +431,10 @@ def _candidate_forms_context(request, resume) -> dict:
 
     return {
         'resume': resume,
+        # The recruitment-progress card: checklist, rejection email, history.
+        'status_history': list(resume.status_changes.select_related('changed_by')[:30]),
+        'show_checklist': resume.recruiter_status in ('offer_extended', 'pre_onboarding', 'hired'),
+        'show_rejection': resume.recruiter_status == 'rejected' or bool(resume.rejection_email_sent_at),
         'reference_checks': reference_services.summarise(resume),
         # None until the candidate is shortlisted; the section renders a
         # "not sent yet" state rather than being hidden, so the recruiter can
@@ -461,6 +463,76 @@ def _candidate_forms_context(request, resume) -> dict:
             e['sitting'] and e['sitting'].needs_retaking
             for e in job_assessments if not e.get('dropped')),
     }
+
+
+def _render_candidate_forms(request, resume, toast=None):
+    response = render(request, 'core/partials/candidate_forms.html',
+                      _candidate_forms_context(request, resume))
+    if toast:
+        response['HX-Trigger'] = json.dumps({'toast': {'level': toast[0], 'text': toast[1]}})
+    return response
+
+
+@login_required
+@require_POST
+def resume_onboarding_toggle(request, uuid):
+    """Tick or untick one Pre-Onboarding checklist item, recording who and when."""
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    key = request.POST.get('item', '')
+    if key not in dict(Resume.ONBOARDING_CHECKLIST):
+        return HttpResponseBadRequest('Unknown checklist item.')
+    toast = None
+    if resume.recruiter_status == 'hired' and key in (resume.onboarding_checklist or {}):
+        # Onboarded is only allowed with every item done; taking one back would
+        # leave an Onboarded candidate with an open checklist.
+        toast = ('error', 'The candidate is already Onboarded, so the checklist is locked.')
+    else:
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            locked = Resume.objects.select_for_update().get(pk=resume.pk)
+            checklist = dict(locked.onboarding_checklist or {})
+            if key in checklist:
+                checklist.pop(key)
+            else:
+                checklist[key] = {'at': timezone.now().isoformat(), 'by': request.user.pk,
+                                  'by_name': request.user.get_full_name() or request.user.username}
+            locked.onboarding_checklist = checklist
+            locked.save(update_fields=['onboarding_checklist', 'updated_at'])
+        resume = locked
+    if request.headers.get('HX-Request'):
+        return _render_candidate_forms(request, resume, toast)
+    if toast:
+        messages.error(request, toast[1])
+    return redirect('core:resume_detail', uuid=uuid)
+
+
+@login_required
+@require_POST
+def resume_rejection_send(request, uuid):
+    """Queue the rejection email for a candidate marked Rejected."""
+    from apps.core.tasks import send_rejection_email
+    from apps.core.utils import claim_send, queue_task
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    if resume.recruiter_status != 'rejected':
+        toast = ('error', 'Mark the candidate Rejected before sending the rejection email.')
+    elif resume.rejection_email_sent_at:
+        toast = ('info', 'The rejection email was already sent.')
+    elif not (resume.email or '').strip():
+        toast = ('error', f'{resume.candidate_name} has no email address on file.')
+    elif not claim_send('rejection', resume.pk, seconds=60):
+        toast = ('info', 'The rejection email is already on its way.')
+    else:
+        # Cleared before queueing: the task records its own failure afterwards.
+        Resume.objects.filter(pk=resume.pk).update(rejection_email_error='')
+        if queue_task(send_rejection_email, resume.pk, request.user.pk):
+            toast = ('success', f'Rejection email queued for {resume.email}.')
+        else:
+            toast = ('error', 'The email could not be queued right now. Try again in a minute.')
+        resume.refresh_from_db()
+    if request.headers.get('HX-Request'):
+        return _render_candidate_forms(request, resume, toast)
+    (messages.error if toast[0] == 'error' else messages.success)(request, toast[1])
+    return redirect('core:resume_detail', uuid=uuid)
 
 
 @login_required
@@ -1023,43 +1095,20 @@ def resume_status_update(request, uuid):
         messages.error(request, 'Invalid status.')
         return redirect('core:resume_detail', uuid=uuid)
 
-    previous_status = resume.recruiter_status
-    resume.recruiter_status = new_status
-    resume.save(update_fields=['recruiter_status', 'updated_at'])
-
-    # Shortlisting is the trigger for the Employee Information Form invitation.
-    # issue_invite() is first-time-only unless resend=True, so moving a candidate
-    # away from shortlisted and back does not email them a second link.
-    invite_note = None
-    if new_status == 'shortlisted' and previous_status != 'shortlisted':
-        from apps.employee_form.services import InviteError, issue_invite
-        already_invited = bool(getattr(getattr(resume, 'employee_form', None), 'invited_at', None))
-        try:
-            issue_invite(resume, user=request.user)
-        except InviteError as exc:
-            invite_note = ('error', str(exc))
-            logger.warning(
-                'employee_form.invite_skipped resume=%s reason=%s', resume.pk, exc
-            )
-        else:
-            invite_note = (
-                ('info', 'The information form was already sent earlier; it was not sent again.')
-                if already_invited else
-                ('success', f'Information form sent to {resume.email}.')
-            )
-
-        # Every assessment the job asks for goes out as one email with one link.
-        from apps.sei_assessment import instruments
-        from apps.sei_assessment.services import (
-            InviteError as SEIInviteError, issue_invite as issue_sei)
-        if instruments.clean_keys(resume.job.assessments):
-            try:
-                issue_sei(resume, user=request.user)
-            except SEIInviteError as exc:
-                logger.warning('sei.invite_skipped resume=%s reason=%s',
-                               resume.pk, exc)
-                if invite_note and invite_note[0] == 'success':
-                    invite_note = ('error', f'Assessments not sent: {exc}')
+    # The rules, the history and whatever the new status sends (assessment
+    # link on Assessment / Test, information form on Selected) live in one place.
+    from apps.core.status import StatusError, change_status
+    try:
+        notes = change_status(resume, new_status, user=request.user)
+        refused = None
+    except StatusError as exc:
+        notes, refused = [], str(exc)
+        resume.refresh_from_db(fields=['recruiter_status'])
+    invite_note = notes[-1] if notes else None
+    if refused:
+        invite_note = ('error', refused)
+    elif any(level == 'error' for level, _ in notes):
+        invite_note = next(n for n in notes if n[0] == 'error')
 
     if is_htmx:
         # 'card' (candidate detail page) swaps the control in place; 'cell'
@@ -1092,7 +1141,8 @@ def resume_status_update(request, uuid):
         level, text = invite_note
         (messages.error if level == 'error' else messages.success)(request, text)
 
-    messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
+    if not refused:
+        messages.success(request, f'Status updated to "{resume.get_recruiter_status_display()}".')
     return redirect('core:resume_detail', uuid=uuid)
 
 

@@ -1,0 +1,14 @@
+{% autoescape off %}Dear {{ candidate_name }},
+
+Thank you for your interest in the {{ job_title }} position at SSL Wireless, and for the time you gave to our recruitment process.
+
+After careful consideration, we have decided not to move forward with your application for this role. This was not an easy decision, and it is not a judgement of your abilities; we had to choose among many strong candidates for a limited number of positions.
+
+We encourage you to keep an eye on our careers page and to apply for future openings that match your experience.
+
+We wish you every success in your career.
+
+Kind regards,
+SSL Wireless HR
+jobs@sslwireless.com
+{% endautoescape %}
