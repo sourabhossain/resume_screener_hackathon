@@ -45,7 +45,7 @@
 
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <div class="h-1 w-full bg-gradient-to-r from-primary-500 via-violet-500 to-primary-400"></div>
-        <div class="flex items-center gap-4 p-6">
+        <div class="flex flex-wrap items-center gap-4 p-6">
             <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary-600 text-2xl font-bold text-white shadow-md">
                 {{ ev.interview.resume.candidate_name|slice:":1"|upper }}
             </div>
@@ -63,6 +63,13 @@
                     {% if ev.interviewer_department %} &middot; {{ ev.interviewer_department }}{% endif %}
                 </p>
             </div>
+            {% if ev.interview.resume.file %}
+            <a href="{% url 'interviews:evaluation_cv' ev.token %}" target="_blank" rel="noopener noreferrer" hx-boost="false"
+               class="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                View CV
+            </a>
+            {% endif %}
         </div>
     </div>
 

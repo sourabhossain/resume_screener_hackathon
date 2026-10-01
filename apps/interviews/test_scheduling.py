@@ -354,3 +354,118 @@ def test_cancelling_an_interview_nobody_was_emailed_about_sends_nothing(authenti
     authenticated_client.post(reverse('interviews:status', kwargs={'pk': interview.pk}), {'action': 'cancel'})
 
     assert mail.outbox == []
+
+
+# ── evaluator CV ─────────────────────────────────────────────────────────
+def _with_cv(resume):
+    from django.core.files.base import ContentFile
+    resume.file.save('cv.pdf', ContentFile(b'%PDF-1.4 the cv'), save=True)
+    return resume
+
+
+@pytest.mark.django_db
+def test_the_evaluator_can_open_the_cv_from_the_page_and_the_email(authenticated_client, candidate, staff, client):
+    _with_cv(candidate)
+    _schedule(authenticated_client, candidate, staff[:1])
+    ev = InterviewEvaluation.objects.get()
+    cv = reverse('interviews:evaluation_cv', kwargs={'token': ev.token})
+
+    page = client.get(reverse('interviews:evaluate', kwargs={'token': ev.token})).content.decode()
+    response = client.get(cv)
+
+    assert cv in page
+    assert cv in _to('panel0@sslwireless.com')[0].body
+    assert response.status_code == 200
+    assert b''.join(response.streaming_content).startswith(b'%PDF')
+    assert response['Cache-Control'] == 'private, no-store, max-age=0'
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('closed', ['submitted', 'expired', 'cancelled'])
+def test_the_cv_link_closes_with_the_evaluation_link(authenticated_client, candidate, staff, client, closed):
+    _with_cv(candidate)
+    _schedule(authenticated_client, candidate, staff[:1])
+    ev = InterviewEvaluation.objects.get()
+    if closed == 'submitted':
+        InterviewEvaluation.objects.filter(pk=ev.pk).update(is_submitted=True)
+    elif closed == 'expired':
+        InterviewEvaluation.objects.filter(pk=ev.pk).update(token_expires_at=timezone.now() - timedelta(minutes=1))
+    else:
+        Interview.objects.filter(pk=ev.interview_id).update(status=Interview.CANCELLED)
+
+    assert client.get(reverse('interviews:evaluation_cv', kwargs={'token': ev.token})).status_code == 404
+
+
+# ── reschedule ───────────────────────────────────────────────────────────
+def _reschedule(client, interview, **extra):
+    data = {'scheduled_date': _day(6), 'scheduled_time': '15:30', 'duration_minutes': '60',
+            'mode': 'online', 'location': 'https://meet.google.com/new-room', 'notify': 'on', **extra}
+    if extra.get('notify', 'on') is None:
+        data.pop('notify')
+    return client.post(reverse('interviews:reschedule', kwargs={'pk': interview.pk}), data)
+
+
+@pytest.mark.django_db
+def test_rescheduling_keeps_the_panel_and_tells_everyone_the_new_time(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:2])
+    interview = Interview.objects.get()
+    tokens = sorted(str(t) for t in interview.evaluations.values_list('token', flat=True))
+    mail.outbox.clear()
+
+    response = _reschedule(authenticated_client, interview)
+
+    interview.refresh_from_db()
+    assert response.status_code == 302
+    assert interview.scheduled_time.strftime('%H:%M') == '15:30' and interview.mode == 'online'
+    assert interview.schedule_version == 1
+    assert sorted(str(t) for t in interview.evaluations.values_list('token', flat=True)) == tokens
+    assert sorted(m.to[0] for m in mail.outbox) == [
+        'nadia@example.com', 'panel0@sslwireless.com', 'panel1@sslwireless.com']
+    candidate_email = _to('nadia@example.com')[0]
+    assert candidate_email.subject.startswith('Interview rescheduled')
+    assert '3:30 PM' in candidate_email.body and '10:00 AM' in candidate_email.body
+    _, calendar, part = _calendar(candidate_email)
+    assert 'SEQUENCE:1' in calendar and part.get_param('method') == 'PUBLISH'
+    assert 'T093000Z' in calendar
+
+
+@pytest.mark.django_db
+def test_a_rescheduled_interview_is_reminded_again_and_its_links_stay_valid(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:1], scheduled_date=_day(1))
+    send_interview_reminders()
+    interview = Interview.objects.get()
+
+    _reschedule(authenticated_client, interview, scheduled_date=_day(45))
+
+    ev = InterviewEvaluation.objects.get()
+    interview.refresh_from_db()
+    assert ev.reminded_at is None and interview.candidate_reminded_at is None
+    assert ev.token_expires_at > interview.ends_at + timedelta(days=6)
+
+
+@pytest.mark.django_db
+def test_rescheduling_without_the_box_ticked_or_without_a_change_emails_no_one(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:1])
+    interview = Interview.objects.get()
+    mail.outbox.clear()
+
+    _reschedule(authenticated_client, interview, notify=None)
+    interview.refresh_from_db()
+    _reschedule(authenticated_client, interview, scheduled_date=interview.scheduled_date.isoformat(),
+                scheduled_time=interview.scheduled_time.strftime('%H:%M'))
+
+    assert mail.outbox == []
+
+
+@pytest.mark.django_db
+def test_only_a_scheduled_interview_can_be_rescheduled(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:1])
+    interview = Interview.objects.get()
+    Interview.objects.filter(pk=interview.pk).update(status=Interview.CANCELLED)
+    mail.outbox.clear()
+
+    _reschedule(authenticated_client, interview)
+
+    interview.refresh_from_db()
+    assert interview.scheduled_time.strftime('%H:%M') == '10:00'
+    assert mail.outbox == []

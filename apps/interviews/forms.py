@@ -20,30 +20,8 @@ def staff_label(user) -> str:
     return user.get_full_name().strip() or user.username
 
 
-class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
-    evaluators = forms.ModelMultipleChoiceField(
-        queryset=None, required=True, widget=forms.CheckboxSelectMultiple,
-        error_messages={'required': 'Choose at least one evaluator.'})
-
-    class Meta:
-        model = Interview
-        fields = ['phase', 'scheduled_date', 'scheduled_time', 'duration_minutes', 'mode',
-                  'location', 'notify_candidate', 'notes']
-        widgets = {
-            'phase': forms.Select(attrs={'class': INPUT}),
-            'scheduled_date': forms.DateInput(attrs={'type': 'date', 'class': INPUT}),
-            'scheduled_time': forms.TimeInput(attrs={'type': 'time', 'class': INPUT, 'step': 300}),
-            'duration_minutes': forms.Select(attrs={'class': INPUT}),
-            'location': forms.TextInput(attrs={'class': INPUT}),
-            'notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Only your team sees these',
-                                           'class': INPUT}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['evaluators'].queryset = staff_evaluators()
-        self.fields['scheduled_time'].required = True
-        self.fields['scheduled_date'].widget.attrs['min'] = timezone.localdate().isoformat()
+class ScheduleRulesMixin:
+    """When and where: not in the past, and a place or a safe meeting link."""
 
     def clean_location(self):
         return (self.cleaned_data.get('location') or '').strip()
@@ -68,6 +46,48 @@ class InterviewCreateForm(AriaInvalidMixin, forms.ModelForm):
             except forms.ValidationError:
                 self.add_error('location', 'Paste the full meeting link, starting with https://')
         return cleaned
+
+
+class InterviewCreateForm(ScheduleRulesMixin, AriaInvalidMixin, forms.ModelForm):
+    evaluators = forms.ModelMultipleChoiceField(
+        queryset=None, required=True, widget=forms.CheckboxSelectMultiple,
+        error_messages={'required': 'Choose at least one evaluator.'})
+
+    class Meta:
+        model = Interview
+        fields = ['phase', 'scheduled_date', 'scheduled_time', 'duration_minutes', 'mode',
+                  'location', 'notify_candidate', 'notes']
+        widgets = {
+            'phase': forms.Select(attrs={'class': INPUT}),
+            'scheduled_date': forms.DateInput(attrs={'type': 'date', 'class': INPUT}),
+            'scheduled_time': forms.TimeInput(attrs={'type': 'time', 'class': INPUT, 'step': 300}),
+            'duration_minutes': forms.Select(attrs={'class': INPUT}),
+            'location': forms.TextInput(attrs={'class': INPUT}),
+            'notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Only your team sees these',
+                                           'class': INPUT}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['evaluators'].queryset = staff_evaluators()
+        self.fields['scheduled_time'].required = True
+        self.fields['scheduled_date'].widget.attrs['min'] = timezone.localdate().isoformat()
+
+class InterviewRescheduleForm(ScheduleRulesMixin, AriaInvalidMixin, forms.ModelForm):
+    """A new time or place for an interview that keeps its panel and links."""
+    SCHEDULE_FIELDS = ('scheduled_date', 'scheduled_time', 'duration_minutes', 'mode', 'location')
+
+    notify = forms.BooleanField(required=False, initial=True)
+
+    class Meta:
+        model = Interview
+        fields = ['scheduled_date', 'scheduled_time', 'duration_minutes', 'mode', 'location']
+        widgets = InterviewCreateForm.Meta.widgets
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['scheduled_time'].required = True
+        self.fields['scheduled_date'].widget.attrs['min'] = timezone.localdate().isoformat()
 
 
 class StaffEvaluatorForm(forms.Form):

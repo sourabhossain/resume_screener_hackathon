@@ -57,6 +57,10 @@ class Interview(SoftDeleteModel):
     # Internal: never sent to the candidate.
     notes = models.TextField(blank=True)
 
+    # Raised on every reschedule: calendars match an update to the invitation
+    # by UID and keep whichever carries the higher SEQUENCE.
+    schedule_version = models.PositiveSmallIntegerField(default=0)
+
     notify_candidate = models.BooleanField(default=True)
     candidate_notified_at = models.DateTimeField(null=True, blank=True)
     candidate_reminded_at = models.DateTimeField(null=True, blank=True)

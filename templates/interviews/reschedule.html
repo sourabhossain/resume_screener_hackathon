@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Reschedule {{ interview.get_phase_display }} - {{ interview.resume.candidate_name|title }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl"
+     x-data="{ mode: '{{ form.mode.value|default:'in_person'|escapejs }}', busy: false }">
+    <nav class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
+        <a href="{% url 'core:resume_detail' interview.resume.uuid %}" class="transition hover:text-primary-600">{{ interview.resume.candidate_name|title }}</a>
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <a href="{% url 'interviews:detail' interview.pk %}" class="transition hover:text-primary-600">{{ interview.get_phase_display }}</a>
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="font-medium text-zinc-900 dark:text-white">Reschedule</span>
+    </nav>
+
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Reschedule {{ interview.get_phase_display }}</h1>
+        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">For <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ interview.resume.candidate_name|title }}</span> &middot; {{ interview.resume.job.title }}</p>
+        <p class="mt-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Now: <span class="font-semibold text-zinc-800 dark:text-zinc-100">{{ previous }}</span>
+        </p>
+    </div>
+
+    <form method="post" hx-boost="false" class="space-y-5" @submit="busy = true">
+        {% csrf_token %}
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 class="text-sm font-bold text-zinc-900 dark:text-white">New time</h2>
+            <div class="mt-4 grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label for="{{ form.scheduled_date.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Date <span class="text-rose-500">*</span></label>
+                    {{ form.scheduled_date }}
+                    {% for e in form.scheduled_date.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+                </div>
+                <div>
+                    <label for="{{ form.scheduled_time.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Time <span class="text-rose-500">*</span> <span class="font-normal text-zinc-400">(Bangladesh time)</span></label>
+                    {{ form.scheduled_time }}
+                    {% for e in form.scheduled_time.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+                </div>
+                <div>
+                    <label for="{{ form.duration_minutes.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Duration</label>
+                    {% include 'core/partials/choice_field.html' with field=form.duration_minutes %}
+                </div>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 class="text-sm font-bold text-zinc-900 dark:text-white">Where</h2>
+            <div class="mt-4 inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800" role="radiogroup" aria-label="Interview format">
+                {% for value, label in form.fields.mode.choices %}
+                <label class="cursor-pointer">
+                    <input type="radio" name="mode" value="{{ value }}" class="sr-only" x-model="mode"{% if form.mode.value == value %} checked{% endif %}>
+                    <span class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition"
+                          :class="mode === '{{ value }}' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'">{{ label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="mt-4">
+                <label for="{{ form.location.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                    <span x-text="mode === 'online' ? 'Meeting link' : 'Room or address'">Room or address</span> <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="location" id="{{ form.location.id_for_label }}" value="{{ form.location.value|default:'' }}" maxlength="500"
+                       :placeholder="mode === 'online' ? 'Meet, Teams or Zoom link' : 'e.g. Conference Room 3, Gulshan 1'"
+                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                {% for e in form.location.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <label class="flex cursor-pointer items-start gap-3">
+                <input type="checkbox" name="notify" value="on"{% if form.notify.value %} checked{% endif %}
+                       class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600 dark:bg-zinc-900">
+                <span class="text-sm text-zinc-700 dark:text-zinc-300">
+                    Email the new time to everyone invited
+                    <span class="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">The panel and, if they were emailed before, the candidate get the change with an updated calendar entry. Evaluation links and anything already submitted stay as they are.</span>
+                </span>
+            </label>
+        </section>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" :disabled="busy" class="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span x-text="busy ? 'Saving…' : 'Save new time'">Save new time</span>
+            </button>
+            <a href="{% url 'interviews:detail' interview.pk %}" class="inline-flex items-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

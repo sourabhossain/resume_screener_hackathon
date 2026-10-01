@@ -36,6 +36,7 @@ app.conf.task_routes = {
     'apps.interviews.tasks.send_candidate_invite': {'queue': 'notifications'},
     'apps.interviews.tasks.send_interview_reminders': {'queue': 'notifications'},
     'apps.interviews.tasks.send_interview_cancellation': {'queue': 'notifications'},
+    'apps.interviews.tasks.send_interview_reschedule': {'queue': 'notifications'},
 }
 app.conf.task_default_queue = 'screening'
 

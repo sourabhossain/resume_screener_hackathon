@@ -9,7 +9,7 @@ from django.contrib import messages
 from apps.core.views import form_errors_to_messages
 from apps.core.models import Resume
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
-from .forms import (EvaluationSubmitForm, InterviewCreateForm, StaffEvaluatorForm,
+from .forms import (EvaluationSubmitForm, InterviewCreateForm, InterviewRescheduleForm, StaffEvaluatorForm,
                     staff_evaluators, staff_label)
 
 
@@ -156,6 +156,55 @@ def interview_detail(request, pk):
         'add_form': add_form,
         'criteria': EVALUATION_CRITERIA,
     })
+
+
+def _when_text(interview):
+    start = interview.starts_at
+    if start:
+        return timezone.localtime(start).strftime('%A, %-d %B %Y, %-I:%M %p')
+    return interview.scheduled_date.strftime('%A, %-d %B %Y')
+
+
+@login_required
+def interview_reschedule(request, pk):
+    """A new time or place, keeping the panel, their links and any evaluations."""
+    interview = get_object_or_404(Interview.objects.select_related('resume', 'resume__job'), pk=pk)
+    if interview.status != Interview.SCHEDULED:
+        messages.error(request, 'Only a scheduled interview can be rescheduled. Reopen it first.')
+        return redirect('interviews:detail', pk=pk)
+    previous = _when_text(interview)
+    before = {f: getattr(interview, f) for f in InterviewRescheduleForm.SCHEDULE_FIELDS}
+    form = InterviewRescheduleForm(request.POST or None, instance=interview)
+    if request.method == 'POST':
+        if form.is_valid() and all(form.cleaned_data[f] == before[f] for f in before):
+            messages.info(request, 'Nothing changed, so no one was emailed.')
+            return redirect('interviews:detail', pk=pk)
+        if form.is_valid():
+            from apps.core.utils import queue_task
+            from .tasks import send_interview_reschedule
+            with transaction.atomic():
+                interview = form.save(commit=False)
+                interview.schedule_version = (interview.schedule_version or 0) + 1
+                interview.candidate_reminded_at = None
+                interview.save()
+                expiry = interview.evaluation_link_expiry()
+                for ev in interview.evaluations.filter(is_submitted=False):
+                    # The day-before reminder belongs to the new date, and a link
+                    # must still work a week after the moved interview.
+                    ev.reminded_at = None
+                    if not ev.token_expires_at or ev.token_expires_at < expiry:
+                        ev.token_expires_at = expiry
+                    ev.save(update_fields=['reminded_at', 'token_expires_at'])
+                notify = form.cleaned_data.get('notify')
+                if notify:
+                    transaction.on_commit(lambda: queue_task(send_interview_reschedule, interview.pk, previous))
+            messages.success(request, 'Interview rescheduled.' + (
+                ' Everyone invited is being emailed the new time and an updated calendar entry.'
+                if notify else ' No one was emailed.'))
+            return redirect('interviews:detail', pk=pk)
+        form_errors_to_messages(request, form)
+    return render(request, 'interviews/reschedule.html', {'interview': interview, 'form': form,
+                                                          'previous': previous})
 
 
 @login_required
@@ -363,6 +412,39 @@ def evaluate(request, token):
         'criteria': EVALUATION_CRITERIA,
         'score_range': range(1, 6),
     })
+
+
+def evaluation_cv(request, token):
+    """The candidate's CV, for the evaluator holding this link.
+
+    Opens only while the link can still be used to evaluate: not expired, not
+    yet submitted, and the interview neither cancelled nor deleted. The link
+    goes only to the evaluator's office email, and every opening is logged.
+    """
+    import logging
+    import os
+    from django.http import FileResponse, Http404
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related(
+        'interview', 'interview__resume', 'interview__resume__job'), token=token)
+    resume = ev.interview.resume
+    if (_closed_by_deletion(ev) or ev.is_submitted or ev.is_expired
+            or ev.interview.status == Interview.CANCELLED or not resume.file):
+        raise Http404
+    try:
+        handle = resume.file.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404
+    extension = os.path.splitext(resume.file.name)[1].lower()
+    inline = extension == '.pdf'
+    safe_name = ''.join(ch for ch in resume.candidate_name.title() if ch.isalnum() or ch in ' -').strip() or 'Candidate'
+    logging.getLogger(__name__).info('interview.cv_served evaluation=%s resume=%s', ev.pk, resume.pk)
+    response = FileResponse(handle, as_attachment=not inline, filename=f'{safe_name} - CV{extension}')
+    response['Cache-Control'] = 'private, no-store, max-age=0'
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Referrer-Policy'] = 'no-referrer'
+    if inline:
+        response['Content-Security-Policy'] = "default-src 'none'; object-src 'self'; frame-ancestors 'self'"
+    return response
 
 
 def evaluate_done(request, token):

@@ -2,7 +2,7 @@
 
 {% if cancelled %}We are sorry to let you know that your interview for the {{ job_title }} position at SSL Wireless, scheduled for {% if starts_at %}{{ starts_at|date:"l, j F Y, g:i A" }}{% else %}{{ interview.scheduled_date|date:"l, j F Y" }}{% endif %}, has been cancelled. We will contact you if it is rescheduled.
 
-A calendar update is attached so the appointment can be removed from your calendar. If you have any questions, reply to this email or write to {{ support_email }}.{% else %}{% if reminder %}This is a friendly reminder of your interview tomorrow for the {{ job_title }} position at SSL Wireless.{% else %}Thank you for your interest in the {{ job_title }} position at SSL Wireless. We are pleased to invite you to an interview.{% endif %}
+A calendar update is attached so the appointment can be removed from your calendar. If you have any questions, reply to this email or write to {{ support_email }}.{% else %}{% if previous %}Your interview for the {{ job_title }} position at SSL Wireless has been moved to a new time. It was {{ previous }}; the new details are below.{% elif reminder %}This is a friendly reminder of your interview tomorrow for the {{ job_title }} position at SSL Wireless.{% else %}Thank you for your interest in the {{ job_title }} position at SSL Wireless. We are pleased to invite you to an interview.{% endif %}
 
 When:  {% if starts_at %}{{ starts_at|date:"l, j F Y, g:i A" }} (Bangladesh time){% else %}{{ interview.scheduled_date|date:"l, j F Y" }}{% endif %}
 Where: {% if interview.is_online %}Online{% if interview.location %} – {{ interview.location }}{% endif %}{% else %}In person{% if interview.location %} – {{ interview.location }}{% endif %}{% endif %}

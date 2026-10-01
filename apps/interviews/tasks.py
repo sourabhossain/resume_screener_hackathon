@@ -114,6 +114,43 @@ def send_interview_cancellation(interview_id: int) -> dict:
     return sent
 
 
+@shared_task(name='apps.interviews.tasks.send_interview_reschedule', soft_time_limit=120, time_limit=150)
+def send_interview_reschedule(interview_id: int, previous: str) -> dict:
+    """Tell everyone already invited the interview's new time and place.
+
+    Evaluators whose first invitation never went out get the ordinary
+    invitation instead; the candidate hears only if they had been told before.
+    """
+    from .models import Interview, InterviewEvaluation
+    from .notifications import evaluator_address, send_candidate_email, send_evaluator_email
+
+    interview = Interview.objects.select_related('resume', 'resume__job').filter(
+        pk=interview_id, status=Interview.SCHEDULED).first()
+    if interview is None:
+        return {'closed': True}
+    sent = {'evaluators': 0, 'candidate': 0}
+    for ev in InterviewEvaluation.objects.select_related('evaluator').filter(interview=interview, is_submitted=False):
+        ev.interview = interview
+        if not evaluator_address(ev):
+            continue
+        try:
+            send_evaluator_email(ev, previous=previous if ev.invited_at else None)
+            InterviewEvaluation.objects.filter(pk=ev.pk).update(invited_at=timezone.now(), invite_error='')
+            sent['evaluators'] += 1
+        except Exception as exc:
+            InterviewEvaluation.objects.filter(pk=ev.pk).update(invite_error=f'Update failed: {exc}'[:500])
+            logger.exception('interview.evaluator_reschedule_failed evaluation=%s', ev.pk)
+    if interview.candidate_notified_at and (interview.resume.email or '').strip():
+        try:
+            send_candidate_email(interview, previous=previous)
+            sent['candidate'] = 1
+        except Exception as exc:
+            Interview.objects.filter(pk=interview.pk).update(candidate_email_error=f'Update failed: {exc}'[:500])
+            logger.exception('interview.candidate_reschedule_failed interview=%s', interview.pk)
+    logger.info('interview.reschedule_sent interview=%s %s', interview.pk, sent)
+    return sent
+
+
 @shared_task(name='apps.interviews.tasks.send_interview_reminders', ignore_result=True)
 def send_interview_reminders():
     """The day before: remind each evaluator still to submit, and the candidate.

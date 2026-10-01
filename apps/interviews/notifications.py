@@ -58,7 +58,7 @@ def calendar_file(interview, *, for_evaluator=None, cancel=False) -> str:
         'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//SSL Wireless//Careers//EN',
         'CALSCALE:GREGORIAN', f'METHOD:{"CANCEL" if cancel else "PUBLISH"}', 'BEGIN:VEVENT',
         f'UID:interview-{interview.pk}-{interview.created_at:%Y%m%d%H%M%S}@sslwireless.com',
-        f'SEQUENCE:{1 if cancel else 0}',
+        f'SEQUENCE:{(interview.schedule_version or 0) + (1 if cancel else 0)}',
         f'STATUS:{"CANCELLED" if cancel else "CONFIRMED"}',
         f'DTSTAMP:{timezone.now().astimezone(dt_timezone.utc).strftime(stamp)}',
         f'DTSTART:{start.astimezone(dt_timezone.utc).strftime(stamp)}',
@@ -74,6 +74,10 @@ def calendar_file(interview, *, for_evaluator=None, cancel=False) -> str:
 
 def evaluation_url(evaluation) -> str:
     return absolute_url(reverse('interviews:evaluate', kwargs={'token': evaluation.token}))
+
+
+def cv_url(evaluation) -> str:
+    return absolute_url(reverse('interviews:evaluation_cv', kwargs={'token': evaluation.token}))
 
 
 def _context(interview):
@@ -123,13 +127,15 @@ def evaluator_address(evaluation):
     return evaluation.interviewer_email
 
 
-def send_evaluator_email(evaluation, *, reminder=False, cancelled=False):
+def send_evaluator_email(evaluation, *, reminder=False, cancelled=False, previous=None):
+    """`previous` is the old start time as text, for a reschedule notice."""
     interview = evaluation.interview
     context = {**_context(interview), 'evaluation': evaluation,
                'evaluator_name': evaluation.interviewer_name, 'evaluation_url': evaluation_url(evaluation),
-               'reminder': reminder, 'cancelled': cancelled}
+               'cv_url': cv_url(evaluation) if interview.resume.file else '',
+               'reminder': reminder, 'cancelled': cancelled, 'previous': previous}
     when = timezone.localtime(interview.starts_at).strftime('%-d %b, %-I:%M %p') if interview.starts_at else ''
-    prefix = ('Cancelled: interview' if cancelled else
+    prefix = ('Cancelled: interview' if cancelled else 'Rescheduled: interview' if previous else
               'Reminder: interview tomorrow' if reminder else 'Interview panel')
     subject = f'{prefix} · {context["candidate_name"]} · {context["job_title"]} · {when}'
     calendar = calendar_file(interview, for_evaluator=evaluation, cancel=cancelled) if interview.starts_at else None
@@ -137,10 +143,12 @@ def send_evaluator_email(evaluation, *, reminder=False, cancelled=False):
           method='CANCEL' if cancelled else 'PUBLISH')
 
 
-def send_candidate_email(interview, *, reminder=False, cancelled=False):
-    context = {**_context(interview), 'reminder': reminder, 'cancelled': cancelled}
+def send_candidate_email(interview, *, reminder=False, cancelled=False, previous=None):
+    context = {**_context(interview), 'reminder': reminder, 'cancelled': cancelled, 'previous': previous}
     if cancelled:
         subject = f'Interview cancelled: {context["job_title"]} at SSL Wireless'
+    elif previous:
+        subject = f'Interview rescheduled: {context["job_title"]} at SSL Wireless'
     elif reminder:
         subject = f'Reminder: your interview tomorrow for {context["job_title"]} at SSL Wireless'
     else:
