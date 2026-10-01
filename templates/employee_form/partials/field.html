@@ -144,7 +144,6 @@
         {% else %}
         {{ field }}
         {% endif %}
-    </div>
 
     <div class="fld-notes">
     {% if question.key in prefilled_keys and not field.errors %}
@@ -160,6 +159,7 @@
         {{ field.errors|join:" " }}
     </p>
     {% endif %}
+    </div>
     </div>
 {% endif %}
 </div>

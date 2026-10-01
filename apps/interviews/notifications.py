@@ -6,6 +6,7 @@ gets the time and place. Internal notes go to neither. Every email carries an
 """
 import logging
 from datetime import timezone as dt_timezone
+from email.mime.text import MIMEText
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -35,8 +36,12 @@ def _fold(line: str) -> str:
     return '\r\n '.join(out)
 
 
-def calendar_file(interview, *, for_evaluator=None) -> str:
-    """One VEVENT for this interview, in UTC, safe for Outlook and Google."""
+def calendar_file(interview, *, for_evaluator=None, cancel=False) -> str:
+    """One VEVENT for this interview, in UTC, safe for Outlook and Google.
+
+    A cancellation carries the same UID with a higher SEQUENCE, so a calendar
+    that took the invitation can match it and mark the slot cancelled.
+    """
     start, end = interview.starts_at, interview.ends_at
     stamp = '%Y%m%dT%H%M%SZ'
     job = interview.resume.job.title
@@ -51,12 +56,14 @@ def calendar_file(interview, *, for_evaluator=None) -> str:
         description += f'\nJoin: {interview.location}'
     lines = [
         'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//SSL Wireless//Careers//EN',
-        'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+        'CALSCALE:GREGORIAN', f'METHOD:{"CANCEL" if cancel else "PUBLISH"}', 'BEGIN:VEVENT',
         f'UID:interview-{interview.pk}-{interview.created_at:%Y%m%d%H%M%S}@sslwireless.com',
+        f'SEQUENCE:{1 if cancel else 0}',
+        f'STATUS:{"CANCELLED" if cancel else "CONFIRMED"}',
         f'DTSTAMP:{timezone.now().astimezone(dt_timezone.utc).strftime(stamp)}',
         f'DTSTART:{start.astimezone(dt_timezone.utc).strftime(stamp)}',
         f'DTEND:{end.astimezone(dt_timezone.utc).strftime(stamp)}',
-        f'SUMMARY:{_ics_text(summary)}',
+        f'SUMMARY:{_ics_text(("Cancelled: " if cancel else "") + summary)}',
         f'DESCRIPTION:{_ics_text(description)}',
     ]
     if interview.location:
@@ -80,7 +87,16 @@ def _context(interview):
     }
 
 
-def _send(subject, template, context, recipient, calendar):
+def _calendar_part(calendar, method):
+    # Built by hand: attach() with a mimetype string repeats the charset
+    # parameter, which strict mail gateways reject.
+    part = MIMEText(calendar, 'calendar', 'utf-8')
+    part.set_param('method', method)
+    part.add_header('Content-Disposition', 'attachment', filename='interview.ics')
+    return part
+
+
+def _send(subject, template, context, recipient, calendar, method='PUBLISH'):
     message = EmailMultiAlternatives(
         subject=' '.join(subject.split()),
         body=render_to_string(f'interviews/email/{template}.txt', context),
@@ -90,27 +106,45 @@ def _send(subject, template, context, recipient, calendar):
     )
     message.attach_alternative(render_to_string(f'interviews/email/{template}.html', context), 'text/html')
     if calendar:
-        message.attach('interview.ics', calendar, 'text/calendar; charset=utf-8; method=PUBLISH')
+        message.attach(_calendar_part(calendar, method))
     message.send(fail_silently=False)
 
 
-def send_evaluator_email(evaluation, *, reminder=False):
+def evaluator_address(evaluation):
+    """Where an evaluator's email goes now, or '' when they must not get it.
+
+    A linked staff account decides: a deactivated account gets nothing (they
+    have left, and the link exposes a candidate's details), and a changed
+    address is followed.
+    """
+    user = evaluation.evaluator
+    if user is not None:
+        return user.email if user.is_active else ''
+    return evaluation.interviewer_email
+
+
+def send_evaluator_email(evaluation, *, reminder=False, cancelled=False):
     interview = evaluation.interview
     context = {**_context(interview), 'evaluation': evaluation,
                'evaluator_name': evaluation.interviewer_name, 'evaluation_url': evaluation_url(evaluation),
-               'reminder': reminder}
+               'reminder': reminder, 'cancelled': cancelled}
     when = timezone.localtime(interview.starts_at).strftime('%-d %b, %-I:%M %p') if interview.starts_at else ''
-    prefix = 'Reminder: interview tomorrow' if reminder else 'Interview panel'
+    prefix = ('Cancelled: interview' if cancelled else
+              'Reminder: interview tomorrow' if reminder else 'Interview panel')
     subject = f'{prefix} · {context["candidate_name"]} · {context["job_title"]} · {when}'
-    calendar = calendar_file(interview, for_evaluator=evaluation) if interview.starts_at else None
-    _send(subject, 'evaluator', context, evaluation.interviewer_email, calendar)
+    calendar = calendar_file(interview, for_evaluator=evaluation, cancel=cancelled) if interview.starts_at else None
+    _send(subject, 'evaluator', context, evaluator_address(evaluation), calendar,
+          method='CANCEL' if cancelled else 'PUBLISH')
 
 
-def send_candidate_email(interview, *, reminder=False):
-    context = {**_context(interview), 'reminder': reminder}
-    if reminder:
+def send_candidate_email(interview, *, reminder=False, cancelled=False):
+    context = {**_context(interview), 'reminder': reminder, 'cancelled': cancelled}
+    if cancelled:
+        subject = f'Interview cancelled: {context["job_title"]} at SSL Wireless'
+    elif reminder:
         subject = f'Reminder: your interview tomorrow for {context["job_title"]} at SSL Wireless'
     else:
         subject = f'Interview invitation: {context["job_title"]} at SSL Wireless'
-    calendar = calendar_file(interview) if interview.starts_at else None
-    _send(subject, 'candidate', context, interview.resume.email, calendar)
+    calendar = calendar_file(interview, cancel=cancelled) if interview.starts_at else None
+    _send(subject, 'candidate', context, interview.resume.email, calendar,
+          method='CANCEL' if cancelled else 'PUBLISH')

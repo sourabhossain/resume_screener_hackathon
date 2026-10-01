@@ -1,17 +1,21 @@
 <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#27272a;max-width:560px">
   <p>Dear {{ evaluator_name }},</p>
-  <p>{% if reminder %}A reminder that you are on the interview panel <strong>tomorrow</strong>.{% else %}You have been added to an interview panel.{% endif %}</p>
-  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:18px 0;font-size:14px">
+  <p>{% if cancelled %}The interview below has been <strong>cancelled</strong>. No evaluation is needed, and your evaluation link no longer works.{% elif reminder %}A reminder that you are on the interview panel <strong>tomorrow</strong>.{% else %}You have been added to an interview panel.{% endif %}</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:18px 0;font-size:14px{% if cancelled %};color:#71717a{% endif %}">
     <tr><td style="width:96px;padding:8px 0;color:#71717a;border-top:1px solid #e4e4e7">Candidate</td><td style="padding:8px 0;border-top:1px solid #e4e4e7"><strong>{{ candidate_name }}</strong></td></tr>
     <tr><td style="padding:8px 0;color:#71717a;border-top:1px solid #e4e4e7">Position</td><td style="padding:8px 0;border-top:1px solid #e4e4e7">{{ job_title }}</td></tr>
     <tr><td style="padding:8px 0;color:#71717a;border-top:1px solid #e4e4e7">Round</td><td style="padding:8px 0;border-top:1px solid #e4e4e7">{{ interview.get_phase_display }}</td></tr>
     <tr><td style="padding:8px 0;color:#71717a;border-top:1px solid #e4e4e7">When</td><td style="padding:8px 0;border-top:1px solid #e4e4e7"><strong>{% if starts_at %}{{ starts_at|date:"l, j F Y" }}<br>{{ starts_at|date:"g:i A" }} – {{ ends_at|date:"g:i A" }}</strong> <span style="color:#71717a">(Bangladesh time)</span>{% else %}{{ interview.scheduled_date|date:"l, j F Y" }}</strong>{% endif %}</td></tr>
-    <tr><td style="padding:8px 0;color:#71717a;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7">Where</td><td style="padding:8px 0;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7">{{ interview.get_mode_display }}{% if interview.location %}<br>{% if interview.is_online %}<a href="{{ interview.location }}" style="color:#284699">{{ interview.location }}</a>{% else %}{{ interview.location }}{% endif %}{% endif %}</td></tr>
+    <tr><td style="padding:8px 0;color:#71717a;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7">Where</td><td style="padding:8px 0;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7">{{ interview.get_mode_display }}{% if interview.location %}<br>{% if interview.is_online and not cancelled %}<a href="{{ interview.location }}" style="color:#284699">{{ interview.location }}</a>{% else %}{{ interview.location }}{% endif %}{% endif %}</td></tr>
   </table>
+  {% if cancelled %}
+  <p style="color:#52525b;font-size:14px">A calendar update is attached so the slot can be removed from your calendar.</p>
+  {% else %}
   <p>Please record your evaluation after the interview:</p>
   <p style="margin:22px 0">
     <a href="{{ evaluation_url }}" style="background:#284699;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;display:inline-block">Open evaluation form</a>
   </p>
   <p style="color:#52525b;font-size:14px">This link is for you only; please do not forward it. A calendar invitation is attached.</p>
+  {% endif %}
   <p>SSL Wireless HR<br><a href="mailto:{{ support_email }}" style="color:#284699">{{ support_email }}</a></p>
 </div>

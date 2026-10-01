@@ -80,7 +80,7 @@ def verify_resume_links_task(self, resume_id: int):
 
     try:
         resume.verification_status = 'processing'
-        resume.save(update_fields=['verification_status'])
+        resume.save(update_fields=['verification_status', 'updated_at'])
 
         result = LinkVerifier.verify_resume(resume)
 
@@ -100,7 +100,7 @@ def verify_resume_links_task(self, resume_id: int):
 
         resume.save(update_fields=[
             'verification_results', 'verification_score',
-            'verification_status', 'verified_at'
+            'verification_status', 'verified_at', 'updated_at'
         ])
 
         return result

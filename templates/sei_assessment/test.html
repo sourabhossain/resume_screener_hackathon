@@ -137,7 +137,17 @@
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'hidden') { this.flushOnLeave(); }
                 });
-                window.addEventListener('keydown', (event) => this.hotkey(event));
+                this.onKey = (event) => { this.keyedAt = Date.now(); this.hotkey(event); };
+                window.addEventListener('keydown', this.onKey);
+            },
+
+            // Alpine calls this when the page is swapped away: no timer, save or
+            // key handler may outlive the questions it belongs to.
+            destroy() {
+                clearInterval(this.tick);
+                clearInterval(this.flusher);
+                clearTimeout(this.guideTimer);
+                window.removeEventListener('keydown', this.onKey);
             },
 
             countDown() {
@@ -229,6 +239,9 @@
             // unanswered statement on this page, or else the button that moves on.
             guideOn() {
                 clearTimeout(this.guideTimer);
+                // Answered from the keyboard: focus stays on that statement, so the
+                // page must not scroll it away from under the next key press.
+                if (Date.now() - (this.keyedAt || 0) < 600) { return; }
                 this.guideTimer = setTimeout(() => {
                     if (this.view !== 'questions') { return; }
                     const gap = this.missingHere()[0];

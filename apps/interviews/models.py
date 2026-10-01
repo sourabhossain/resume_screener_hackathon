@@ -83,6 +83,15 @@ class Interview(SoftDeleteModel):
         start = self.starts_at
         return start + timedelta(minutes=self.duration_minutes or 60) if start else None
 
+    def evaluation_link_expiry(self):
+        """Evaluation links stay open until a week after the interview, and never
+        less than the usual 30 days: one booked six weeks out must still work
+        on the day."""
+        from datetime import datetime, time
+        end = self.ends_at or timezone.make_aware(datetime.combine(self.scheduled_date, time(23, 59)))
+        return max(timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS),
+                   end + timedelta(days=7))
+
     @property
     def is_online(self) -> bool:
         return self.mode == self.ONLINE

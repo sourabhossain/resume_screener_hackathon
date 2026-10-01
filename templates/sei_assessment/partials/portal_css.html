@@ -40,10 +40,10 @@
     .ap-acc { --a: var(--c, var(--brand)); --ai: var(--ci, #fff); }
     html.dark .ap-acc { --a: var(--cd, #8ba6f2); --ai: var(--cdi, #0b1633); }
 
-    .ap-portal {
-        background: var(--card); border: 1px solid var(--line); border-radius: 1rem;
-        overflow: hidden; overflow: clip; box-shadow: var(--shadow);
-    }
+    .ap-portal { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; box-shadow: var(--shadow); }
+    .ap-portal > :first-child { border-top-left-radius: 1rem; border-top-right-radius: 1rem; }
+    .ap-portal > :last-child { border-bottom-left-radius: 1rem; border-bottom-right-radius: 1rem; }
+    @supports (overflow: clip) { .ap-portal { overflow: clip; } }
     .ap-top {
         background: var(--card); border-bottom: 1px solid var(--line);
         padding: .875rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem;

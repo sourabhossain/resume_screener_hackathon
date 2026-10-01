@@ -49,7 +49,7 @@ def send_employee_form_invite(form_id: int) -> str:
 
     # HR resending must not throw out someone already part-way through: the
     # old code stops working, but a session verified with it stays verified.
-    # A new recipient is cleared by the service before this runs.
+    # A changed candidate email closes the link first (revoke_candidate_links).
     verified_at = form.otp_verified_at
     otp = form.issue_otp()
     form.otp_verified_at = verified_at

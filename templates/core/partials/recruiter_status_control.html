@@ -14,7 +14,7 @@
           {% if status_context == 'card' %}hx-target="closest .rs-status"{% else %}hx-target="closest td"{% endif %}
           hx-swap="outerHTML"
           hx-select="unset"
-          x-data="{ open: false, mx: 0, my: 0, up: false, mh: 420, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); const below = window.innerHeight - r.bottom - 12; const above = r.top - 12; this.up = below < 430 && above > below; this.mh = Math.round(Math.min(420, Math.max(160, this.up ? above : below))); this.mx = Math.max(8, Math.min(r.left, window.innerWidth - 368)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
+          x-data="{ open: false, mx: 0, my: 0, up: false, mh: 420, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); const below = window.innerHeight - r.bottom - 12; const above = r.top - 12; this.up = below < 430 && above > below; this.mh = Math.round(Math.min(420, Math.max(160, this.up ? above : below))); this.mx = Math.max(8, Math.min(r.left, document.documentElement.clientWidth - 368)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
           x-on:keydown.escape.window="open = false"
           x-on:scroll.window="open = false"
           class="relative inline-block">

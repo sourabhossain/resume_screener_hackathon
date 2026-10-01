@@ -6,6 +6,7 @@
      x-data="{
         mode: '{{ form.mode.value|default:'in_person'|escapejs }}',
         q: '',
+        busy: false,
         chosen: {{ chosen|default:'[]' }},
         panels: JSON.parse(document.getElementById('iv-panels').textContent),
         has(id) { return this.chosen.includes(id); },
@@ -24,7 +25,7 @@
         <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">For <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ resume.candidate_name|title }}</span> &middot; {{ resume.job.title }}</p>
     </div>
 
-    <form method="post" hx-boost="false" class="space-y-5">
+    <form method="post" hx-boost="false" class="space-y-5" @submit="busy = true">
         {% csrf_token %}
 
         <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
@@ -74,7 +75,7 @@
                     <span x-text="mode === 'online' ? 'Meeting link' : 'Room or address'">Room or address</span> <span class="text-rose-500">*</span>
                 </label>
                 <input type="text" name="location" id="{{ form.location.id_for_label }}" value="{{ form.location.value|default:'' }}" maxlength="500"
-                       :placeholder="mode === 'online' ? 'https://meet.google.com/… or Teams / Zoom link' : 'e.g. Conference Room 3, SSL Wireless, Gulshan 1'"
+                       :placeholder="mode === 'online' ? 'Meet, Teams or Zoom link' : 'e.g. Conference Room 3, Gulshan 1'"
                        class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
                 {% for e in form.location.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
             </div>
@@ -150,9 +151,9 @@
         </section>
 
         <div class="flex flex-wrap items-center gap-3">
-            <button type="submit" class="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white">
+            <button type="submit" :disabled="busy" class="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                Schedule &amp; send invitations
+                <span x-text="busy ? 'Scheduling…' : 'Schedule & send invitations'">Schedule &amp; send invitations</span>
             </button>
             <a href="{% url 'core:resume_detail' resume.uuid %}" class="inline-flex items-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancel</a>
         </div>

@@ -99,7 +99,7 @@ def send_invite(invitation, *, otp: str) -> None:
     else:
         subject = f'Your assessment for your application — {resume.job.title}'
     message = EmailMultiAlternatives(
-        subject=subject,
+        subject=' '.join(subject.split()),
         body=render_to_string('sei_assessment/email/invite.txt', context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],

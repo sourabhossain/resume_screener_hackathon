@@ -32,6 +32,7 @@ REQUIRED_TASKS = (
     'apps.interviews.tasks.send_evaluator_invite',
     'apps.interviews.tasks.send_candidate_invite',
     'apps.interviews.tasks.send_interview_reminders',
+    'apps.interviews.tasks.send_interview_cancellation',
 )
 
 # Work that only ever runs because the scheduler fires it. A worker can be

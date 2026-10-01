@@ -615,6 +615,12 @@ def resume_edit(request, uuid):
                 else:
                     instance.tier, instance.recommendation = 'low', 'reject'
             instance.save()
+            if 'email' in form.changed_data:
+                from apps.core.utils import revoke_candidate_links
+                if revoke_candidate_links(instance):
+                    messages.warning(request, 'The email address changed, so the links already sent to the '
+                                              'old address were closed. Send the information form or the '
+                                              'assessment again to reach the new address.')
             if new_file:
                 from apps.core.services.screening_queue import queue_screening
                 queue_screening(instance.id)
@@ -906,6 +912,8 @@ def careers_list(request):
            rate='10/h', method='POST', block=True)
 @ratelimit(key=lambda group, request: f"{client_ip(request)}:{request.resolver_match.kwargs.get('slug', '')}",
            rate='300/h', method='POST', block=True)
+# And across every job: each application costs a screening call to the AI.
+@ratelimit(key=lambda group, request: f"apply-any:{client_ip(request)}", rate='120/h', method='POST', block=True)
 def careers_apply(request, slug):
     """Public job detail + resume submission form. Only open jobs accept applications.
 

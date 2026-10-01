@@ -182,3 +182,25 @@ def test_ticking_the_last_checklist_item_unlocks_onboarded_without_a_reload(auth
     assert 'hx-swap-oob="true"' in control[:80]
     onboarded = control[control.index('value="hired"'):][:300]
     assert 'disabled' not in onboarded
+
+
+@pytest.mark.django_db
+def test_correcting_a_candidates_email_closes_the_links_sent_to_the_old_one(authenticated_client, sample_job):
+    from apps.core.forms import ResumeEditForm
+    from apps.employee_form.models import EmployeeForm
+    from apps.sei_assessment.models import AssessmentInvitation
+    resume = Resume.objects.create(job=sample_job, candidate_name='Typo Email', email='tpyo@example.com',
+                                   screening_status='completed')
+    form = EmployeeForm.objects.create(resume=resume, otp_verified_at=timezone.now())
+    invitation = AssessmentInvitation.objects.create(resume=resume, otp_verified_at=timezone.now(),
+                                                     token_expires_at=timezone.now() + timedelta(days=3))
+    old_tokens = form.token, invitation.token
+
+    authenticated_client.post(reverse('core:resume_edit', kwargs={'uuid': resume.uuid}), {
+        'candidate_name': 'Typo Email', 'email': 'typo@example.com',
+        'scores_seen': ResumeEditForm.score_signature(resume)})
+
+    form.refresh_from_db()
+    invitation.refresh_from_db()
+    assert (form.token, invitation.token) != old_tokens
+    assert form.otp_verified_at is None and invitation.otp_verified_at is None

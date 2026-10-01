@@ -15,6 +15,20 @@ def _stub_verify_resume_links_delay(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _never_open_smtp(monkeypatch):
+    """A test that selects the SMTP backend must not reach the real mail server.
+
+    The .env carries real credentials, so an un-stubbed send would deliver to
+    whatever address the test used.
+    """
+    from django.core.mail.backends.smtp import EmailBackend
+
+    def refuse(self, *args, **kwargs):
+        raise RuntimeError('A test tried to open a real SMTP connection; stub the send instead.')
+    monkeypatch.setattr(EmailBackend, 'open', refuse)
+
+
+@pytest.fixture(autouse=True)
 def _clear_cache():
     """Reset the cache between tests so django-ratelimit counters (cache-backed,
     keyed by IP) don't leak across tests and trip the per-IP limits."""

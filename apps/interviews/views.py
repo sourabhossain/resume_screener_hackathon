@@ -37,18 +37,43 @@ def _queue_invites(interview, evaluations, *, candidate):
     transaction.on_commit(send)
 
 
+def _release(kind, pk):
+    from django.core.cache import cache
+    cache.delete(f'send-claim:{kind}:{pk}')
+
+
 def _evaluation_for(interview, user):
     return InterviewEvaluation(interview=interview, evaluator=user,
-                               interviewer_name=staff_label(user), interviewer_email=user.email)
+                               interviewer_name=staff_label(user), interviewer_email=user.email,
+                               token_expires_at=interview.evaluation_link_expiry())
 
 
 def _panel_of(interview):
-    return list(interview.evaluations.exclude(evaluator=None).values_list('evaluator_id', flat=True))
+    """Staff on this panel who can still be invited: active, with an email."""
+    return list(interview.evaluations.filter(evaluator__is_active=True).exclude(evaluator__email='')
+                .values_list('evaluator_id', flat=True))
+
+
+def _queue_cancellation(interview):
+    """Tell the invited panel and candidate, once the change is committed."""
+    invited = (interview.candidate_notified_at is not None
+               or interview.evaluations.filter(invited_at__isnull=False, is_submitted=False).exists())
+    if not invited:
+        return False
+    from apps.core.utils import queue_task
+    from .tasks import send_interview_cancellation
+    transaction.on_commit(lambda: queue_task(send_interview_cancellation, interview.pk))
+    return True
 
 
 @login_required
 def interview_create(request, resume_uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=resume_uuid)
+    from apps.core.status import OUTCOMES_THE_SYSTEM_NEVER_MOVES
+    if resume.recruiter_status in OUTCOMES_THE_SYSTEM_NEVER_MOVES:
+        messages.error(request, f'{resume.candidate_name.title()} is {resume.get_recruiter_status_display()}, '
+                                'so an interview cannot be scheduled. Change the status first.')
+        return redirect('core:resume_detail', uuid=resume.uuid)
     held = Interview.objects.filter(resume=resume, is_deleted=False).exclude(status=Interview.CANCELLED)
     done_phases = set(held.values_list('phase', flat=True))
     next_phase = next((key for key, _ in Interview.PHASE_CHOICES if key not in done_phases), '3')
@@ -58,7 +83,11 @@ def interview_create(request, resume_uuid):
             phase = form.cleaned_data['phase']
             required_prior = {'2': '1', '3': '2'}
             prior_phase = required_prior.get(phase)
-            if prior_phase and prior_phase not in done_phases:
+            if phase in done_phases:
+                # Also stops a double click from booking (and emailing) it twice.
+                form.add_error('phase', f'{dict(Interview.PHASE_CHOICES)[phase]} is already scheduled for '
+                                        'this candidate. Open it from the candidate page instead.')
+            elif prior_phase and prior_phase not in done_phases:
                 phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
                 form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
             else:
@@ -135,17 +164,21 @@ def evaluation_resend(request, token):
     """Email an evaluator their link again."""
     from apps.core.utils import claim_send, queue_task
     from .tasks import send_evaluator_invite
-    ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview'), token=token)
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview', 'evaluator'), token=token)
     if ev.is_submitted or ev.interview.status != Interview.SCHEDULED:
         messages.error(request, 'Only a pending evaluator on a scheduled interview can be emailed.')
     elif not ev.interviewer_email:
         messages.error(request, f'{ev.interviewer_name} has no email address. Copy the link instead.')
+    elif ev.evaluator_id and not ev.evaluator.is_active:
+        messages.error(request, f'{ev.interviewer_name} is no longer an active staff account, so the link '
+                                'was not sent. Remove them from the panel.')
     elif not claim_send('interview_evaluator', ev.pk, seconds=60):
         messages.info(request, 'The email was sent a moment ago.')
     elif queue_task(send_evaluator_invite, ev.pk):
         InterviewEvaluation.objects.filter(pk=ev.pk).update(invite_error='')
         messages.success(request, f'Evaluation link emailed again to {ev.interviewer_name}.')
     else:
+        _release('interview_evaluator', ev.pk)
         messages.error(request, 'The email could not be queued right now. Try again in a minute.')
     return redirect('interviews:detail', pk=ev.interview_id)
 
@@ -167,6 +200,7 @@ def candidate_resend(request, pk):
         Interview.objects.filter(pk=interview.pk).update(candidate_email_error='', notify_candidate=True)
         messages.success(request, f'Interview details emailed to {interview.resume.email}.')
     else:
+        _release('interview_candidate', interview.pk)
         messages.error(request, 'The email could not be queued right now. Try again in a minute.')
     return redirect('interviews:detail', pk=interview.pk)
 
@@ -179,8 +213,11 @@ def interview_delete(request, pk):
         return redirect('core:dashboard')
     resume_uuid = interview.resume.uuid
     if request.method == 'POST':
-        interview.soft_delete()
-        messages.success(request, 'Interview deleted.')
+        with transaction.atomic():
+            told = interview.status == Interview.SCHEDULED and _queue_cancellation(interview)
+            interview.soft_delete()
+        messages.success(request, 'Interview deleted.' + (
+            ' Everyone who was invited is being told it is cancelled.' if told else ''))
     return redirect('core:resume_detail', uuid=resume_uuid)
 
 
@@ -200,12 +237,17 @@ def interview_status(request, pk):
     elif target == interview.status:
         messages.info(request, f'The interview is already {interview.get_status_display().lower()}.')
     else:
-        interview.status = target
-        interview.save(update_fields=['status'])
+        was = interview.status
+        with transaction.atomic():
+            interview.status = target
+            interview.save(update_fields=['status'])
+            told = target == Interview.CANCELLED and was == Interview.SCHEDULED and _queue_cancellation(interview)
         messages.success(request, {
-            Interview.CANCELLED: 'Interview cancelled. Evaluation links that were not used no longer work.',
+            Interview.CANCELLED: 'Interview cancelled. Evaluation links that were not used no longer work.'
+                                 + (' Everyone who was invited is being told by email.' if told else ''),
             Interview.COMPLETED: 'Interview marked as completed.',
-            Interview.SCHEDULED: 'Interview reopened.',
+            Interview.SCHEDULED: 'Interview reopened. Use Resend email and Send again to tell the panel '
+                                 'and the candidate.',
         }[target])
     return redirect('interviews:detail', pk=pk)
 
@@ -225,7 +267,7 @@ def evaluation_delete(request, token):
 
 @login_required
 def evaluation_renew(request, token):
-    from datetime import timedelta
+    from apps.core.utils import claim_send
     ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview__resume__job__owner'), token=token)
     if not _can_access_interview(request.user, ev.interview):
         messages.error(request, 'You do not have permission to renew this evaluation link.')
@@ -233,9 +275,11 @@ def evaluation_renew(request, token):
     if request.method == 'POST' and ev.interview.status == Interview.CANCELLED:
         messages.error(request, 'This interview is cancelled. Reopen it before renewing a link.')
         return redirect('interviews:detail', pk=ev.interview_id)
-    if request.method == 'POST' and not ev.is_submitted:
+    if request.method == 'POST' and not ev.is_submitted and not claim_send('interview_renew', ev.pk, seconds=30):
+        messages.info(request, 'A new link was made a moment ago.')
+    elif request.method == 'POST' and not ev.is_submitted:
         ev.token = uuid.uuid4()
-        ev.token_expires_at = timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS)
+        ev.token_expires_at = ev.interview.evaluation_link_expiry()
         ev.save(update_fields=['token', 'token_expires_at'])
         if ev.interviewer_email:
             # The old link stops working, so the new one goes out at once.

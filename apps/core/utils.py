@@ -74,3 +74,25 @@ def check_counted_otp(obj, raw: str) -> bool:
         return True
     obj.refresh_from_db(fields=['otp_attempts'])
     return False
+
+
+def revoke_candidate_links(resume) -> int:
+    """Close the candidate's unfinished form and assessment links.
+
+    Called when the candidate's email changes: whoever received the old one,
+    if it was mistyped, must not keep a verified session that will later show
+    what the real candidate enters. The links are reissued on the next send.
+    Returns how many links were closed.
+    """
+    import uuid as _uuid
+    from apps.employee_form.models import EmployeeForm
+    from apps.sei_assessment.models import AssessmentInvitation
+
+    closed = 0
+    for model, rows in ((EmployeeForm, EmployeeForm.objects.filter(resume=resume, is_submitted=False)),
+                        (AssessmentInvitation, AssessmentInvitation.objects.filter(resume=resume))):
+        for row in rows:
+            closed += model.objects.filter(pk=row.pk).update(
+                token=_uuid.uuid4(), otp_hash='', otp_verified_at=None)
+    return closed
+

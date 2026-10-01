@@ -48,6 +48,11 @@ def _to(address):
     return [m for m in mail.outbox if address in m.to]
 
 
+def _calendar(email):
+    part = email.attachments[0]
+    return part.get_filename(), part.get_payload(decode=True).decode(), part
+
+
 # ── scheduling ───────────────────────────────────────────────────────────
 @pytest.mark.django_db
 def test_one_submit_creates_the_panel_and_emails_everyone(authenticated_client, candidate, staff):
@@ -72,8 +77,10 @@ def test_each_evaluator_gets_their_own_link_and_a_calendar_file(authenticated_cl
     ev = InterviewEvaluation.objects.get(evaluator=staff[0])
     assert str(ev.token) in email.body
     assert 'Nadia Islam' in email.subject and 'Conference Room 3' in email.body
-    name, calendar, kind = email.attachments[0]
-    assert name == 'interview.ics' and kind.startswith('text/calendar')
+    name, calendar, part = _calendar(email)
+    assert name == 'interview.ics' and part.get_content_type() == 'text/calendar'
+    assert part.get_param('method') == 'PUBLISH'
+    assert str(part['Content-Type']).count('charset') == 1
     start = (timezone.localdate() + timedelta(days=3)).strftime('%Y%m%d')
     assert f'DTSTART:{start}T040000Z' in calendar
     assert f'DTEND:{start}T050000Z' in calendar
@@ -90,7 +97,7 @@ def test_the_candidate_email_has_the_time_and_place_but_never_the_internal_notes
     assert 'gap in 2024' not in email.body and 'gap in 2024' not in html
     assert str(InterviewEvaluation.objects.get().token) not in email.body
     assert email.reply_to == ['jobs@sslwireless.com']
-    assert email.attachments[0][0] == 'interview.ics'
+    assert _calendar(email)[0] == 'interview.ics'
 
 
 @pytest.mark.django_db
@@ -254,3 +261,96 @@ def test_the_calendar_file_escapes_text_and_keeps_lines_short(candidate):
     assert 'LOCATION:Room 3\\, Level 7\\; SSL Wireless' in ics.replace('\r\n ', '')
     assert all(len(line.encode()) <= 75 for line in ics.split('\r\n'))
     assert 'T093000Z' in ics and 'T110000Z' in ics
+
+
+
+# ── fixes from the go-live review ────────────────────────────────────────
+@pytest.mark.django_db
+def test_a_double_submit_books_the_round_once(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:1])
+    mail.outbox.clear()
+
+    response = _schedule(authenticated_client, candidate, staff[:1])
+
+    assert response.status_code == 200 and 'already scheduled' in response.content.decode()
+    assert Interview.objects.filter(resume=candidate).count() == 1
+    assert mail.outbox == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('status', ['rejected', 'withdrawn', 'hired'])
+def test_a_closed_candidate_cannot_be_invited(authenticated_client, candidate, staff, status):
+    candidate.recruiter_status = status
+    candidate.save(update_fields=['recruiter_status'])
+
+    _schedule(authenticated_client, candidate, staff[:1])
+    page = authenticated_client.get(reverse('core:resume_detail', kwargs={'uuid': candidate.uuid})).content.decode()
+
+    assert not Interview.objects.filter(resume=candidate).exists()
+    assert mail.outbox == []
+    assert reverse('interviews:create', kwargs={'resume_uuid': candidate.uuid}) not in page
+
+
+@pytest.mark.django_db
+def test_a_link_for_an_interview_weeks_away_still_works_on_the_day(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:1], scheduled_date=_day(45))
+
+    ev = InterviewEvaluation.objects.get()
+    assert ev.token_expires_at > ev.interview.ends_at + timedelta(days=6)
+
+
+@pytest.mark.django_db
+def test_a_member_who_has_left_is_not_reminded_or_resent(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:2], scheduled_date=_day(1))
+    staff[0].is_active = False
+    staff[0].save()
+    mail.outbox.clear()
+
+    authenticated_client.post(reverse('interviews:evaluation_resend',
+                                      kwargs={'token': InterviewEvaluation.objects.get(evaluator=staff[0]).token}))
+    send_interview_reminders()
+
+    assert _to('panel0@sslwireless.com') == []
+    assert len(_to('panel1@sslwireless.com')) == 1
+
+
+@pytest.mark.django_db
+def test_a_changed_staff_address_is_followed(authenticated_client, candidate, staff):
+    _schedule(authenticated_client, candidate, staff[:1])
+    staff[0].email = 'new.address@sslwireless.com'
+    staff[0].save()
+    mail.outbox.clear()
+
+    authenticated_client.post(reverse('interviews:evaluation_resend',
+                                      kwargs={'token': InterviewEvaluation.objects.get().token}))
+
+    assert len(_to('new.address@sslwireless.com')) == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('how', ['cancel', 'delete'])
+def test_cancelling_or_deleting_tells_everyone_who_was_invited(authenticated_client, candidate, staff, how):
+    _schedule(authenticated_client, candidate, staff[:2])
+    interview = Interview.objects.get()
+    mail.outbox.clear()
+
+    if how == 'cancel':
+        authenticated_client.post(reverse('interviews:status', kwargs={'pk': interview.pk}), {'action': 'cancel'})
+    else:
+        authenticated_client.post(reverse('interviews:delete', kwargs={'pk': interview.pk}))
+
+    assert sorted(m.to[0] for m in mail.outbox) == [
+        'nadia@example.com', 'panel0@sslwireless.com', 'panel1@sslwireless.com']
+    candidate_email = _to('nadia@example.com')[0]
+    assert candidate_email.subject.startswith('Interview cancelled')
+    _, calendar, part = _calendar(candidate_email)
+    assert part.get_param('method') == 'CANCEL' and 'STATUS:CANCELLED' in calendar and 'SEQUENCE:1' in calendar
+
+
+@pytest.mark.django_db
+def test_cancelling_an_interview_nobody_was_emailed_about_sends_nothing(authenticated_client, candidate):
+    interview = Interview.objects.create(resume=candidate, scheduled_date=timezone.localdate() + timedelta(days=2))
+
+    authenticated_client.post(reverse('interviews:status', kwargs={'pk': interview.pk}), {'action': 'cancel'})
+
+    assert mail.outbox == []

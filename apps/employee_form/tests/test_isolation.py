@@ -358,9 +358,14 @@ def test_a_console_backend_logs_that_nothing_was_delivered(candidate, settings, 
 
 def test_a_real_smtp_backend_does_not_log_that_warning(candidate, settings, caplog):
     import logging
+    from unittest import mock
     settings.EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    # Django's test runner swaps in locmem regardless, so patch the send itself.
-    with caplog.at_level(logging.WARNING, logger='apps.employee_form.services'):
+    # Overriding the setting really does select SMTP, so the send itself is
+    # stubbed: a test must never open a connection to the mail server.
+    with mock.patch('django.core.mail.backends.smtp.EmailBackend.send_messages', return_value=1) as sent, \
+            caplog.at_level(logging.WARNING, logger='apps.employee_form.services'):
         issue_invite(candidate)
+
+    assert sent.called
 
     assert not any('invite_not_delivered' in r.message for r in caplog.records)

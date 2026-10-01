@@ -126,5 +126,12 @@ class ResumeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tier=tier)
         return queryset.order_by('-final_score', '-created_at')
     
+    def perform_update(self, serializer):
+        before = serializer.instance.email
+        resume = serializer.save()
+        if (resume.email or '') != (before or ''):
+            from apps.core.utils import revoke_candidate_links
+            revoke_candidate_links(resume)
+
     def perform_destroy(self, instance):
         instance.soft_delete()

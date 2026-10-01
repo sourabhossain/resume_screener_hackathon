@@ -51,7 +51,7 @@ def send_invite(form, *, otp: str) -> None:
     html_body = render_to_string('employee_form/email/invite.html', context)
 
     message = EmailMultiAlternatives(
-        subject=subject,
+        subject=' '.join(subject.split()),
         body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
