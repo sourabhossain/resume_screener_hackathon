@@ -3,7 +3,7 @@
     <legend class="ap-q"><span class="ap-qn" aria-hidden="true">{{ badge }}</span><span class="ap-qt"><span class="sr-only">{% if live %}{{ spec.noun|capfirst }} {{ no }}{% else %}Practice {{ spec.noun }}{% endif %}: </span>{{ text }}</span></legend>
     <div class="ap-rows">
         {% for step in scale %}
-        <label class="ap-row">
+        <label class="ap-row is-toned" style="{{ step.tone }}">
             <input type="radio" name="{% if live %}q{{ no }}{% else %}practice{% endif %}" value="{{ step.value }}" class="sr-only"
                    {% if value == step.value %}checked{% endif %}
                    {% if live %}@change="record({{ no }}, {{ step.value }})"{% endif %}>

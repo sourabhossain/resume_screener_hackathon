@@ -36,15 +36,17 @@ PE = 'pe'
 # lightest step is the loudest, which would stand the scale on its head -- the
 # first option would shout and the last would disappear. These rise in
 # lightness instead, and every step stays visible against the dark card.
-_RAMP_5 = (('#E6F1FB', '#042C53'), ('#B5D4F4', '#042C53'), ('#85B7EB', '#042C53'),
-           ('#378ADD', '#ffffff'), ('#185FA5', '#ffffff'))
-_RAMP_4 = (('#E6F1FB', '#042C53'), ('#A9CCF1', '#042C53'),
-           ('#5FA0E4', '#ffffff'), ('#185FA5', '#ffffff'))
-
-_DARK_5 = (('#2b3a4d', '#dbe7f5'), ('#31517a', '#e3edf9'), ('#37699f', '#eef4fc'),
-           ('#3e86cc', '#ffffff'), ('#5aa6f0', '#0a2238'))
-_DARK_4 = (('#2b3a4d', '#dbe7f5'), ('#33587f', '#e6f0fa'),
-           ('#3b7bbd', '#ffffff'), ('#5aa6f0', '#0a2238'))
+# One colour per answer on a one-question screen, from "not at all" (slate)
+# to "most" (green): (badge, fill, text) in light, then in dark. Each badge
+# carries white text at 4.5:1 or better; each dark badge carries near-black.
+_TONES_5 = (('#475569', '#eef0f4', '#3f4a5c'), ('#c2410c', '#fdf1e3', '#9a3412'),
+            ('#7e22ce', '#f4ebfe', '#6b21a8'), ('#4338ca', '#e8e9fd', '#3730a3'),
+            ('#15803d', '#e3f6ea', '#166534'))
+_DARK_5 = (('#94a3b8', '#262a31', '#cbd5e1'), ('#fb923c', '#33261b', '#fdba74'),
+           ('#c084fc', '#2d2238', '#d8b4fe'), ('#818cf8', '#24253d', '#c7d2fe'),
+           ('#4ade80', '#1c2e24', '#86efac'))
+_TONES_4 = (_TONES_5[0], _TONES_5[1], _TONES_5[3], _TONES_5[4])
+_DARK_4 = (_DARK_5[0], _DARK_5[1], _DARK_5[3], _DARK_5[4])
 
 
 @dataclass(frozen=True)
@@ -87,12 +89,13 @@ class Instrument:
     @property
     def scale(self):
         """One row of the response scale: value, what the candidate reads, and
-        the fill plus the text colour that clears it, in both themes."""
+        its colours in both themes as CSS custom properties."""
         letters = 'ABCDEFGHIJ'
         return [
             {'value': value, 'label': label, 'full': full, 'letter': letters[i],
-             'fill': fill, 'ink': ink, 'dark_fill': dfill, 'dark_ink': dink}
-            for i, ((value, label), (_, full), (fill, ink), (dfill, dink))
+             'tone': (f'--oc:{badge};--ob:{fill};--ot:{text};'
+                      f'--ocd:{dbadge};--obd:{dfill};--otd:{dtext};')}
+            for i, ((value, label), (_, full), (badge, fill, text), (dbadge, dfill, dtext))
             in enumerate(zip(self.rating_short, self.rating_labels,
                              self.ramp, self.dark_ramp))
         ]
@@ -129,7 +132,7 @@ REGISTRY = {
         items=scoring.ITEMS,
         rating_labels=scoring.RATING_LABELS,
         rating_short=scoring.RATING_SHORT,
-        ramp=_RAMP_4,
+        ramp=_TONES_4,
         dark_ramp=_DARK_4,
         min_rating=scoring.MIN_RATING,
         max_rating=scoring.MAX_RATING,
@@ -154,7 +157,7 @@ REGISTRY = {
         items=pe_scoring.ITEMS,
         rating_labels=pe_scoring.RATING_LABELS,
         rating_short=pe_scoring.RATING_SHORT,
-        ramp=_RAMP_5,
+        ramp=_TONES_5,
         dark_ramp=_DARK_5,
         min_rating=pe_scoring.MIN_RATING,
         max_rating=pe_scoring.MAX_RATING,

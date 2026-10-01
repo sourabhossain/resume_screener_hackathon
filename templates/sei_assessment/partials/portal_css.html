@@ -172,7 +172,7 @@
     .ap-bar div { height: 100%; background: var(--a); border-radius: 3px; transition: width .3s ease; }
     .ap-seg { display: flex; gap: 4px; margin: .5rem 0 1.125rem; }
     .ap-seg span { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
-    .ap-seg span.is-done { background: var(--a); }
+    .ap-seg span.is-done { background: var(--ok); }
     .ap-seg span.is-here { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--a); }
     .ap-prompt { font-size: .8125rem; color: var(--sub); margin: -.5rem 0 1rem; }
 
@@ -227,6 +227,18 @@
     }
     .ap-row > input:checked + span { background: var(--a); color: var(--ai); border-color: var(--a); }
     .ap-row > input:checked + span .ap-b { background: var(--ai); color: var(--a); }
+    .ap-row.is-toned > span { background: var(--ob); color: var(--ot); }
+    .ap-row.is-toned .ap-b { background: var(--oc); color: #fff; }
+    .ap-row.is-toned:hover > span { border-color: var(--oc); }
+    .ap-row.is-toned > input:focus-visible + span { outline-color: var(--oc); }
+    .ap-row.is-toned > input:checked + span { background: var(--oc); color: #fff; border-color: var(--oc); font-weight: 600; }
+    .ap-row.is-toned > input:checked + span .ap-b { background: #fff; color: var(--oc); }
+    html.dark .ap-row.is-toned > span { background: var(--obd); color: var(--otd); }
+    html.dark .ap-row.is-toned .ap-b { background: var(--ocd); color: #0c0a09; }
+    html.dark .ap-row.is-toned:hover > span { border-color: var(--ocd); }
+    html.dark .ap-row.is-toned > input:focus-visible + span { outline-color: var(--ocd); }
+    html.dark .ap-row.is-toned > input:checked + span { background: var(--ocd); color: #0c0a09; border-color: var(--ocd); }
+    html.dark .ap-row.is-toned > input:checked + span .ap-b { background: #0c0a09; color: var(--ocd); }
 
     .ap-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: .375rem; margin: .625rem 0 1rem; }
     .ap-grid.is-wide { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
