@@ -211,7 +211,7 @@ def interview_reschedule(request, pk):
 def interview_delivery(request, pk):
     """The email lines of the interview page, polled while anything is sending."""
     interview = get_object_or_404(Interview.objects.select_related('resume'), pk=pk)
-    polls = request.GET.get('n', '')
+    polls = request.GET.get('n', '')[:3]
     return render(request, 'interviews/partials/delivery_update.html', {
         'interview': interview,
         'evaluations': interview.evaluations.select_related('evaluator'),
