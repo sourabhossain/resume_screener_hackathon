@@ -234,6 +234,10 @@ def verify(request, token):
     closed = _closed_response(request, invitation, sittings)
     if closed:
         return closed
+    # Back from the questions lands here: someone already verified goes straight
+    # on to where they were, not to a code form that looks like a logout.
+    if _is_verified(request, invitation):
+        return redirect('sei_assessment:entry', token=invitation.token)
 
     error = ''
     if request.method == 'POST':

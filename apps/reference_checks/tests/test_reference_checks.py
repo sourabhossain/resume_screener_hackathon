@@ -636,6 +636,15 @@ def test_the_right_code_opens_section_a(client, sent_check):
     assert response.url == _step(sent_check, 'candidate')
 
 
+def test_going_back_to_the_code_page_after_verifying_returns_to_the_form(client, sent_check):
+    _verified(client, sent_check)
+
+    response = client.get(_verify(sent_check))
+
+    assert response.status_code == 302
+    assert response.url == _step(sent_check, 'candidate')
+
+
 def test_wrong_codes_lock_the_link(client, sent_check):
     for _ in range(ReferenceCheck.OTP_MAX_ATTEMPTS):
         client.post(_verify(sent_check), {'code': '000000'})

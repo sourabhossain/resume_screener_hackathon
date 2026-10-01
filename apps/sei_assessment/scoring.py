@@ -56,11 +56,13 @@ INVALID_LABEL = 'Invalid - Insufficient Responses'
 MIN_RATING, MAX_RATING = 0, 3
 ITEMS_PER_DIMENSION = 8
 
+# The sheet's key ("if it is not true about you" ... "definitely true about
+# you"), in the first person the candidate answers in.
 RATING_LABELS = (
-    (0, 'Not true'),
-    (1, 'A little true'),
-    (2, 'Fairly true'),
-    (3, 'Definitely true'),
+    (0, 'Not true about me'),
+    (1, 'A little true about me'),
+    (2, 'Fairly true about me'),
+    (3, 'Definitely true about me'),
 )
 
 # What the candidate reads -- see the note on pe_scoring.RATING_SHORT. These

@@ -4,9 +4,11 @@
 
 {% block portal_attrs %}style="{{ instrument.accent_style }}" x-data="apPart()"{% endblock %}
 
+{% block top_class %} is-sticky{% endblock %}
 {% block pill %}
 <div class="ap-pill" role="timer" :class="{ 'is-low': secondsLeft <= 60 }">
-    {% if multi %}<span class="ap-pill-part">Part {{ part_number }} &middot; </span>{% endif %}<b x-text="clock()">{{ clock }}</b> left
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l2.5 2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    {% if multi %}<span class="ap-pill-part">Part {{ part_number }} &middot; </span>{% endif %}<b x-text="clock()">{{ clock }}</b> <span class="ap-pill-left">left</span>
 </div>
 {% endblock %}
 
@@ -220,6 +222,30 @@
                 this.answers[no] = value;
                 this.unsent[no] = value;
                 this.backup();
+                this.guideOn();
+            },
+
+            // After an answer, bring the next thing to do into view: the next
+            // unanswered statement on this page, or else the button that moves on.
+            guideOn() {
+                clearTimeout(this.guideTimer);
+                this.guideTimer = setTimeout(() => {
+                    if (this.view !== 'questions') { return; }
+                    const gap = this.missingHere()[0];
+                    const target = gap !== undefined
+                        ? document.querySelector('fieldset[data-item="' + gap + '"]')
+                        : this.$root.querySelector('.ap-foot');
+                    this.reveal(target, gap !== undefined ? 'start' : 'end');
+                }, 220);
+            },
+            reveal(el, align) {
+                if (!el) { return; }
+                const header = this.$root.querySelector('.ap-top.is-sticky');
+                const top = header ? header.getBoundingClientRect().bottom : 0;
+                const box = el.getBoundingClientRect();
+                if (box.top >= top && box.bottom <= window.innerHeight) { return; }
+                const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                el.scrollIntoView({block: align, behavior: still ? 'auto' : 'smooth'});
             },
 
             // Answers not yet confirmed by the server are kept in this tab's

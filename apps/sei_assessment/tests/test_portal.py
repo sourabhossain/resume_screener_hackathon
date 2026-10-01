@@ -546,3 +546,25 @@ def test_a_dropped_invalid_paper_does_not_offer_a_retake(client, django_user_mod
     response = hr.get(reverse('core:resume_detail', kwargs={'uuid': both.resume.uuid}))
 
     assert response.context['sei_needs_retake'] is False
+
+
+@pytest.mark.django_db
+def test_going_back_to_the_code_page_mid_part_returns_to_the_questions(client, both):
+    _enter(client, both)
+    _begin(client, both, PE)
+
+    back = client.get(_url('verify', both))
+    assert back.status_code == 302
+    assert back.url == _url('entry', both)
+    assert client.get(back.url).url == _url('test', both)
+
+
+@pytest.mark.django_db
+def test_a_visitor_without_the_code_still_gets_the_code_page(client, both):
+    _enter(client, both)
+    stranger = type(client)()
+
+    page = stranger.get(_url('verify', both))
+
+    assert page.status_code == 200
+    assert 'name="code"' in page.content.decode()

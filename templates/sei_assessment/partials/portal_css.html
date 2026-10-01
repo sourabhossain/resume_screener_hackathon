@@ -1,70 +1,95 @@
 <style>
     .ap {
         --brand: #284699;
-        --brand-ink: #ffffff;
         --card: #ffffff;
-        --tint: #f5f7fb;
-        --text: #172033;
-        --sub: #5a6578;
-        --line: #dde2ea;
+        --tint: #fafafa;
+        --text: #18181b;
+        --sub: #71717a;
+        --line: #e4e4e7;
+        --ink: #1c1917;
+        --ink-hover: #0c0a09;
+        --ink-text: #ffffff;
+        --ring: #284699;
         --ok: #15803d;
         --warn: #b45309;
         --bad: #b42335;
         --ok-ink: #14532d;
         --warn-ink: #7c2d12;
+        --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 24px -4px rgba(15,23,42,.08);
         max-width: 51.25rem; margin: 0 auto;
         color: var(--text); font-size: .9375rem; line-height: 1.6;
     }
     html.dark .ap {
-        --brand: #1e3578;
-        --card: #18202b;
-        --tint: #1c2531;
-        --text: #edf1f6;
-        --sub: #9fabbb;
-        --line: #2a3441;
+        --brand: #3d5fbd;
+        --card: #18181b;
+        --tint: #1e1e22;
+        --text: #f4f4f5;
+        --sub: #a1a1aa;
+        --line: #2f2f35;
+        --ink: #fafaf9;
+        --ink-hover: #e7e5e4;
+        --ink-text: #1c1917;
+        --ring: #6f8fe0;
         --ok: #4ade80;
         --warn: #fbbf24;
         --bad: #f87171;
         --ok-ink: #4ade80;
         --warn-ink: #fbbf24;
+        --shadow: 0 1px 2px rgba(0,0,0,.2), 0 8px 32px -8px rgba(0,0,0,.45);
     }
     .ap-acc { --a: var(--c, var(--brand)); --ai: var(--ci, #fff); }
     html.dark .ap-acc { --a: var(--cd, #8ba6f2); --ai: var(--cdi, #0b1633); }
 
-    .ap-portal { background: var(--card); border: 1px solid var(--line); border-radius: .875rem; overflow: hidden; }
+    .ap-portal {
+        background: var(--card); border: 1px solid var(--line); border-radius: 1rem;
+        overflow: hidden; overflow: clip; box-shadow: var(--shadow);
+    }
     .ap-top {
-        background: var(--brand); color: var(--brand-ink);
-        padding: .875rem 1.375rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+        background: var(--card); border-bottom: 1px solid var(--line);
+        padding: .875rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    }
+    .ap-top.is-sticky {
+        position: sticky; top: var(--ap-nav, 0px); z-index: 20;
+        background: color-mix(in srgb, var(--card) 92%, transparent);
+        -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
     }
     .ap-brand { display: flex; align-items: center; gap: .75rem; min-width: 0; }
-    .ap-logo {
-        flex: none; width: 2.5rem; height: 2.5rem; border-radius: .5rem; background: #fff;
+    .ap-mark {
+        flex: none; width: 2.25rem; height: 2.25rem; border-radius: .625rem;
         display: flex; align-items: center; justify-content: center;
+        background: color-mix(in srgb, var(--brand) 9%, var(--card)); color: var(--brand);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 16%, transparent);
     }
-    .ap-logo img { width: auto; height: 1.75rem; }
-    .ap-name { font-weight: 600; letter-spacing: .01em; line-height: 1.3; white-space: nowrap; }
-    .ap-sub { font-size: .75rem; opacity: .85; line-height: 1.3; }
+    html.dark .ap-mark { color: #9fb4ef; }
+    .ap-mark svg { width: 1.125rem; height: 1.125rem; }
+    .ap-brand-text { min-width: 0; }
+    .ap-name { font-weight: 600; font-size: .9375rem; letter-spacing: -.01em; line-height: 1.3; white-space: nowrap; color: var(--text); }
+    .ap-sub { display: flex; align-items: center; gap: .3125rem; font-size: .75rem; line-height: 1.3; color: var(--sub); margin-top: .0625rem; }
+    .ap-sub svg { width: .75rem; height: .75rem; flex: none; }
     .ap-top-end { display: flex; align-items: center; gap: .5rem; flex: none; }
     .ap-pill {
-        background: rgba(255,255,255,.16); border-radius: .375rem; padding: .25rem .75rem;
+        display: inline-flex; align-items: center; gap: .375rem;
+        border: 1px solid var(--line); background: var(--tint); color: var(--text);
+        border-radius: 999px; padding: .3125rem .75rem .3125rem .625rem;
         font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap;
+        transition: background-color .2s, border-color .2s, color .2s;
     }
+    .ap-pill svg { width: .9375rem; height: .9375rem; color: var(--sub); flex: none; }
     .ap-pill b { font-weight: 700; }
-    .ap-pill.is-low { background: #b42335; }
-    .ap-theme {
-        width: 2rem; height: 2rem; border-radius: .375rem; border: 0; cursor: pointer;
-        background: rgba(255,255,255,.12); color: #fff; display: flex; align-items: center; justify-content: center;
+    .ap-pill-part, .ap-pill-left { color: var(--sub); }
+    .ap-pill.is-low {
+        background: color-mix(in srgb, var(--bad) 10%, var(--card));
+        border-color: color-mix(in srgb, var(--bad) 40%, var(--card)); color: var(--bad);
     }
-    .ap-theme:hover { background: rgba(255,255,255,.22); }
-    .ap-theme:focus-visible, .ap-btn:focus-visible, .ap-gc:focus-visible { outline: 2px solid var(--a, var(--brand)); outline-offset: 2px; }
-    .ap-top .ap-theme:focus-visible { outline-color: #fff; }
-    .ap-theme svg { width: 1rem; height: 1rem; }
+    .ap-pill.is-low svg, .ap-pill.is-low .ap-pill-part, .ap-pill.is-low .ap-pill-left { color: var(--bad); }
+    .ap-btn:focus-visible, .ap-gc:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
-    .ap-steps { padding: .875rem 1.375rem; border-bottom: 1px solid var(--line); background: var(--tint); }
+    .ap-steps { padding: .8125rem 1.5rem; border-bottom: 1px solid var(--line); background: var(--tint); }
     .ap-steps ol { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; }
     .ap-sp { display: flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--sub); white-space: nowrap; }
     .ap-sp:not(:last-child) { flex: 1; }
-    .ap-sp:not(:last-child)::after { content: ''; flex: 1; min-width: .75rem; height: 1.5px; background: var(--line); margin: 0 .625rem; }
+    .ap-sp:not(:last-child)::after { content: ''; flex: 1; min-width: .75rem; height: 1.5px; border-radius: 1px; background: var(--line); margin: 0 .625rem; }
+    .ap-sp.done:not(:last-child)::after { background: color-mix(in srgb, var(--ok) 45%, var(--line)); }
     .ap-sp i {
         width: 1.375rem; height: 1.375rem; border-radius: 50%; border: 1.5px solid var(--line); flex: none;
         display: flex; align-items: center; justify-content: center;
@@ -72,8 +97,10 @@
     }
     .ap-sp i svg { width: .75rem; height: .75rem; }
     .ap-sp.active { color: var(--text); font-weight: 600; }
-    .ap-sp.active i { background: var(--brand); border-color: var(--brand); color: #fff; }
-    html.dark .ap-sp.active i { background: #3d5fbd; border-color: #3d5fbd; }
+    .ap-sp.active i {
+        background: var(--brand); border-color: var(--brand); color: #fff;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent);
+    }
     .ap-sp.done { color: var(--ok); }
     .ap-sp.done i { background: var(--ok); border-color: var(--ok); color: var(--card); }
 
@@ -107,10 +134,10 @@
     .ap-li { display: flex; gap: .75rem; margin: .625rem 0; align-items: flex-start; }
     .ap-dot {
         width: 1.5rem; height: 1.5rem; border-radius: 50%; flex: none; margin-top: .0625rem;
-        background: color-mix(in srgb, var(--brand) 12%, var(--card)); color: var(--brand);
+        background: color-mix(in srgb, var(--brand) 9%, var(--card)); color: var(--brand);
         font-size: .75rem; font-weight: 600; display: flex; align-items: center; justify-content: center;
     }
-    html.dark .ap-dot { background: #25324a; color: #cfe0f5; }
+    html.dark .ap-dot { background: color-mix(in srgb, var(--brand) 22%, var(--card)); color: #c7d4f7; }
 
     .ap-note {
         border-left: 4px solid var(--a); background: color-mix(in srgb, var(--a) 8%, var(--card));
@@ -127,12 +154,16 @@
     .ap-hint { flex: 1; text-align: center; font-size: .75rem; color: var(--sub); min-width: 0; }
     .ap-hint b { color: var(--bad); font-weight: 600; }
     .ap-btn {
-        border: 0; border-radius: .375rem; padding: .625rem 1.5rem; font-size: .875rem; font-weight: 600;
-        cursor: pointer; background: var(--a, var(--brand)); color: var(--ai, #fff); font-family: inherit;
+        border: 0; border-radius: .5rem; padding: .6875rem 1.5rem; font-size: .875rem; font-weight: 600;
+        cursor: pointer; background: var(--ink); color: var(--ink-text); font-family: inherit; line-height: 1.25;
+        box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 4px 16px -6px rgba(0,0,0,.3);
+        transition: background-color .2s ease, transform .2s ease, box-shadow .2s ease;
     }
-    .ap-btn:hover { filter: brightness(1.1); }
-    .ap-btn:disabled { opacity: .5; cursor: default; filter: none; }
-    .ap-btn.g { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+    .ap-btn:hover { background: var(--ink-hover); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,.1), 0 8px 24px -8px rgba(0,0,0,.35); }
+    .ap-btn:active { transform: none; }
+    .ap-btn:disabled { opacity: .45; cursor: default; transform: none; box-shadow: none; }
+    .ap-btn.g { background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .ap-btn.g:hover { background: var(--tint); transform: none; }
     .ap-btn.is-hidden { visibility: hidden; }
 
     .ap-meta { display: flex; justify-content: space-between; gap: .75rem; font-size: .8125rem; color: var(--sub); }
@@ -146,6 +177,8 @@
     .ap-prompt { font-size: .8125rem; color: var(--sub); margin: -.5rem 0 1rem; }
 
     .ap-it { border: 1.5px solid var(--line); border-radius: .875rem; padding: .875rem; margin: 0 0 .75rem; min-width: 0; }
+    .ap-it, .ap-qwrap { scroll-margin-top: calc(var(--ap-nav, 0px) + 5.5rem); }
+    .ap-foot { scroll-margin-bottom: 1rem; }
     .ap-it.is-bad { border-color: var(--bad); }
     .ap-s { display: flex; align-items: flex-start; gap: .5rem; font-weight: 600; margin-bottom: .625rem; }
     .ap-n {
@@ -159,7 +192,8 @@
     .ap-o { display: block; cursor: pointer; position: relative; }
     .ap-o > span {
         display: flex; align-items: center; justify-content: center; height: 100%;
-        padding: .5625rem .375rem; border-radius: .625rem; text-align: center; font-size: .8125rem; font-weight: 500;
+        padding: .5625rem .5rem; border-radius: .625rem; text-align: center; font-size: .8125rem; font-weight: 500;
+        line-height: 1.35; text-wrap: balance;
         border: 2px solid transparent;
         background: color-mix(in srgb, var(--a) 10%, var(--card)); color: color-mix(in srgb, var(--a) 60%, var(--text));
         transition: background-color .15s, border-color .15s, color .15s;
@@ -227,8 +261,7 @@
         border: 1px solid var(--line); background: var(--tint); color: var(--text); font-family: inherit;
         font-size: 1.25rem; letter-spacing: .4em; text-align: center;
     }
-    .ap-code:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: transparent; }
-    html.dark .ap-code:focus { outline-color: #8ba6f2; }
+    .ap-code:focus { outline: 2px solid var(--ring); outline-offset: 1px; border-color: transparent; background: var(--card); }
     .ap-narrow { max-width: 26rem; margin: 0 auto; }
     .ap-stack > * + * { margin-top: .75rem; }
     .ap-btn.is-block { width: 100%; }
@@ -243,13 +276,14 @@
     @keyframes ap-late { to { opacity: 1; } }
 
     .ap-lead a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
-    html.dark .ap-lead a { color: #8ba6f2; }
+    html.dark .ap-lead a { color: #9fb4ef; }
     .ap-legal { text-align: center; font-size: .75rem; color: var(--sub); margin: .75rem 0 0; }
     .ap-legal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
     @media (max-width: 37.5rem) {
         .ap-top { padding: .75rem 1rem; }
-        .ap-sub, .ap-idle, .ap-pill-part { display: none; }
+        .ap-mark { width: 2rem; height: 2rem; }
+        .ap-sub, .ap-idle, .ap-pill-part, .ap-pill-left { display: none; }
         .ap-steps { padding: .75rem 1rem; }
         .ap-sp span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
         .ap-body { padding: 1.25rem 1rem; }
@@ -263,6 +297,7 @@
         .ap-q { padding: 1.125rem; }
     }
     @media (prefers-reduced-motion: reduce) {
-        .ap-bar div, .ap-o > span, .ap-row > span { transition: none; }
+        .ap-bar div, .ap-o > span, .ap-row > span, .ap-btn, .ap-pill { transition: none; }
+        .ap-btn:hover { transform: none; }
     }
 </style>

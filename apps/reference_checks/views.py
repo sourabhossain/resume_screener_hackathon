@@ -219,6 +219,9 @@ def verify(request, token):
     closed = _closed_response(request, check)
     if closed:
         return closed
+    # Back from a section lands here: a verified respondent goes back to the form.
+    if _is_verified(request, check):
+        return redirect('reference_checks:step', token=token, step_key=check.resume_step)
 
     error = ''
     if request.method == 'POST':
