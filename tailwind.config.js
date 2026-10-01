@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./templates/**/*.html'],
+  content: ['./templates/**/*.html', './static/js/**/*.js', './apps/**/*.py'],
   // Runtime-assembled picker tone classes — safelist so they survive purge.
   safelist: [
     {

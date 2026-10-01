@@ -86,15 +86,16 @@ deploy. The settings it guards:
 
 Also required:
 
-- **Celery must be running.** Invitations are sent by
-  `apps.employee_form.tasks.send_employee_form_invite` on the `screening` queue.
-  Without a worker, forms are created but no email goes out.
+- **Celery must be running.** Every email (information form, assessment link,
+  reference requests, rejection) is sent on the `notifications` queue by the
+  `celery-notifications` worker. Without it, the site says the email was queued
+  and nothing goes out. `python manage.py preflight` checks every worker and task.
 - **The email settings must reach the _worker_, not just `web`.** The worker is the
   process that talks to SMTP. After editing `.env`, recreate every service —
   `restart` does not re-read the env file:
 
   ```bash
-  docker compose up -d --force-recreate web celery-screening celery-verification celery-beat
+  docker compose up -d --force-recreate web celery-screening celery-notifications celery-verification celery-beat
   ```
 
   Get this wrong and the symptom is confusing: the site looks correctly
@@ -102,7 +103,7 @@ Also required:
   the worker's log instead. Verify with:
 
   ```bash
-  docker compose exec celery-screening python -c \
+  docker compose exec celery-notifications python -c \
     "import django;django.setup();from django.conf import settings;print(settings.EMAIL_BACKEND, settings.EMAIL_HOST)"
   ```
 

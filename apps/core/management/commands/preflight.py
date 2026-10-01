@@ -22,6 +22,7 @@ REQUIRED_TASKS = (
     'apps.core.tasks.draft_job_description_task',
     'apps.core.tasks.close_expired_jobs',
     'apps.core.tasks.release_stale_screenings',
+    'apps.core.tasks.clear_expired_sessions',
     'apps.core.tasks.send_rejection_email',
     'apps.employee_form.tasks.send_employee_form_invite',
     'apps.reference_checks.tasks.send_reference_check_request',
@@ -35,6 +36,7 @@ REQUIRED_TASKS = (
 SCHEDULED_TASKS = (
     'apps.core.tasks.close_expired_jobs',
     'apps.core.tasks.release_stale_screenings',
+    'apps.core.tasks.clear_expired_sessions',
     'apps.sei_assessment.tasks.close_expired_sittings',
 )
 

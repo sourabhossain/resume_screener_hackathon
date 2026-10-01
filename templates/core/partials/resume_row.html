@@ -2,7 +2,7 @@
 <tr id="resume-row-{{ resume.pk }}"
     class="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.screening_status == 'completed' and resume.verification_status == 'processing' or resume.screening_status == 'completed' and resume.verification_status == 'pending' %}
-    hx-get="{% url 'core:resume_row_fragment' resume.uuid %}"
+    hx-get="{% url 'core:resume_row_fragment' resume.uuid %}{% if rank %}?rank={{ rank }}{% endif %}"
     hx-trigger="every 3s"
     hx-target="this"
     hx-swap="outerHTML"
@@ -184,8 +184,8 @@
 
     <td data-label="Applied" class="px-4 py-4 align-middle whitespace-nowrap">
         <div class="flex flex-col leading-tight">
-            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-200">{{ resume.created_at|date:'j M Y' }}</span>
-            <span class="text-xs text-zinc-400 dark:text-zinc-500">{{ resume.created_at|date:'g:i a' }} &middot; {{ resume.created_at|naturaltime }}</span>
+            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-200" title="{{ resume.created_at|date:'j M Y, g:i a' }}">{{ resume.created_at|date:'j M Y' }}</span>
+            <span class="text-xs text-zinc-400 dark:text-zinc-500">{{ resume.created_at|naturaltime }}</span>
         </div>
     </td>
 

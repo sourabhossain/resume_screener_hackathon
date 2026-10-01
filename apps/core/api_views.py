@@ -118,6 +118,8 @@ class ResumeViewSet(viewsets.ModelViewSet):
         queryset = Resume.objects.select_related('job')
         job_id = self.request.query_params.get('job', None)
         if job_id:
+            if not str(job_id).isdigit():
+                return queryset.none()
             queryset = queryset.filter(job_id=job_id)
         tier = self.request.query_params.get('tier', None)
         if tier in ['top', 'mid', 'low']:

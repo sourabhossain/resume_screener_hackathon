@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
@@ -468,6 +469,12 @@ def _candidate_forms_context(request, resume) -> dict:
 def _render_candidate_forms(request, resume, toast=None):
     response = render(request, 'core/partials/candidate_forms.html',
                       _candidate_forms_context(request, resume))
+    # The header's status control goes along out of band: finishing the
+    # checklist unlocks Onboarded there, which would otherwise stay greyed out
+    # until a reload.
+    response.write(render_to_string('core/partials/recruiter_status_control.html',
+                                    {'resume': resume, 'status_context': 'card', 'status_oob': True},
+                                    request=request))
     if toast:
         response['HX-Trigger'] = json.dumps({'toast': {'level': toast[0], 'text': toast[1]}})
     return response
@@ -561,9 +568,20 @@ def resume_edit(request, uuid):
     SCORE_FIELDS = {'experience_score', 'education_score', 'skills_score',
                     'certification_score', 'achievement_score', 'final_score'}
     if request.method == 'POST':
+        seen_now = ResumeEditForm.score_signature(resume)
+        screening_busy = resume.screening_status in ('pending', 'processing')
         form = ResumeEditForm(request.POST, request.FILES, instance=resume)
         if form.is_valid():
             changed = {f for f in form.changed_data if f in SCORE_FIELDS}
+            if changed and (screening_busy or form.cleaned_data.get('scores_seen') != seen_now):
+                # Screening ran while the page was open: keep its scores and
+                # drop the ones typed over the stale page.
+                fresh = Resume.objects.filter(pk=resume.pk).values(*SCORE_FIELDS).first() or {}
+                for field in changed:
+                    setattr(form.instance, field, fresh.get(field))
+                changed = set()
+                messages.warning(request, 'The scores changed while this page was open, so your '
+                                          'score edits were not saved. Open Edit again to adjust them.')
             new_file = 'file' in form.changed_data
             if new_file:
                 file_hash = compute_file_hash(request.FILES['file'])
@@ -587,8 +605,10 @@ def resume_edit(request, uuid):
                 # Keep tier + recommendation consistent with the (edited) final score,
                 # using the same thresholds the AI screener applies (rank_node).
                 cfg = settings.AI_SCREENING_CONFIG
-                score = instance.final_score or 0
-                if score >= cfg['TOP_TIER_THRESHOLD']:
+                score = instance.final_score
+                if score is None:
+                    pass
+                elif score >= cfg['TOP_TIER_THRESHOLD']:
                     instance.tier, instance.recommendation = 'top', 'interview'
                 elif score >= cfg['MID_TIER_THRESHOLD']:
                     instance.tier, instance.recommendation = 'mid', 'talent_pool'
@@ -696,11 +716,17 @@ def resume_row_fragment(request, uuid):
     # table uses). The initial page render passes rank=forloop.counter; without
     # recomputing it here, a polled row would lose its rank badge once screening
     # completes and shows "—" until a full reload.
-    ordered_ids = list(ordered.values_list('id', flat=True))
-    try:
-        rank = ordered_ids.index(resume.id) + 1
-    except ValueError:
-        rank = None
+    # A filtered table numbers its own rows, so the rank it drew is sent back
+    # and kept; recomputing over the whole job would make the badge jump.
+    shown = request.GET.get('rank', '')
+    if shown.isdigit():
+        rank = int(shown)
+    else:
+        ordered_ids = list(ordered.values_list('id', flat=True))
+        try:
+            rank = ordered_ids.index(resume.id) + 1
+        except ValueError:
+            rank = None
     return render(
         request,
         'core/partials/resume_row.html',
@@ -872,8 +898,14 @@ def careers_list(request):
     return render(request, 'careers/job_list.html', context)
 
 
+# Bangladeshi mobile carriers put many subscribers behind one address, so a
+# per-address limit alone would lock out real applicants on launch day. Each
+# applicant (address + email) gets a few tries; the address as a whole a lot.
+@ratelimit(key=lambda group, request: (f"{client_ip(request)}:{request.resolver_match.kwargs.get('slug', '')}:"
+                                       f"{(request.POST.get('email') or '').strip().lower()}"),
+           rate='10/h', method='POST', block=True)
 @ratelimit(key=lambda group, request: f"{client_ip(request)}:{request.resolver_match.kwargs.get('slug', '')}",
-           rate='20/h', method='POST', block=True)
+           rate='300/h', method='POST', block=True)
 def careers_apply(request, slug):
     """Public job detail + resume submission form. Only open jobs accept applications.
 

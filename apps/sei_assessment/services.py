@@ -103,6 +103,7 @@ def send_invite(invitation, *, otp: str) -> None:
         body=render_to_string('sei_assessment/email/invite.txt', context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
+        reply_to=[settings.CAREERS_REPLY_TO],
     )
     message.attach_alternative(
         render_to_string('sei_assessment/email/invite.html', context), 'text/html')
@@ -138,9 +139,6 @@ def issue_invite(resume, *, user=None, resend=False):
     # on MySQL, and two first sends would deadlock on the insert.
     invitation_row, _ = AssessmentInvitation.objects.get_or_create(resume=resume)
     from apps.core.utils import claim_send, queue_task
-    if resend and invitation_row.invited_at and not claim_send('assessment', invitation_row.pk):
-        raise InviteError('The assessment link was sent a moment ago. Wait a few seconds '
-                          'before sending it again.')
     with transaction.atomic():
         invitation = AssessmentInvitation.objects.select_for_update().get(resume=resume)
         # Only instruments that still exist: a retired one has no scorer, and
@@ -196,6 +194,17 @@ def issue_invite(resume, *, user=None, resend=False):
             raise InviteError(
                 f'{resume.job.title} no longer asks for any assessment that '
                 f'{resume.candidate_name} still has to take.')
+
+        # invited_at is only stamped once the worker has sent the email, so a
+        # double click, or leaving and re-entering Assessment / Test before
+        # then, would queue a second email whose code voids the first.
+        if invitation.invited_at is None:
+            claimed = claim_send('assessment-first', invitation.pk, seconds=60)
+        else:
+            claimed = claim_send('assessment', invitation.pk)
+        if not claimed:
+            raise InviteError('The assessment link was sent a moment ago. Wait a minute '
+                              'before sending it again.')
 
         # An explicit resend is a fresh start: the candidate gets the full
         # window again, not whatever was left of the old one.

@@ -4,6 +4,8 @@ import uuid
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -308,6 +310,7 @@ def send_request(check, *, otp: str) -> None:
         body=render_to_string('reference_checks/email/request.txt', context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
+        reply_to=[settings.CAREERS_REPLY_TO],
     )
     message.attach_alternative(
         render_to_string('reference_checks/email/request.html', context), 'text/html')
@@ -362,14 +365,33 @@ def issue_request(resume, source_key, *, kind, recipient_name, recipient_email,
             f'That address belongs to {resume.candidate_name}. A verification request '
             'must go to the employer or referee, not the candidate.')
 
+    try:
+        validate_email((recipient_email or '').strip())
+    except ValidationError:
+        raise SendError(f'"{recipient_email}" is not a valid email address.')
+
     check = resume.reference_checks.filter(source_key=source_key).first()
     if check and check.is_submitted:
         raise SendError(f'{contact["title"]} has already replied.')
     if check and not resend:
         return check
 
+    # One person, one request: a second code to the same inbox only confuses them.
+    other = (resume.reference_checks.exclude(source_key=source_key)
+             .filter(recipient_email__iexact=recipient_email.strip()).first())
+    if other is not None:
+        raise SendError(f'{recipient_email.strip()} already has a request for this candidate '
+                        f'({other.recipient_name or "another contact"}). Each request must go '
+                        'to a different person.')
+
     from apps.core.utils import claim_send, queue_task
-    if check is not None and resend and not claim_send('reference_check', check.pk):
+    # Keyed on the contact, not the row: two first clicks both find no row and
+    # would both try to create it.
+    if check is None:
+        claimed = claim_send('reference_check-first', f'{resume.pk}:{source_key}')
+    else:
+        claimed = not resend or claim_send('reference_check', check.pk)
+    if not claimed:
         raise SendError('This request was sent a moment ago. Wait a few seconds before sending it again.')
 
     if check is None:

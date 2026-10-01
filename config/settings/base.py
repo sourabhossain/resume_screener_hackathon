@@ -387,6 +387,10 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or (
     else 'SSL Wireless Careers <careers@localhost>'
 )
 
+# Where a candidate's or referee's reply to any of our emails should land: the
+# sending mailbox is often a service account nobody reads.
+CAREERS_REPLY_TO = os.environ.get('CAREERS_REPLY_TO', 'jobs@sslwireless.com')
+
 # Absolute base URL used to build candidate-facing links in emails. Emails are
 # sent outside a request context, so the host cannot be derived from one.
 SITE_BASE_URL = os.environ.get('SITE_BASE_URL', 'http://localhost:8000')

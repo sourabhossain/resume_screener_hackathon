@@ -47,3 +47,30 @@ def queue_task(task, *args) -> bool:
     except Exception:
         logging.getLogger(__name__).exception('queue.failed task=%s args=%s', task.name, args)
         return False
+
+
+def check_counted_otp(obj, raw: str) -> bool:
+    """Check a one-time code against `obj`, spending one attempt atomically.
+
+    The attempt is taken in the database before the slow hash comparison, so
+    guesses sent in parallel cannot all read the same count and all get through
+    the lock; each one costs an attempt, and the fifth closes the door.
+    """
+    from django.contrib.auth.hashers import check_password
+    from django.db.models import F
+    from django.utils import timezone
+
+    if not obj.otp_hash or obj.otp_is_expired or obj.otp_is_locked:
+        return False
+    rows = type(obj)._base_manager.filter(
+        pk=obj.pk, otp_hash=obj.otp_hash, otp_attempts__lt=obj.OTP_MAX_ATTEMPTS)
+    if not rows.update(otp_attempts=F('otp_attempts') + 1, updated_at=timezone.now()):
+        obj.refresh_from_db(fields=['otp_attempts', 'otp_hash'])
+        return False
+    if check_password(raw, obj.otp_hash):
+        obj.otp_verified_at = timezone.now()
+        obj.otp_attempts = 0
+        obj.save(update_fields=['otp_verified_at', 'otp_attempts', 'updated_at'])
+        return True
+    obj.refresh_from_db(fields=['otp_attempts'])
+    return False

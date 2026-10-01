@@ -22,6 +22,7 @@ app.conf.task_routes = {
     'apps.core.tasks.verify_resume_links_task': {'queue': 'verification'},
     'apps.core.tasks.close_expired_jobs': {'queue': 'notifications'},
     'apps.core.tasks.release_stale_screenings': {'queue': 'notifications'},
+    'apps.core.tasks.clear_expired_sessions': {'queue': 'notifications'},
     'apps.core.tasks.draft_job_description_task': {'queue': 'screening'},
     # Invitation emails and the scheduled sweeps: short and I/O-bound, on their
     # own queue and worker so a batch of LLM screening calls never delays them.
@@ -56,6 +57,10 @@ app.conf.beat_schedule = {
         'task': 'apps.core.tasks.release_stale_screenings',
         'schedule': crontab(minute='*/10'),
     },
+    'clear-expired-sessions-daily': {
+        'task': 'apps.core.tasks.clear_expired_sessions',
+        'schedule': crontab(hour=3, minute=15),
+    },
     # The SEI sitting is fifteen minutes long, so a candidate who closes the tab
     # leaves an open paper. Swept every five minutes rather than daily: HR
     # should not see "In progress" for someone who left before lunch.
@@ -65,7 +70,3 @@ app.conf.beat_schedule = {
     },
 }
 
-
-@app.task(bind=True, ignore_result=True)
-def debug_task(self):
-    print(f'Request: {self.request!r}')

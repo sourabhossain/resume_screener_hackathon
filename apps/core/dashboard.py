@@ -130,7 +130,7 @@ def furthest_stages(resumes, hr=None):
         if to_status in STAGE_RANK:
             evidence[pk] = max(evidence.get(pk, 0), STAGE_RANK[to_status])
     forms = EmployeeForm.objects.filter(resume__in=resumes)
-    reach(forms.values_list('resume_id', flat=True), 'shortlisted')
+    reach(forms.values_list('resume_id', flat=True), 'selected')
     reach(forms.filter(is_submitted=True).values_list('resume_id', flat=True), 'info_received')
     reach(AssessmentInvitation.objects.filter(resume__in=resumes, invited_at__isnull=False)
           .values_list('resume_id', flat=True), 'assessment')
@@ -341,16 +341,22 @@ def _meter(label, done, total, verb, note=''):
             'share': _pct(done, total), 'width': (done * 100 / total) if total else 0}
 
 
-def interview_summary(resumes):
+def interview_summary(resumes, job=None):
     from apps.interviews.models import Interview, InterviewEvaluation
 
     today = timezone.localdate()
     interviews = Interview.objects.filter(resume__in=resumes)
-    stats = interviews.aggregate(
-        upcoming=Count('id', filter=Q(status='scheduled', scheduled_date__gte=today)),
-        overdue=Count('id', filter=Q(status='scheduled', scheduled_date__lt=today)),
-        completed=Count('id', filter=Q(status='completed')),
-    )
+    stats = interviews.aggregate(completed=Count('id', filter=Q(status='completed')))
+    # Upcoming and overdue are about the calendar, not about when the candidate
+    # applied: an interview tomorrow counts whatever range is picked.
+    live = Interview.objects.filter(resume__job__is_deleted=False, resume__is_deleted=False,
+                                    status='scheduled')
+    if job:
+        live = live.filter(resume__job=job)
+    stats.update(live.aggregate(
+        upcoming=Count('id', filter=Q(scheduled_date__gte=today)),
+        overdue=Count('id', filter=Q(scheduled_date__lt=today)),
+    ))
     evals = InterviewEvaluation.objects.filter(interview__in=interviews.exclude(status='cancelled'))
     verdicts = evals.filter(is_submitted=True).aggregate(
         yes=Count('id', filter=Q(recommendation='yes')),
@@ -559,7 +565,7 @@ def build(user, params):
         'scores': score_distribution(resumes),
         'tiers': tier_mix(resumes),
         'pipeline': pipeline_progress(resumes, hr_view=hr_view),
-        'interviews': interview_summary(resumes),
+        'interviews': interview_summary(resumes, job),
         'bgv': bgv_outcomes(hr) if hr_view else None,
         'jobs_board': job_leaderboard(resumes, ranks),
         'recruiters': recruiter_table(resumes, ranks),

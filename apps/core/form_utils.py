@@ -4,7 +4,9 @@ import unicodedata
 from django import forms
 from django.contrib import messages
 
-_PERSON_TEXT_EXTRA = frozenset(" -.'")
+# Bangla keyboards put zero-width (non-)joiners inside conjuncts, and names are
+# written "মো: রহিম", "Md. Rahim, Jr." or "Abu Sayeed (Rony)".
+_PERSON_TEXT_EXTRA = frozenset(" -.':,()\u200c\u200d")
 _LABEL_TEXT_EXTRA = frozenset(" -.'&,()/")
 _UNICODE_MARK_CATEGORIES = frozenset({'Mn', 'Mc', 'Me', 'Zs'})
 _PHONE_EXTRA = frozenset("+-() ")
@@ -81,7 +83,7 @@ def clean_person_text(value, *, required=False):
         require_letter=True,
         invalid_message=(
             'Contains invalid characters. '
-            'Use letters, numbers, spaces, hyphens, periods, or apostrophes only.'
+            'Use letters, numbers, spaces and . - \' : , ( ) only.'
         ),
     )
 

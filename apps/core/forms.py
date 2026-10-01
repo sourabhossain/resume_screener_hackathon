@@ -77,8 +77,8 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         choices=sei_instruments.choices,
         widget=forms.CheckboxSelectMultiple,
         label='Assessments',
-        help_text='Emailed to a candidate when they are shortlisted, as one '
-                  'link; the parts open one after another. Leave both clear '
+        help_text='Emailed to a candidate when they are moved to Assessment / Test, '
+                  'as one link; the parts open one after another. Leave both clear '
                   'to send none.',
     )
 
@@ -317,8 +317,28 @@ class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms
             'final_score': 'Final Score',
         }
     
+    SCORE_FIELDS = ('experience_score', 'education_score', 'skills_score',
+                    'certification_score', 'achievement_score', 'final_score')
+
+    # The scores as they stood when the page was drawn. Screening can finish
+    # while the page is open, and the empty boxes it was drawn with must not
+    # then be saved over the fresh scores.
+    scores_seen = forms.CharField(widget=forms.HiddenInput, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['scores_seen'].initial = self.score_signature(self.instance)
+
+    @classmethod
+    def score_signature(cls, resume):
+        return '|'.join([resume.screening_status or ''] +
+                        ['' if getattr(resume, f) is None else f'{float(getattr(resume, f)):g}'
+                         for f in cls.SCORE_FIELDS])
+
     def clean_file(self):
-        """Validate uploaded file using mixin."""
+        """Validate a newly uploaded file; the one already stored was checked on upload."""
+        if 'file' not in self.files:
+            return self.cleaned_data.get('file')
         return self.validate_resume_file(self.cleaned_data.get('file'))
 
     def clean_candidate_name(self):
@@ -329,4 +349,6 @@ class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms
 
     def save(self, commit=True):
         """Save with file metadata using mixin."""
+        if 'file' not in self.changed_data:
+            return super(FileSaveMixin, self).save(commit)
         return self.save_with_file_metadata(commit)

@@ -105,7 +105,7 @@ def start(request, uuid):
         messages.error(
             request,
             'HR background verification opens once the candidate reaches '
-            'Interviewing.',
+            'Selected.',
         )
         return redirect('core:resume_detail', uuid=uuid)
 
@@ -199,6 +199,7 @@ def step(request, uuid, step_key):
                 locked = (HRVerification.objects
                           .select_for_update()
                           .get(pk=verification.pk))
+                offer_was_issued = (locked.answers or {}).get('offer_letter_issued') == 'yes'
                 locked.answers = {
                     **(locked.answers or {}), **step_form.storable_answers()
                 }
@@ -212,7 +213,9 @@ def step(request, uuid, step_key):
                 'hr_verification.section_saved verification=%s section=%s by=%s',
                 verification.pk, step_key, request.user.pk,
             )
-            if (verification.answers or {}).get('offer_letter_issued') == 'yes':
+            # Only on the save that records the offer: a later typo fix in another
+            # section must not pull back a candidate HR has since moved.
+            if not offer_was_issued and (verification.answers or {}).get('offer_letter_issued') == 'yes':
                 from apps.core.status import advance
                 advance(verification.resume, 'offer_extended',
                         reason='Offer letter recorded as issued', user=request.user)

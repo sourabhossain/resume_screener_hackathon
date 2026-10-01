@@ -86,7 +86,7 @@ def start(request, uuid):
     if resume.recruiter_status not in STATUSES_ALLOWING_START:
         messages.error(
             request,
-            'Candidate mapping opens once the candidate reaches Interviewing.',
+            'Candidate mapping opens once the candidate reaches Selected.',
         )
         return redirect('core:resume_detail', uuid=uuid)
 
@@ -246,6 +246,17 @@ def submit(request, uuid):
         )
         return redirect('candidate_mapping:step', uuid=uuid,
                         step_key=mapping.next_unfinished_step)
+
+    missing = mapping.missing_required()
+    if missing:
+        titles = []
+        for step_key, question in missing:
+            title = schema.get_step(step_key)['title']
+            if title not in titles:
+                titles.append(title)
+        messages.error(request, 'Cannot sign off yet. Required answers are still blank in: '
+                                + ', '.join(titles) + '.')
+        return redirect('candidate_mapping:step', uuid=uuid, step_key=missing[0][0])
 
     mapping.submit(user=request.user)
     # Only the sign-off columns: a bare save() would write back the `answers`

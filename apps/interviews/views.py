@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.db import transaction
 from django.contrib import messages
 
 from apps.core.views import form_errors_to_messages
@@ -145,9 +146,19 @@ def evaluation_renew(request, token):
     return redirect('interviews:detail', pk=ev.interview_id)
 
 
+def _closed_by_deletion(ev):
+    return (ev.interview.is_deleted or ev.interview.resume.is_deleted
+            or ev.interview.resume.job.is_deleted)
+
+
 def evaluate(request, token):
-    # A deleted interview or candidate closes the panel's links with it.
-    ev = get_object_or_404(InterviewEvaluation, token=token, interview__is_deleted=False, interview__resume__is_deleted=False, interview__resume__job__is_deleted=False)
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related(
+        'interview', 'interview__resume', 'interview__resume__job'), token=token)
+
+    # A deleted interview or candidate closes the panel's links with it, with
+    # a page that says so rather than a bare "not found".
+    if _closed_by_deletion(ev):
+        return render(request, 'interviews/cancelled.html', {'ev': ev}, status=410)
 
     if ev.is_submitted:
         return render(request, 'interviews/already_submitted.html', {'ev': ev})
@@ -181,10 +192,21 @@ def evaluate(request, token):
             else:
                 total = sum(ev.scores.values())
                 pct = round((total / MAX_SCORE) * 100)
-                ev.recommendation = 'yes' if pct >= 75 else ('maybe' if pct >= 55 else 'no')
+                # Same cut-offs as the Good / Satisfactory line the interviewer saw.
+                ev.recommendation = 'yes' if pct >= 80 else ('maybe' if pct >= 60 else 'no')
             ev.is_submitted = True
             ev.submitted_at = timezone.now()
-            ev.save()
+            with transaction.atomic():
+                # A double submit (two tabs, a retried request) must not let the
+                # second overwrite the first, and a link renewed meanwhile keeps
+                # its new token: only the answer columns are written.
+                if InterviewEvaluation.objects.select_for_update().filter(
+                        pk=ev.pk, is_submitted=True).exists():
+                    return render(request, 'interviews/already_submitted.html', {'ev': ev})
+                ev.save(update_fields=[
+                    'scores', 'additional_notes', 'another_phase_required', 'hard_negotiation',
+                    'suitable_other_dept', 'suitable_higher_position', 'suitable_junior_position',
+                    'recommendation', 'is_submitted', 'submitted_at'])
             ev.interview.complete_if_all_submitted()
 
             return redirect('interviews:evaluate_done', token=token)
@@ -200,7 +222,10 @@ def evaluate(request, token):
 
 
 def evaluate_done(request, token):
-    ev = get_object_or_404(InterviewEvaluation, token=token, interview__is_deleted=False, interview__resume__is_deleted=False, interview__resume__job__is_deleted=False)
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related(
+        'interview', 'interview__resume', 'interview__resume__job'), token=token)
+    if _closed_by_deletion(ev):
+        return render(request, 'interviews/cancelled.html', {'ev': ev}, status=410)
     return render(request, 'interviews/evaluate_done.html', {'ev': ev})
 
 

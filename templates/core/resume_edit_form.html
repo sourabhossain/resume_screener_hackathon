@@ -36,6 +36,7 @@
         
         <form method="post" enctype="multipart/form-data" hx-boost="false" class="p-8" x-data="{ submitting: false }" @submit="submitting = true">
             {% csrf_token %}
+            {{ form.scores_seen }}
             
             <div class="space-y-8">
 

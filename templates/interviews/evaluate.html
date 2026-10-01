@@ -95,9 +95,11 @@
                             </svg>
                         </span>
                     </div>
-                    <div class="flex shrink-0 gap-1.5">
+                    <div class="flex shrink-0 gap-1.5" role="group" aria-label="{{ label }}">
                         {% for val in score_range %}
                         <button type="button" data-v="{{ val }}"
+                                aria-label="{{ label }}: {{ val }} out of 5"
+                                :aria-pressed="scores['{{ key }}'] == {{ val }} ? 'true' : 'false'"
                                 :class="scores['{{ key }}'] == {{ val }} ? 'active' : ''"
                                 @click="setScore('{{ key }}', {{ val }})"
                                 class="score-btn">{{ val }}</button>

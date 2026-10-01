@@ -26,6 +26,30 @@ def candidate(db, sample_job):
     )
 
 
+def _complete(mapping):
+    """Every section saved and every required answer given, ready to sign off."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from apps.candidate_mapping.models import CandidateMappingFile
+    answers = dict(mapping.answers or {})
+    for step_key in schema.STEP_KEYS:
+        for question in schema.questions(step_key):
+            if not question.get('required') or answers.get(question['key']) not in (None, '', []):
+                continue
+            if question['type'] in schema.FILE_TYPES:
+                CandidateMappingFile.objects.create(
+                    mapping=mapping, question_key=question['key'],
+                    file=SimpleUploadedFile('signature.png', b'\x89PNG\r\n\x1a\n' + b'0' * 40,
+                                            content_type='image/png'),
+                    original_name='signature.png')
+            elif question.get('choices'):
+                answers[question['key']] = question['choices'][0][0]
+            else:
+                answers[question['key']] = '1'
+    mapping.answers = answers
+    mapping.completed_steps = list(schema.STEP_KEYS)
+    mapping.save()
+
+
 @pytest.fixture
 def hr_user(db, django_user_model):
     return django_user_model.objects.create_user(
@@ -374,8 +398,7 @@ def test_sign_off_needs_every_section(hr_client, candidate):
 
 def test_sign_off_locks_and_dates_the_record(hr_client, candidate):
     mapping = _start(hr_client, candidate)
-    mapping.completed_steps = list(schema.STEP_KEYS)
-    mapping.save()
+    _complete(mapping)
 
     hr_client.post(_url('submit', candidate))
 
@@ -391,8 +414,7 @@ def test_sign_off_locks_and_dates_the_record(hr_client, candidate):
 
 def test_a_signed_off_record_ignores_a_posted_section(hr_client, candidate):
     mapping = _start(hr_client, candidate)
-    mapping.completed_steps = list(schema.STEP_KEYS)
-    mapping.save()
+    _complete(mapping)
     hr_client.post(_url('submit', candidate))
 
     hr_client.post(_url('step', candidate, step_key='candidate'),
@@ -663,11 +685,10 @@ def test_involuntary_separation_is_flagged_on_its_own(hr_client, candidate):
 def test_sign_off_does_not_clobber_a_concurrent_section_save(hr_client, candidate):
     """submit() used a bare save(), writing back the answers it read earlier."""
     mapping = _start(hr_client, candidate)
-    mapping.completed_steps = list(schema.STEP_KEYS)
-    mapping.save()
+    _complete(mapping)
     # Stand in for another assessor's save landing after this request read the row.
     CandidateMapping.objects.filter(pk=mapping.pk).update(
-        answers={'suitability_summary': 'Written by the other assessor'})
+        answers={**mapping.answers, 'suitability_summary': 'Written by the other assessor'})
 
     hr_client.post(_url('submit', candidate))
 
@@ -730,3 +751,15 @@ def test_hr_evidence_is_not_cached_by_the_browser(hr_client, candidate, settings
     assert response.status_code == 200
     assert 'no-store' in response['Cache-Control']
     assert 'private' in response['Cache-Control']
+
+
+def test_sign_off_is_refused_while_a_required_answer_is_blank(hr_client, candidate):
+    mapping = _start(hr_client, candidate)
+    mapping.completed_steps = list(schema.STEP_KEYS)
+    mapping.save()
+
+    response = hr_client.post(_url('submit', candidate))
+
+    mapping.refresh_from_db()
+    assert not mapping.is_submitted
+    assert response.status_code == 302

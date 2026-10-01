@@ -7,6 +7,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 from apps.core.models import Job, Resume
+from apps.core.forms import ResumeEditForm
 
 
 @pytest.mark.django_db
@@ -481,6 +482,8 @@ class TestResumeViews:
 
     def test_resume_edit_post(self, authenticated_client, sample_resume):
         """Test editing a resume's scores and candidate name."""
+        sample_resume.screening_status = 'completed'
+        sample_resume.save(update_fields=['screening_status'])
         data = {
             'candidate_name': 'John Doe Updated',
             'experience_score': 92,
@@ -489,6 +492,7 @@ class TestResumeViews:
             'certification_score': '',
             'achievement_score': '',
             'final_score': 87,
+            'scores_seen': ResumeEditForm.score_signature(sample_resume),
         }
         response = authenticated_client.post(
             reverse('core:resume_edit', kwargs={'uuid': sample_resume.uuid}),
@@ -498,6 +502,37 @@ class TestResumeViews:
         sample_resume.refresh_from_db()
         assert sample_resume.candidate_name == 'John Doe Updated'
         assert float(sample_resume.final_score) == 87
+
+    def test_scores_typed_on_a_page_drawn_before_screening_finished_are_not_saved(
+            self, authenticated_client, sample_resume):
+        drawn_while_screening = ResumeEditForm.score_signature(
+            Resume(screening_status='processing'))
+        response = authenticated_client.post(
+            reverse('core:resume_edit', kwargs={'uuid': sample_resume.uuid}),
+            {'candidate_name': 'Renamed', 'experience_score': '', 'education_score': '',
+             'skills_score': '', 'certification_score': '', 'achievement_score': '',
+             'final_score': '', 'scores_seen': drawn_while_screening},
+        )
+        assert response.status_code == 302
+        before = sample_resume.final_score, sample_resume.tier, sample_resume.recommendation
+        sample_resume.refresh_from_db()
+        assert sample_resume.candidate_name == 'Renamed'
+        assert (sample_resume.final_score, sample_resume.tier, sample_resume.recommendation) == before
+        assert not sample_resume.score_manually_edited
+
+    def test_a_candidate_whose_cv_file_is_missing_can_still_be_edited(
+            self, authenticated_client, sample_resume):
+        sample_resume.file.name = 'resumes/gone-from-disk.pdf'
+        sample_resume.save(update_fields=['file'])
+        response = authenticated_client.post(
+            reverse('core:resume_edit', kwargs={'uuid': sample_resume.uuid}),
+            {'candidate_name': 'Still Editable',
+             'scores_seen': ResumeEditForm.score_signature(sample_resume)},
+        )
+        assert response.status_code == 302
+        sample_resume.refresh_from_db()
+        assert sample_resume.candidate_name == 'Still Editable'
+        assert sample_resume.file.name == 'resumes/gone-from-disk.pdf'
 
     def test_resume_rescreen_get_redirects(self, authenticated_client, sample_resume):
         """Test GET to rescreen endpoint redirects without queuing."""

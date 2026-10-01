@@ -96,6 +96,28 @@ class CandidateMapping(models.Model):
         """Every section saved at least once, so sign-off cannot skip one."""
         return self.completed_count >= schema.TOTAL_STEPS
 
+    def missing_required(self):
+        """(step_key, question) pairs that are required but blank.
+
+        Saving each section once is not enough: a section saved before a
+        question became required still holds a blank answer for it.
+        """
+        from apps.core.form_logic import is_blank
+        uploaded = set(self.files.values_list('question_key', flat=True))
+        answers = self.answers or {}
+        missing = []
+        for step_key in schema.STEP_KEYS:
+            for question in schema.questions(step_key):
+                if not question.get('required'):
+                    continue
+                if question['type'] in schema.FILE_TYPES:
+                    filled = question['key'] in uploaded
+                else:
+                    filled = not is_blank(answers.get(question['key']))
+                if not filled:
+                    missing.append((step_key, question))
+        return missing
+
     def submit(self, user=None):
         self.is_submitted = True
         self.submitted_at = timezone.now()

@@ -190,7 +190,9 @@ def test_a_deleted_candidates_public_links_stop_working(client, sample_job):
 
     assert client.get(reverse('employee_form:entry', kwargs={'token': form.token})).status_code == 404
     assert client.get(reverse('reference_checks:entry', kwargs={'token': check.token})).status_code == 404
-    assert client.get(reverse('interviews:evaluate', kwargs={'token': ev.token})).status_code == 404
+    closed = client.get(reverse('interviews:evaluate', kwargs={'token': ev.token}))
+    assert closed.status_code == 410
+    assert 'No evaluation is needed' in closed.content.decode()
 
 
 # ── exports ──────────────────────────────────────────────────────────────

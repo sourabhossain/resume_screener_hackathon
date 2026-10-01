@@ -55,6 +55,7 @@ def send_invite(form, *, otp: str) -> None:
         body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[recipient],
+        reply_to=[settings.CAREERS_REPLY_TO],
     )
     message.attach_alternative(html_body, 'text/html')
     # fail_silently=False so a broken SMTP config surfaces as an error the

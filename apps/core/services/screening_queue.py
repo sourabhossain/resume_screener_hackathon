@@ -24,6 +24,18 @@ def stale_filter(now=None) -> Q:
     return Q(screening_status='processing', updated_at__lt=cutoff)
 
 
+# Link checks queue behind each other two at a time, so a bulk upload can keep
+# one waiting for a while; an hour untouched means the task was lost.
+VERIFICATION_STALE_AFTER = timedelta(minutes=60)
+
+
+def stale_verification_filter(now=None) -> Q:
+    """Screened rows whose link check was queued or started and never finished."""
+    cutoff = (now or timezone.now()) - VERIFICATION_STALE_AFTER
+    return Q(screening_status='completed', verification_status__in=['pending', 'processing'],
+             updated_at__lt=cutoff)
+
+
 def queue_screening(resume_id) -> bool:
     """Queue one résumé. On a broker failure mark it failed instead of raising.
 

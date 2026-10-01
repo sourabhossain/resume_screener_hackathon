@@ -131,6 +131,14 @@
         align-items: center;
         text-align: center;
     }
+    @media (max-width: 639px) {
+        .brand-lockup--nav .brand-product {
+            display: none;
+        }
+        .brand-lockup--nav .brand-logo--nav {
+            height: 2.25rem;
+        }
+    }
     .brand-lockup--footer {
         gap: 0.625rem;
     }

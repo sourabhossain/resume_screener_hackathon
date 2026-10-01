@@ -15,7 +15,7 @@
     {% endblock %}
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=11">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=12">
     <script src="{% static 'js/status-picker.js' %}?v=5"></script>
     <script>try { localStorage.removeItem('htmx-history-cache'); } catch (e) {}</script>
     <script src="https://unpkg.com/htmx.org@2.0.3"
@@ -470,6 +470,7 @@
         <div class="mx-auto px-4 sm:px-6 lg:px-8" style="max-width: 96rem;">
             <div class="flex min-h-[4.25rem] items-center justify-between gap-3 py-3">
                 <div class="flex min-w-0 items-center gap-6 lg:gap-10">
+                    {% if user.is_authenticated %}
                     <button @click="mobileMenuOpen = !mobileMenuOpen"
                             aria-label="Toggle navigation menu"
                             :aria-expanded="mobileMenuOpen"
@@ -481,6 +482,7 @@
                             <span class="hamburger-line h-0.5 w-full rounded-full bg-zinc-600 dark:bg-zinc-400"></span>
                         </div>
                     </button>
+                    {% endif %}
 
                     {% if user.is_authenticated %}
                     {% url 'core:dashboard' as brand_home_url %}
@@ -577,7 +579,10 @@
                 </div>
             </div>
         </div>
+    </nav>
 
+    {% if user.is_authenticated %}
+    <div>
         <div x-show="mobileMenuOpen"
              style="display:none"
              x-transition:enter="transition ease-out duration-300"
@@ -587,7 +592,7 @@
              x-transition:leave-start="opacity-100"
              x-transition:leave-end="opacity-0"
              @click="mobileMenuOpen = false"
-             class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden">
+             class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 md:hidden">
         </div>
 
         <div x-show="mobileMenuOpen"
@@ -724,7 +729,8 @@
                 </div>
             </div>
         </div>
-    </nav>
+    </div>
+    {% endif %}
     {% endblock topbar %}
 
     <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8" style="max-width: 96rem;">

@@ -47,7 +47,12 @@ def send_employee_form_invite(form_id: int) -> str:
         logger.info('employee_form.invite_skipped form=%s (candidate deleted)', form_id)
         return 'deleted'
 
+    # HR resending must not throw out someone already part-way through: the
+    # old code stops working, but a session verified with it stays verified.
+    # A new recipient is cleared by the service before this runs.
+    verified_at = form.otp_verified_at
     otp = form.issue_otp()
+    form.otp_verified_at = verified_at
     form.invited_at = timezone.now()
     form.invite_count = (form.invite_count or 0) + 1
     form.last_error = ''

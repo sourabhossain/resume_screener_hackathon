@@ -119,7 +119,7 @@ class Job(SoftDeleteModel):
 
     # Instrument keys from apps.sei_assessment.instruments. Empty means this
     # job sends no assessment at all, which is the default: a job has to ask
-    # for a questionnaire before a shortlisted candidate is sent one.
+    # for a questionnaire before a candidate in Assessment / Test is sent one.
     assessments = models.JSONField(
         default=list, blank=True,
         help_text="Assessments emailed to a candidate when they are shortlisted")
@@ -415,9 +415,15 @@ class Resume(SoftDeleteModel):
     @property
     def onboarding_items(self):
         """The checklist with each item's done state, for the candidate page."""
+        from django.utils.dateparse import parse_datetime
         done = self.onboarding_checklist or {}
-        return [{'key': key, 'label': label, 'done': key in done, **done.get(key, {})}
-                for key, label in self.ONBOARDING_CHECKLIST]
+        items = []
+        for key, label in self.ONBOARDING_CHECKLIST:
+            entry = dict(done.get(key) or {})
+            # Stored as a UTC ISO string; shown as a date and time in Dhaka.
+            entry['at'] = parse_datetime(entry['at']) if entry.get('at') else None
+            items.append({'key': key, 'label': label, 'done': key in done, **entry})
+        return items
 
     @property
     def onboarding_done_count(self) -> int:

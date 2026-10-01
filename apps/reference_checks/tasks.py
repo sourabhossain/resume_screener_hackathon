@@ -41,7 +41,12 @@ def send_reference_check_request(check_id: int) -> str:
         logger.info('reference_checks.skipped check=%s (candidate deleted)', check_id)
         return 'deleted'
 
+    # HR resending must not throw out someone already part-way through: the
+    # old code stops working, but a session verified with it stays verified.
+    # A new recipient is cleared by the service before this runs.
+    verified_at = check.otp_verified_at
     otp = check.issue_otp()
+    check.otp_verified_at = verified_at
     check.invited_at = timezone.now()
     check.invite_count = (check.invite_count or 0) + 1
     check.last_error = ''

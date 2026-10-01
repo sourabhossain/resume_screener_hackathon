@@ -156,13 +156,26 @@ def release_stale_screenings():
     """
     from django.utils import timezone
     from apps.core.models import Resume
-    from apps.core.services.screening_queue import STALE_REASON, stale_filter
+    from apps.core.services.screening_queue import (
+        STALE_REASON, stale_filter, stale_verification_filter)
 
     count = Resume.objects.filter(stale_filter()).update(
         screening_status='failed', reasoning=STALE_REASON, updated_at=timezone.now())
     if count:
         logger.warning('screening.released_stale count=%s', count)
-    return {'released': count}
+    # A lost link check would otherwise keep the row polling for ever.
+    links = Resume.objects.filter(stale_verification_filter()).update(
+        verification_status='failed', verified_at=None, updated_at=timezone.now())
+    if links:
+        logger.warning('verification.released_stale count=%s', links)
+    return {'released': count, 'links_released': links}
+
+
+@shared_task(ignore_result=True)
+def clear_expired_sessions():
+    """Delete expired login and candidate sessions; Django never does this itself."""
+    from django.core.management import call_command
+    call_command('clearsessions')
 
 
 @shared_task(ignore_result=True)
@@ -222,6 +235,20 @@ def send_rejection_email(resume_id: int, user_id=None) -> str:
     Not retried: a retry after an SMTP timeout could send the same letter twice.
     A failure is kept on the row and shown on the candidate page.
     """
+    from django.core.cache import cache
+    from apps.core.utils import claim_send
+
+    # Two clicks far enough apart can queue two tasks; only one may send, and
+    # the second then finds the first one's sent_at.
+    if not claim_send('rejection-sending', resume_id, seconds=600):
+        return 'in_progress'
+    try:
+        return _send_rejection_email(resume_id, user_id)
+    finally:
+        cache.delete(f'send-claim:rejection-sending:{resume_id}')
+
+
+def _send_rejection_email(resume_id, user_id):
     from django.conf import settings
     from django.core.mail import EmailMultiAlternatives
     from django.template.loader import render_to_string
@@ -245,6 +272,7 @@ def send_rejection_email(resume_id: int, user_id=None) -> str:
         body=render_to_string('core/email/rejection.txt', context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[resume.email],
+        reply_to=[settings.CAREERS_REPLY_TO],
     )
     message.attach_alternative(render_to_string('core/email/rejection.html', context), 'text/html')
     try:

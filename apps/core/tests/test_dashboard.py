@@ -26,8 +26,8 @@ def _resume(job, name, status='new', score=None, tier='', days_ago=0):
 def test_the_funnel_counts_the_furthest_stage_a_rejected_candidate_reached(sample_job):
     interviewed = _resume(sample_job, 'Interviewed then rejected', 'rejected')
     Interview.objects.create(resume=interviewed, scheduled_date=date.today())
-    shortlisted = _resume(sample_job, 'Shortlisted then rejected', 'rejected')
-    EmployeeForm.objects.create(resume=shortlisted)
+    selected = _resume(sample_job, 'Selected then rejected', 'rejected')
+    EmployeeForm.objects.create(resume=selected)
     offered = _resume(sample_job, 'Offered then withdrew', 'withdrawn')
     HRVerification.objects.create(resume=offered, answers={'offer_letter_issued': 'yes'})
     _resume(sample_job, 'Hired', 'hired')
@@ -37,8 +37,8 @@ def test_the_funnel_counts_the_furthest_stage_a_rejected_candidate_reached(sampl
     ranks = dashboard.furthest_stages(resumes, dashboard.hr_answers(resumes))
     counts = {s['key']: s['count'] for s in dashboard.funnel(ranks)['stages']}
 
-    assert counts == {'applied': 5, 'shortlisted': 4, 'phone_screen': 3, 'assessment': 3,
-                      'interviewing': 3, 'selected': 2, 'info_received': 2, 'bgv_completed': 2,
+    assert counts == {'applied': 5, 'shortlisted': 4, 'phone_screen': 4, 'assessment': 4,
+                      'interviewing': 4, 'selected': 3, 'info_received': 2, 'bgv_completed': 2,
                       'offer_extended': 2, 'pre_onboarding': 1, 'hired': 1}
 
 

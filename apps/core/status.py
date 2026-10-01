@@ -47,18 +47,25 @@ def change_status(resume, new_status, *, user=None, source=StatusChange.MANUAL, 
     valid = {key for key, _ in Resume.RECRUITER_STATUS_CHOICES}
     if new_status not in valid:
         raise StatusError('Invalid status.')
-    if new_status == 'hired' and not resume.onboarding_complete:
-        remaining = len(Resume.ONBOARDING_CHECKLIST) - resume.onboarding_done_count
-        raise StatusError(
-            f'Complete the Pre-Onboarding checklist first — {remaining} item'
-            f'{"s" if remaining != 1 else ""} still open. A candidate can only be marked '
-            'Onboarded once every item is done.')
-
-    previous = resume.recruiter_status or 'new'
-    if previous == new_status:
-        return []
 
     with transaction.atomic():
+        # Locked so a manual change and an automatic one cannot both read the
+        # old status and the later write silently undo the earlier one.
+        locked = Resume.all_objects.select_for_update().get(pk=resume.pk)
+        previous = locked.recruiter_status or 'new'
+        resume.recruiter_status = previous
+        resume.onboarding_checklist = locked.onboarding_checklist
+        if source == StatusChange.AUTO and (
+                previous in OUTCOMES_THE_SYSTEM_NEVER_MOVES or rank(new_status) <= rank(previous)):
+            raise StatusError('The candidate has already moved on.')
+        if new_status == 'hired' and new_status != previous and not resume.onboarding_complete:
+            remaining = len(Resume.ONBOARDING_CHECKLIST) - resume.onboarding_done_count
+            raise StatusError(
+                f'Complete the Pre-Onboarding checklist first — {remaining} item'
+                f'{"s" if remaining != 1 else ""} still open. A candidate can only be marked '
+                'Onboarded once every item is done.')
+        if previous == new_status:
+            return []
         resume.recruiter_status = new_status
         resume.save(update_fields=['recruiter_status', 'updated_at'])
         StatusChange.objects.create(
@@ -71,17 +78,13 @@ def change_status(resume, new_status, *, user=None, source=StatusChange.MANUAL, 
 
 def advance(resume, target, *, reason, user=None) -> bool:
     """Move forward automatically, never backwards and never out of an outcome."""
-    resume.refresh_from_db(fields=['recruiter_status', 'onboarding_checklist'])
-    current = resume.recruiter_status or 'new'
-    if current in OUTCOMES_THE_SYSTEM_NEVER_MOVES or target in OUTCOMES_THE_SYSTEM_NEVER_MOVES:
-        return False
-    if rank(target) <= rank(current):
+    if target in OUTCOMES_THE_SYSTEM_NEVER_MOVES:
         return False
     try:
-        change_status(resume, target, user=user, source=StatusChange.AUTO, reason=reason)
+        return bool(change_status(resume, target, user=user, source=StatusChange.AUTO, reason=reason)
+                    or resume.recruiter_status == target)
     except StatusError:
         return False
-    return True
 
 
 def _run_entry_actions(resume, previous, new_status, user):
@@ -110,9 +113,12 @@ def _send_assessments(resume, user):
 
 def _send_information_form(resume, user):
     from apps.employee_form.services import InviteError, issue_invite
-    already = bool(getattr(getattr(resume, 'employee_form', None), 'invited_at', None))
+    existing = getattr(resume, 'employee_form', None)
+    already = bool(getattr(existing, 'invited_at', None))
     try:
-        issue_invite(resume, user=user)
+        # A form row whose first email never left (queue down at the time) is
+        # sent now; one already emailed is left alone.
+        issue_invite(resume, user=user, resend=existing is not None and not already)
     except InviteError as exc:
         logger.warning('employee_form.invite_skipped resume=%s reason=%s', resume.pk, exc)
         return [('error', str(exc))]

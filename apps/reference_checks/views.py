@@ -81,7 +81,7 @@ def send(request, uuid, source_key):
 
     if resume.recruiter_status not in STATUSES_ALLOWING_SEND:
         messages.error(
-            request, 'Reference checks open once the candidate reaches Interviewing.')
+            request, 'Reference checks open once the candidate reaches Selected.')
         return redirect('reference_checks:manage', uuid=uuid)
 
     kind = request.POST.get('kind', '')

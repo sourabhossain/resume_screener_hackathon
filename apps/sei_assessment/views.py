@@ -398,7 +398,9 @@ def save(request, token, instrument=None, part=None):
 
     try:
         incoming = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({'status': 'error', 'error': 'bad payload'}, status=400)
+    if not isinstance(incoming, dict) or not isinstance(incoming.get('answers') or {}, dict):
         return JsonResponse({'status': 'error', 'error': 'bad payload'}, status=400)
 
     spec = assessment.spec
@@ -511,7 +513,13 @@ def report(request, uuid, instrument):
 @require_POST
 def send(request, uuid):
     """Send, or resend, the candidate's one assessment invitation."""
+    from apps.core.status import ASSESSMENT_OPEN
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    if resume.recruiter_status not in ASSESSMENT_OPEN:
+        messages.error(request, f'The assessment can only be sent once {resume.candidate_name} '
+                                'is in Assessment / Test or later, and not after Rejected, '
+                                'Withdrawn or Onboarded.')
+        return redirect('core:resume_detail', uuid=uuid)
     try:
         services.issue_invite(resume, user=request.user, resend=True)
     except services.InviteError as exc:

@@ -134,18 +134,8 @@ class EmployeeForm(models.Model):
         those cases via `otp_is_expired` / `otp_is_locked` so the candidate gets
         an accurate message instead of "wrong code".
         """
-        if not self.otp_hash or self.otp_is_expired or self.otp_is_locked:
-            return False
-
-        if check_password(raw, self.otp_hash):
-            self.otp_verified_at = timezone.now()
-            self.otp_attempts = 0
-            self.save(update_fields=['otp_verified_at', 'otp_attempts', 'updated_at'])
-            return True
-
-        self.otp_attempts += 1
-        self.save(update_fields=['otp_attempts', 'updated_at'])
-        return False
+        from apps.core.utils import check_counted_otp
+        return check_counted_otp(self, raw)
 
     # ── Progress ─────────────────────────────────────────────────────────
     @property
