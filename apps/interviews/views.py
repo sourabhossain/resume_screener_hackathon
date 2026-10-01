@@ -208,6 +208,18 @@ def interview_reschedule(request, pk):
 
 
 @login_required
+def interview_delivery(request, pk):
+    """The email lines of the interview page, polled while anything is sending."""
+    interview = get_object_or_404(Interview.objects.select_related('resume'), pk=pk)
+    polls = request.GET.get('n', '')
+    return render(request, 'interviews/partials/delivery_update.html', {
+        'interview': interview,
+        'evaluations': interview.evaluations.select_related('evaluator'),
+        'polls': int(polls) if polls.isdigit() else 0,
+    })
+
+
+@login_required
 @require_POST
 def evaluation_resend(request, token):
     """Email an evaluator their link again."""

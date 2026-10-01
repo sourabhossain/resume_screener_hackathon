@@ -1,0 +1,20 @@
+<span id="iv-candidate-email" class="inline-flex flex-wrap items-center gap-2"{% if oob %} hx-swap-oob="true"{% endif %}>
+                    {% if interview.candidate_email_error %}
+                    <span class="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-700 dark:bg-rose-900/20 dark:text-rose-400" title="{{ interview.candidate_email_error }}">Failed — {{ interview.candidate_email_error|truncatechars:70 }}</span>
+                    {% elif interview.candidate_notified_at %}
+                    <span class="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Sent {{ interview.candidate_notified_at|date:"M j, g:i A" }}{% if interview.candidate_reminded_at %} · reminded {{ interview.candidate_reminded_at|date:"M j" }}{% endif %}</span>
+                    {% elif interview.candidate_email_pending %}
+                    <span class="rounded-full bg-zinc-100 px-2.5 py-1 font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Sending…</span>
+                    {% else %}
+                    <span class="rounded-full bg-zinc-100 px-2.5 py-1 font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Not sent</span>
+                    {% endif %}
+                    {% if interview.status == 'scheduled' and interview.resume.email %}
+                    <form method="post" action="{% url 'interviews:candidate_resend' interview.pk %}" hx-boost="false"
+                          data-confirm data-confirm-title="Email the candidate?"
+                          data-confirm-text="The interview time and place go to {{ interview.resume.email }}."
+                          data-confirm-button="Send email">
+                        {% csrf_token %}
+                        <button type="submit" class="rounded-lg border border-zinc-200 px-2.5 py-1 font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800">{% if interview.candidate_notified_at %}Send again{% else %}Send now{% endif %}</button>
+                    </form>
+                    {% endif %}
+</span>

@@ -64,24 +64,7 @@
 
                 <div class="mt-4 flex flex-wrap items-center gap-2 text-xs">
                     <span class="font-semibold text-zinc-500 dark:text-zinc-400">Candidate email:</span>
-                    {% if interview.candidate_email_error %}
-                    <span class="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-700 dark:bg-rose-900/20 dark:text-rose-400" title="{{ interview.candidate_email_error }}">Failed — {{ interview.candidate_email_error|truncatechars:70 }}</span>
-                    {% elif interview.candidate_notified_at %}
-                    <span class="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Sent {{ interview.candidate_notified_at|date:"M j, g:i A" }}{% if interview.candidate_reminded_at %} · reminded {{ interview.candidate_reminded_at|date:"M j" }}{% endif %}</span>
-                    {% elif interview.notify_candidate and interview.scheduled_time and interview.status == 'scheduled' %}
-                    <span class="rounded-full bg-zinc-100 px-2.5 py-1 font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Sending…</span>
-                    {% else %}
-                    <span class="rounded-full bg-zinc-100 px-2.5 py-1 font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Not sent</span>
-                    {% endif %}
-                    {% if interview.status == 'scheduled' and interview.resume.email %}
-                    <form method="post" action="{% url 'interviews:candidate_resend' interview.pk %}" hx-boost="false"
-                          data-confirm data-confirm-title="Email the candidate?"
-                          data-confirm-text="The interview time and place go to {{ interview.resume.email }}."
-                          data-confirm-button="Send email">
-                        {% csrf_token %}
-                        <button type="submit" class="rounded-lg border border-zinc-200 px-2.5 py-1 font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800">{% if interview.candidate_notified_at %}Send again{% else %}Send now{% endif %}</button>
-                    </form>
-                    {% endif %}
+                    {% include 'interviews/partials/candidate_email.html' %}
                 </div>
 
                 {% if interview.notes %}
@@ -151,6 +134,8 @@
         </div>
     </div>
 
+    {% include 'interviews/partials/delivery_poller.html' with polls=0 %}
+
     <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
         <div class="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <h2 class="font-bold text-zinc-900 dark:text-white">Evaluators</h2>
@@ -175,15 +160,7 @@
                             {{ ev.interviewer_position }}{% if ev.interviewer_position and ev.interviewer_department %} &middot; {% endif %}{{ ev.interviewer_department }}
                         </p>
                         {% endif %}
-                        {% if not ev.is_submitted %}
-                        {% if ev.invite_error %}
-                        <p class="mt-0.5 text-xs font-medium text-rose-600 dark:text-rose-400" title="{{ ev.invite_error }}">Email failed — {{ ev.invite_error|truncatechars:60 }}</p>
-                        {% elif ev.invited_at %}
-                        <p class="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">Emailed {{ ev.invited_at|date:"M j, g:i A" }}{% if ev.reminded_at %} · reminded {{ ev.reminded_at|date:"M j" }}{% endif %}</p>
-                        {% elif ev.interviewer_email %}
-                        <p class="mt-0.5 text-xs text-zinc-400">Sending email…</p>
-                        {% endif %}
-                        {% endif %}
+                        {% include 'interviews/partials/evaluator_delivery.html' %}
                     </div>
                 </div>
 

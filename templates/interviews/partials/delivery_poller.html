@@ -1,0 +1,3 @@
+<div id="iv-delivery-poller" hidden{% if oob %} hx-swap-oob="true"{% endif %}{% if interview.delivery_pending and polls < 40 %}
+     hx-get="{% url 'interviews:delivery' interview.pk %}?n={{ polls|add:1 }}"
+     hx-trigger="every 3s" hx-target="this" hx-select="unset" hx-swap="none"{% endif %}></div>

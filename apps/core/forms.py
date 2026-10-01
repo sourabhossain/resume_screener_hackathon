@@ -352,3 +352,25 @@ class ResumeEditForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms
         if 'file' not in self.changed_data:
             return super(FileSaveMixin, self).save(commit)
         return self.save_with_file_metadata(commit)
+
+
+class UserEditForm(AriaInvalidMixin, forms.ModelForm):
+    """A staff account's name, sign-in name, email and access."""
+
+    class Meta:
+        from django.contrib.auth import get_user_model
+        model = get_user_model()
+        fields = ['first_name', 'last_name', 'username', 'email', 'is_staff', 'is_superuser']
+
+    def clean_first_name(self):
+        return clean_person_text(self.cleaned_data.get('first_name'))
+
+    def clean_last_name(self):
+        return clean_person_text(self.cleaned_data.get('last_name'))
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip()
+        if email and type(self.instance).objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('Another account already uses this email address.')
+        return email
+

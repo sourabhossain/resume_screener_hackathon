@@ -9,6 +9,7 @@ urlpatterns = [
     path('interviews/<int:pk>/delete/', views.interview_delete, name='delete'),
     path('interviews/<int:pk>/status/', views.interview_status, name='status'),
     path('interviews/<int:pk>/reschedule/', views.interview_reschedule, name='reschedule'),
+    path('interviews/<int:pk>/delivery/', views.interview_delivery, name='delivery'),
     path('interviews/evaluations/<uuid:token>/delete/', views.evaluation_delete, name='evaluation_delete'),
     path('interviews/evaluations/<uuid:token>/renew/', views.evaluation_renew, name='evaluation_renew'),
     path('interviews/evaluations/<uuid:token>/resend/', views.evaluation_resend, name='evaluation_resend'),

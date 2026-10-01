@@ -97,6 +97,19 @@ class Interview(SoftDeleteModel):
                    end + timedelta(days=7))
 
     @property
+    def candidate_email_pending(self) -> bool:
+        return (self.notify_candidate and self.scheduled_time is not None and self.status == self.SCHEDULED
+                and not self.candidate_notified_at and not self.candidate_email_error)
+
+    @property
+    def delivery_pending(self) -> bool:
+        """Any invitation still on its way, so the page keeps checking."""
+        if self.candidate_email_pending:
+            return True
+        return any(ev.interviewer_email and not ev.is_submitted and not ev.invited_at and not ev.invite_error
+                   for ev in self.evaluations.all())
+
+    @property
     def is_online(self) -> bool:
         return self.mode == self.ONLINE
 

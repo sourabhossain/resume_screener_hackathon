@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit {{ target.username }} · SSL Wireless Careers{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl px-1 sm:px-0">
+
+    <nav class="mb-8 flex items-center gap-2 text-sm">
+        <a href="{% url 'core:user_list' %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700 dark:hover:bg-primary-950/40 dark:hover:text-primary-300 dark:hover:ring-primary-800">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Users
+        </a>
+        <svg class="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="font-semibold text-zinc-900 dark:text-white">Edit {{ target.username }}</span>
+    </nav>
+
+    <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
+        <div class="border-b border-zinc-100 bg-zinc-50/80 px-6 py-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl gradient-bg text-base font-bold text-white shadow-sm">
+                    {{ target.username|slice:":1"|upper }}
+                </div>
+                <div class="min-w-0">
+                    <h1 class="truncate text-lg font-semibold text-zinc-900 dark:text-white">{{ target.get_full_name|default:target.username }}</h1>
+                    <p class="text-sm text-zinc-500">Joined {{ target.date_joined|date:"M j, Y" }}{% if target.last_login %} &middot; last signed in {{ target.last_login|timesince }} ago{% endif %}</p>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" hx-boost="false" class="space-y-6 p-6" x-data="{ submitting: false }" @submit="submitting = true">
+            {% csrf_token %}
+
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label for="id_first_name" class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">First name</label>
+                    <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}" maxlength="150" class="form-input" placeholder="John">
+                </div>
+                <div>
+                    <label for="id_last_name" class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Last name</label>
+                    <input type="text" name="last_name" id="id_last_name" value="{{ form.last_name.value|default:'' }}" maxlength="150" class="form-input" placeholder="Doe">
+                </div>
+            </div>
+
+            <div>
+                <label for="id_username" class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Username <span class="text-red-500">*</span></label>
+                <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" required maxlength="150" class="form-input">
+                <p class="mt-1.5 text-xs text-zinc-400">Used to sign in. Letters, digits and @ . + - _ only.</p>
+                {% for e in form.username.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+            </div>
+
+            <div>
+                <label for="id_email" class="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">Email address</label>
+                <input type="email" name="email" id="id_email" value="{{ form.email.value|default:'' }}" class="form-input" placeholder="john@sslwireless.com">
+                <p class="mt-1.5 text-xs text-zinc-400">Interview invitations and evaluation links go here. Without an email, this person cannot be put on an interview panel.</p>
+                {% for e in form.email.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+            </div>
+
+            <div class="rounded-xl border border-zinc-200/80 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+                <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Access</p>
+                <div class="space-y-3">
+                    <label class="flex cursor-pointer items-center gap-3">
+                        <input type="checkbox" name="is_staff"{% if form.is_staff.value %} checked{% endif %} class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
+                        <div>
+                            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">HR</span>
+                            <p class="text-xs text-zinc-400">Can use the HR tools: background verification, candidate mapping, reference checks and assessment reports</p>
+                        </div>
+                    </label>
+                    <label class="flex cursor-pointer items-center gap-3">
+                        <input type="checkbox" name="is_superuser"{% if form.is_superuser.value %} checked{% endif %}{% if target == request.user %} disabled{% endif %} class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
+                        {% if target == request.user and form.is_superuser.value %}<input type="hidden" name="is_superuser" value="on">{% endif %}
+                        <div>
+                            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Superuser</span>
+                            <p class="text-xs text-zinc-400">{% if target == request.user %}You cannot remove your own superuser access.{% else %}Full access, including user management{% endif %}</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex flex-col-reverse gap-3 border-t border-zinc-100 pt-6 dark:border-zinc-800 sm:flex-row sm:justify-end">
+                <a href="{% url 'core:user_list' %}" class="flex justify-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    Cancel
+                </a>
+                <button type="submit" :disabled="submitting"
+                        class="btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    <span x-text="submitting ? 'Saving…' : 'Save changes'">Save changes</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

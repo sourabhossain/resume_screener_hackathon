@@ -1,0 +1,3 @@
+{% include 'interviews/partials/candidate_email.html' with oob=True %}
+{% for ev in evaluations %}{% include 'interviews/partials/evaluator_delivery.html' with oob=True %}{% endfor %}
+{% include 'interviews/partials/delivery_poller.html' with oob=True %}

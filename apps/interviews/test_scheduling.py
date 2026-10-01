@@ -550,3 +550,32 @@ def test_cancelling_after_a_reschedule_supersedes_the_updated_calendar_entry(aut
 
     _, calendar, _ = _calendar(_to('nadia@example.com')[0])
     assert 'SEQUENCE:2' in calendar and 'STATUS:CANCELLED' in calendar
+
+
+# ── live delivery status on the interview page ───────────────────────────
+@pytest.mark.django_db
+def test_the_page_keeps_checking_while_an_invitation_is_on_its_way(authenticated_client, candidate):
+    interview = Interview.objects.create(resume=candidate, scheduled_date=timezone.localdate() + timedelta(days=2),
+                                         scheduled_time=timezone.datetime(2000, 1, 1, 16, 0).time(), location='Room 3')
+    InterviewEvaluation.objects.create(interview=interview, interviewer_name='P', interviewer_email='p@x.com')
+    url = reverse('interviews:delivery', kwargs={'pk': interview.pk})
+
+    page = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk})).content.decode()
+    assert 'Sending…' in page and url in page
+
+    Interview.objects.filter(pk=interview.pk).update(candidate_notified_at=timezone.now())
+    InterviewEvaluation.objects.update(invited_at=timezone.now())
+    update = authenticated_client.get(url + '?n=1').content.decode()
+
+    assert 'hx-swap-oob="true"' in update and 'Sent ' in update and 'Emailed ' in update
+    assert url not in update
+
+
+@pytest.mark.django_db
+def test_the_page_stops_checking_after_two_minutes(authenticated_client, candidate):
+    interview = Interview.objects.create(resume=candidate, scheduled_date=timezone.localdate() + timedelta(days=2),
+                                         scheduled_time=timezone.datetime(2000, 1, 1, 16, 0).time(), location='Room 3')
+    url = reverse('interviews:delivery', kwargs={'pk': interview.pk})
+
+    assert url in authenticated_client.get(url + '?n=39').content.decode()
+    assert url not in authenticated_client.get(url + '?n=40').content.decode()

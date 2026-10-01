@@ -1062,6 +1062,29 @@ def user_create(request):
 
 
 @_superuser_required
+def user_edit(request, pk):
+    from .forms import UserEditForm
+    target = get_object_or_404(User, pk=pk)
+    form = UserEditForm(request.POST or None, instance=target)
+    if request.method == 'POST':
+        was_superuser = target.is_superuser
+        if form.is_valid():
+            losing_admin = was_superuser and not form.cleaned_data['is_superuser']
+            if losing_admin and target.pk == request.user.pk:
+                messages.error(request, 'You cannot remove your own superuser access.')
+            elif losing_admin and not User.objects.filter(is_superuser=True, is_active=True).exclude(
+                    pk=target.pk).exists():
+                messages.error(request, 'This is the last active superuser. Make someone else a superuser first.')
+            else:
+                form.save()
+                messages.success(request, f'"{target.username}" updated.')
+                return redirect('core:user_list')
+        else:
+            form_errors_to_messages(request, form)
+    return render(request, 'users/user_edit.html', {'form': form, 'target': target})
+
+
+@_superuser_required
 def user_change_password(request, pk):
     target = get_object_or_404(User, pk=pk)
     if request.method == 'POST':

@@ -1,0 +1,11 @@
+<div id="iv-ev-delivery-{{ ev.pk }}"{% if oob %} hx-swap-oob="true"{% endif %}>
+                        {% if not ev.is_submitted %}
+                        {% if ev.invite_error %}
+                        <p class="mt-0.5 text-xs font-medium text-rose-600 dark:text-rose-400" title="{{ ev.invite_error }}">Email failed — {{ ev.invite_error|truncatechars:60 }}</p>
+                        {% elif ev.invited_at %}
+                        <p class="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">Emailed {{ ev.invited_at|date:"M j, g:i A" }}{% if ev.reminded_at %} · reminded {{ ev.reminded_at|date:"M j" }}{% endif %}</p>
+                        {% elif ev.interviewer_email %}
+                        <p class="mt-0.5 text-xs text-zinc-400">Sending email…</p>
+                        {% endif %}
+                        {% endif %}
+</div>
