@@ -400,6 +400,7 @@ def _candidate_forms_context(request, resume) -> dict:
     # The assessment goes out on Assessment / Test and stays resendable through
     # the rest of the pipeline rather than vanishing at the next stage.
     from apps.core.status import ASSESSMENT_OPEN as SEI_STATUSES_ALLOWING_SEND
+    from apps.core.status import INFORMATION_FORM_OPEN
 
     # One row per assessment the job asks for, whether or not it has been sent
     # yet, so the recruiter sees the whole set rather than only what exists.
@@ -457,6 +458,7 @@ def _candidate_forms_context(request, resume) -> dict:
         'job_assessments': job_assessments,
         'assessment_invitation': invitation,
         'sei_can_send': resume.recruiter_status in SEI_STATUSES_ALLOWING_SEND,
+        'eif_can_send': resume.recruiter_status in INFORMATION_FORM_OPEN,
         'sei_has_pending': any(
             not (e['sitting'] and e['sitting'].is_valid_result)
             for e in job_assessments if not e.get('dropped')),

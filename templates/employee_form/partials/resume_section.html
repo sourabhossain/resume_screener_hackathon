@@ -13,7 +13,7 @@
             </a>
             {% endif %}
 
-            {% if not form_obj.is_submitted %}
+            {% if not form_obj.is_submitted and eif_can_send %}
             <form method="post" action="{% url 'employee_form:send' uuid=resume.uuid %}" hx-boost="false"
                   data-confirm
                   data-confirm-safe data-confirm-icon="question"

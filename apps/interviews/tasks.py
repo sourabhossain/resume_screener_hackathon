@@ -122,6 +122,7 @@ def send_interview_reminders():
     only once: the reminder time is claimed in the database before sending, so
     a second run of the sweep cannot email anyone twice.
     """
+    from apps.core.models import Resume
     from .models import Interview, InterviewEvaluation
     from .notifications import send_candidate_email, send_evaluator_email
 
@@ -132,7 +133,8 @@ def send_interview_reminders():
     evaluations = _live(InterviewEvaluation.objects.select_related(
         'evaluator', 'interview', 'interview__resume', 'interview__resume__job')).filter(
         interview__scheduled_date=tomorrow, interview__status=Interview.SCHEDULED,
-        is_submitted=False, invited_at__isnull=False, reminded_at__isnull=True).exclude(interviewer_email='')
+        is_submitted=False, invited_at__isnull=False, reminded_at__isnull=True).exclude(interviewer_email='').exclude(
+        interview__resume__recruiter_status__in=('rejected', 'withdrawn'))
     from .notifications import evaluator_address
     for ev in evaluations:
         if not evaluator_address(ev):
@@ -153,6 +155,8 @@ def send_interview_reminders():
     interviews = Interview.objects.select_related('resume', 'resume__job').filter(
         scheduled_date=tomorrow, status=Interview.SCHEDULED, is_deleted=False,
         resume__is_deleted=False, resume__job__is_deleted=False, notify_candidate=True,
+        resume__recruiter_status__in=[k for k, _ in Resume.RECRUITER_STATUS_CHOICES
+                                      if k not in ('rejected', 'withdrawn')],
         candidate_notified_at__isnull=False, candidate_reminded_at__isnull=True)
     for interview in interviews:
         if not Interview.objects.filter(pk=interview.pk, candidate_reminded_at__isnull=True).update(

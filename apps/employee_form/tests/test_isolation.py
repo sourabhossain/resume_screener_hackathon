@@ -95,6 +95,7 @@ def test_deleting_the_candidate_cleans_up_documents(client, candidate):
 # ── PROBE 14: a form for one resume must not be sendable via another URL ──
 def test_send_endpoint_is_scoped_to_the_named_resume(
         authenticated_client, candidate, other_candidate):
+    Resume.objects.filter(pk=candidate.pk).update(recruiter_status='selected')
     authenticated_client.post(
         reverse('employee_form:send', kwargs={'uuid': candidate.uuid}))
     assert EmployeeForm.objects.filter(resume=candidate).exists()

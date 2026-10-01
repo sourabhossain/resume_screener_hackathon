@@ -204,3 +204,61 @@ def test_correcting_a_candidates_email_closes_the_links_sent_to_the_old_one(auth
     invitation.refresh_from_db()
     assert (form.token, invitation.token) != old_tokens
     assert form.otp_verified_at is None and invitation.otp_verified_at is None
+
+
+# ── flow gaps ────────────────────────────────────────────────────────────
+@pytest.mark.django_db
+@pytest.mark.parametrize('status', ['new', 'shortlisted', 'assessment', 'interviewing', 'rejected', 'hired'])
+def test_the_information_form_is_not_sent_before_selected_or_after_the_end(authenticated_client, sample_job, status):
+    from django.core import mail
+    from apps.employee_form.models import EmployeeForm
+    resume = Resume.objects.create(job=sample_job, candidate_name='Too Early', email='early@example.com',
+                                   recruiter_status=status, screening_status='completed',
+                                   verification_status='completed')
+
+    authenticated_client.post(reverse('employee_form:send', kwargs={'uuid': resume.uuid}))
+    page = authenticated_client.get(reverse('core:resume_detail', kwargs={'uuid': resume.uuid})).content.decode()
+
+    assert not EmployeeForm.objects.filter(resume=resume).exists()
+    assert mail.outbox == []
+    assert reverse('employee_form:send', kwargs={'uuid': resume.uuid}) not in page
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('outcome', ['rejected', 'withdrawn'])
+def test_rejecting_or_withdrawing_cancels_interviews_and_closes_every_open_link(
+        authenticated_client, sample_job, django_user_model, monkeypatch, outcome):
+    from django.core import mail
+    from apps.employee_form.models import EmployeeForm
+    from apps.interviews.models import Interview, InterviewEvaluation
+    from apps.reference_checks.models import ReferenceCheck
+    from apps.sei_assessment.models import AssessmentInvitation
+    monkeypatch.setattr('django.db.transaction.on_commit', lambda fn, *a, **k: fn())
+    panel = django_user_model.objects.create_user('panel', email='panel@sslwireless.com', password='x')
+    resume = Resume.objects.create(job=sample_job, candidate_name='Out Now', email='out@example.com',
+                                   recruiter_status='selected', screening_status='completed',
+                                   verification_status='completed')
+    interview = Interview.objects.create(resume=resume, scheduled_date=timezone.localdate() + timedelta(days=1),
+                                         candidate_notified_at=timezone.now())
+    InterviewEvaluation.objects.create(interview=interview, evaluator=panel, interviewer_name='Panel',
+                                       interviewer_email=panel.email, invited_at=timezone.now())
+    form = EmployeeForm.objects.create(resume=resume, otp_verified_at=timezone.now())
+    invitation = AssessmentInvitation.objects.create(resume=resume, otp_verified_at=timezone.now(),
+                                                     token_expires_at=timezone.now() + timedelta(days=3))
+    check = ReferenceCheck.objects.create(resume=resume, kind='employer', source_key='employer_1',
+                                          recipient_name='R', recipient_email='r@acme.com',
+                                          otp_verified_at=timezone.now(),
+                                          token_expires_at=timezone.now() + timedelta(days=3))
+
+    authenticated_client.post(reverse('core:resume_status_update', kwargs={'uuid': resume.uuid}),
+                              {'recruiter_status': outcome})
+
+    interview.refresh_from_db()
+    assert interview.status == Interview.CANCELLED
+    assert sorted(m.to[0] for m in mail.outbox) == ['out@example.com', 'panel@sslwireless.com']
+    for row in (form, invitation, check):
+        row.refresh_from_db()
+        assert row.is_expired and row.otp_verified_at is None
+    from apps.interviews.tasks import send_interview_reminders
+    mail.outbox.clear()
+    assert send_interview_reminders() == {'evaluators': 0, 'candidates': 0}

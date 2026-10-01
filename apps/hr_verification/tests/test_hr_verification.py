@@ -1386,19 +1386,20 @@ def test_recording_the_offer_letter_moves_the_candidate_to_offer_letter_sent(hr_
     assert candidate.recruiter_status == 'offer_extended'
 
 
-def test_a_later_section_save_does_not_pull_the_candidate_back_to_offer_letter_sent(hr_client, candidate):
-    candidate.recruiter_status = 'bgv_completed'
+def test_recording_the_offer_waits_for_sign_off_and_keeps_the_order(hr_client, candidate):
+    from apps.core.models import StatusChange
+    candidate.recruiter_status = 'info_received'
     candidate.save(update_fields=['recruiter_status'])
     _fill_everything(hr_client, candidate)
     hr_client.post(_url('step', candidate, step_key='clearance'),
                    {**CLEARANCE, 'offer_letter_issued': 'yes',
                     'offer_letter_issue_date': timezone.localdate().isoformat()})
     candidate.refresh_from_db()
-    assert candidate.recruiter_status == 'offer_extended'
+    assert candidate.recruiter_status == 'info_received'
 
-    candidate.recruiter_status = 'bgv_completed'
-    candidate.save(update_fields=['recruiter_status'])
-    hr_client.post(_url('step', candidate, step_key='education'), EDUCATION)
+    hr_client.post(_url('submit', candidate))
 
     candidate.refresh_from_db()
-    assert candidate.recruiter_status == 'bgv_completed'
+    assert candidate.recruiter_status == 'offer_extended'
+    assert list(StatusChange.objects.filter(resume=candidate).order_by('created_at', 'id')
+                .values_list('to_status', flat=True))[-2:] == ['bgv_completed', 'offer_extended']

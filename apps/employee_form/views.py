@@ -538,6 +538,11 @@ def detail(request, uuid):
 def send(request, uuid):
     """Recruiter-triggered send or re-send of the invitation."""
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    from apps.core.status import INFORMATION_FORM_OPEN
+    if resume.recruiter_status not in INFORMATION_FORM_OPEN:
+        messages.error(request, 'The information form can only be sent once the candidate is Selected, '
+                                'and not after Rejected, Withdrawn or Onboarded.')
+        return redirect('core:resume_detail', uuid=uuid)
     existing = getattr(resume, 'employee_form', None)
     resend = existing is not None
 

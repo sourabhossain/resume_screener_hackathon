@@ -19,6 +19,9 @@ OUTCOMES_THE_SYSTEM_NEVER_MOVES = frozenset({'rejected', 'withdrawn', 'hired'})
 POST_SELECTION = frozenset({
     'selected', 'info_received', 'bgv_completed', 'offer_extended', 'pre_onboarding', 'hired',
 })
+# Statuses in which the information form may be sent or resent: it collects
+# NID and family details, so never before Selected, and not once Onboarded.
+INFORMATION_FORM_OPEN = POST_SELECTION - {'hired'}
 # Statuses in which the assessment link may be (re)sent by HR.
 ASSESSMENT_OPEN = frozenset({
     'assessment', 'interviewing', 'selected', 'info_received', 'bgv_completed',
@@ -89,6 +92,8 @@ def advance(resume, target, *, reason, user=None) -> bool:
 
 def _run_entry_actions(resume, previous, new_status, user):
     notes = []
+    if new_status in ('rejected', 'withdrawn'):
+        notes += _close_open_steps(resume)
     if new_status == 'assessment':
         notes += _send_assessments(resume, user)
     # The information form goes out when the candidate first reaches Selected,
@@ -125,3 +130,41 @@ def _send_information_form(resume, user):
     if already:
         return [('info', 'The information form was already sent earlier; it was not sent again.')]
     return [('success', f'Information form sent to {resume.email}.')]
+
+
+def _close_open_steps(resume):
+    """A candidate who is out of the process stops receiving anything.
+
+    Scheduled interviews are cancelled (everyone invited is told), and every
+    unfinished link -- information form, assessment, referee requests -- is
+    closed with its session, so no more personal data or references are
+    collected. Moving the candidate back later and resending reopens them.
+    """
+    from django.utils import timezone
+    from apps.employee_form.models import EmployeeForm
+    from apps.interviews.models import Interview
+    from apps.interviews.views import _queue_cancellation
+    from apps.reference_checks.models import ReferenceCheck
+    from apps.sei_assessment.models import AssessmentInvitation
+
+    now = timezone.now()
+    notes = []
+    interviews = list(Interview.objects.filter(resume=resume, status=Interview.SCHEDULED))
+    for interview in interviews:
+        Interview.objects.filter(pk=interview.pk).update(status=Interview.CANCELLED)
+        interview.status = Interview.CANCELLED
+        _queue_cancellation(interview)
+    if interviews:
+        notes.append(('info', f'{len(interviews)} scheduled interview{"s" if len(interviews) != 1 else ""} '
+                              'cancelled; everyone invited is being told.'))
+    closed = 0
+    closed += EmployeeForm.objects.filter(resume=resume, is_submitted=False).update(
+        token_expires_at=now, otp_verified_at=None)
+    closed += AssessmentInvitation.objects.filter(resume=resume).update(token_expires_at=now, otp_verified_at=None)
+    closed += ReferenceCheck.objects.filter(resume=resume, is_submitted=False).update(
+        token_expires_at=now, otp_verified_at=None)
+    if closed:
+        notes.append(('info', 'Open form, assessment and referee links were closed.'))
+    logger.info('status.closed_open_steps resume=%s interviews=%s links=%s', resume.pk, len(interviews), closed)
+    return notes
+
