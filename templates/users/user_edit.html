@@ -58,19 +58,19 @@
             <div class="rounded-xl border border-zinc-200/80 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
                 <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Access</p>
                 <div class="space-y-3">
-                    <label class="flex cursor-pointer items-center gap-3">
-                        <input type="checkbox" name="is_staff"{% if form.is_staff.value %} checked{% endif %} class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="checkbox" name="is_staff"{% if form.is_staff.value %} checked{% endif %} class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
                         <div>
                             <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">HR</span>
                             <p class="text-xs text-zinc-400">Can use the HR tools: background verification, candidate mapping, reference checks and assessment reports</p>
                         </div>
                     </label>
-                    <label class="flex cursor-pointer items-center gap-3">
-                        <input type="checkbox" name="is_superuser"{% if form.is_superuser.value %} checked{% endif %}{% if target == request.user %} disabled{% endif %} class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="checkbox" name="is_superuser"{% if form.is_superuser.value %} checked{% endif %}{% if target == request.user %} disabled{% endif %} class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/35 dark:border-zinc-600 dark:bg-zinc-900">
                         {% if target == request.user and form.is_superuser.value %}<input type="hidden" name="is_superuser" value="on">{% endif %}
                         <div>
                             <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Superuser</span>
-                            <p class="text-xs text-zinc-400">{% if target == request.user %}You cannot remove your own superuser access.{% else %}Full access, including user management{% endif %}</p>
+                            <p class="text-xs text-zinc-400">{% if target == request.user %}You cannot remove your own superuser access.{% else %}Full access, including the HR tools and user management{% endif %}</p>
                         </div>
                     </label>
                 </div>
