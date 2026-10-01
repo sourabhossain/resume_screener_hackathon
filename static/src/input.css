@@ -131,6 +131,20 @@
         align-items: center;
         text-align: center;
     }
+    .fld-head {
+        padding-bottom: 0.5rem;
+    }
+    .fld[hidden] {
+        display: none !important;
+    }
+    @media (min-width: 640px) {
+        .fld {
+            display: grid;
+            grid-template-rows: subgrid;
+            grid-row: span 3;
+            row-gap: 0;
+        }
+    }
     @media (max-width: 639px) {
         .brand-lockup--nav .brand-product {
             display: none;

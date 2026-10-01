@@ -1,7 +1,8 @@
 <div data-question="{{ question.key }}"{% if question.key in uploaded_keys %} data-uploaded{% endif %}
-     class="{% if item.half %}sm:col-span-1{% else %}sm:col-span-2{% endif %}">
+     class="fld {% if item.half %}sm:col-span-1{% else %}sm:col-span-2{% endif %}">
 
     {% if question.type == 'boolean' %}
+    <div>
     <label class="-mt-1 inline-flex cursor-pointer items-start gap-2.5 rounded-lg py-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
         <input type="checkbox" data-boolean
                name="{{ field.html_name }}"
@@ -16,9 +17,11 @@
     {% if field.errors %}
     <p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ field.errors|join:" " }}</p>
     {% endif %}
+    </div>
 
     {% else %}
 
+    <div class="fld-head">
     <label {% if question.type != 'radio' and question.type != 'checkbox' %}for="{{ field.id_for_label }}"{% endif %}
            class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">
         {{ item.label|default:question.label }}{% if question.required %}<span class="ml-0.5 text-rose-500">*</span>{% endif %}
@@ -27,8 +30,9 @@
     {% if question.help %}
     <p class="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">{{ question.help }}</p>
     {% endif %}
+    </div>
 
-    <div class="mt-2">
+    <div class="fld-control">
         {% if question.type == 'radio' or question.type == 'checkbox' %}
         <div class="{% if question.choices|length > 8 %}grid gap-1 sm:grid-cols-2{% else %}space-y-1{% endif %}" role="group"
              {% if question.required and question.type == 'checkbox' and not question.show_if and not question.required_if %}data-required-group="{{ field.html_name }}"{% endif %}>
@@ -142,6 +146,7 @@
         {% endif %}
     </div>
 
+    <div class="fld-notes">
     {% if question.key in prefilled_keys and not field.errors %}
     <p class="mt-1.5 inline-flex items-start gap-1.5 text-xs font-medium text-sky-600 dark:text-sky-400">
         <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -155,5 +160,6 @@
         {{ field.errors|join:" " }}
     </p>
     {% endif %}
+    </div>
 {% endif %}
 </div>
