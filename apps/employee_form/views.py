@@ -221,6 +221,35 @@ def resend_code(request, token):
 STEP_SAVE_FIELDS = ['answers', 'current_step', 'is_submitted', 'submitted_at', 'updated_at']
 
 
+# Short names for the section tabs; the full title stays as the page heading.
+TAB_LABELS = {
+    'section_a': 'Identification', 'section_b': 'Education', 'employment': 'Employment',
+    'reference_1': 'Reference 1', 'reference_2': 'Reference 2', 'team_reporting': 'Team & Reporting',
+    'department': 'Department', 'd1_sales': 'Sales', 'd2_marketing': 'Marketing', 'd3_finance': 'Finance',
+    'd4_technology': 'Technology', 'd5_operations': 'Operations', 'd6_corporate': 'Corporate',
+    'd7_declaration': 'Declaration',
+}
+
+
+def _section_tabs(form, step_key):
+    """One tab per section on this candidate's path.
+
+    Sections up to the furthest one reached can be opened again; later ones
+    are locked, the same rule step() enforces, so a tab never offers a jump
+    the server would refuse.
+    """
+    path = form.path
+    reached = path.index(form.current_step) if form.current_step in path else 0
+    tabs = []
+    for index, key in enumerate(path):
+        state = ('current' if key == step_key else 'done' if index < reached
+                 else 'open' if index <= reached else 'locked')
+        tabs.append({'key': key, 'number': index + 1, 'state': state,
+                     'label': TAB_LABELS.get(key) or schema.get_step(key)['title'],
+                     'title': schema.get_step(key)['title']})
+    return tabs
+
+
 @_candidate_page
 def step(request, token, step_key):
     """Render and accept one step of the wizard."""
@@ -386,6 +415,7 @@ def step(request, token, step_key):
 
     return render(request, 'employee_form/step.html', {
         'form_obj': form,
+        'tabs': _section_tabs(form, step_key),
         'step': schema.get_step(step_key),
         'step_form': step_form,
         'own_groups': own_groups,

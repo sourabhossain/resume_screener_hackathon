@@ -131,6 +131,15 @@
         align-items: center;
         text-align: center;
     }
+    @media (max-width: 639px) {
+        .ef-tabs {
+            -webkit-mask-image: linear-gradient(to right, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
+            mask-image: linear-gradient(to right, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
+        }
+        .ef-tabs::-webkit-scrollbar {
+            display: none;
+        }
+    }
     .fld-head {
         padding-bottom: 0.5rem;
     }
