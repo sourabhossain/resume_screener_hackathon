@@ -132,7 +132,7 @@
                 </div>
                 <div>
                     <p class="flex items-center gap-2 font-semibold text-zinc-900 dark:text-white">{{ iv.get_phase_display }}{% if iv.status != 'scheduled' %} {% include 'interviews/partials/status_chip.html' %}{% endif %}</p>
-                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.scheduled_date|date:"F j, Y" }}</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.scheduled_date|date:"F j, Y" }}{% if iv.starts_at %} &middot; {{ iv.starts_at|date:"g:i A" }}{% endif %}{% if iv.location %} &middot; {{ iv.get_mode_display }}{% endif %}</p>
                 </div>
             </div>
             <div class="flex items-center gap-3">

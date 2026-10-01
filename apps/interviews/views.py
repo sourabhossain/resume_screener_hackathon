@@ -9,7 +9,8 @@ from django.contrib import messages
 from apps.core.views import form_errors_to_messages
 from apps.core.models import Resume
 from .models import Interview, InterviewEvaluation, EVALUATION_CRITERIA, CRITERIA_KEYS, MAX_SCORE
-from .forms import InterviewCreateForm, InterviewerAddForm, EvaluationSubmitForm
+from .forms import (EvaluationSubmitForm, InterviewCreateForm, StaffEvaluatorForm,
+                    staff_evaluators, staff_label)
 
 
 def _can_access_interview(user, interview):
@@ -20,31 +21,82 @@ def _can_access_interview(user, interview):
     return user.is_authenticated
 
 
+def _queue_invites(interview, evaluations, *, candidate):
+    """Queue the emails once the rows are committed, so a worker never misses them."""
+    from apps.core.utils import queue_task
+    from .tasks import send_candidate_invite, send_evaluator_invite
+
+    def send():
+        for ev in evaluations:
+            if not queue_task(send_evaluator_invite, ev.pk):
+                InterviewEvaluation.objects.filter(pk=ev.pk).update(
+                    invite_error='Could not queue the email: the background queue is unavailable.')
+        if candidate and not queue_task(send_candidate_invite, interview.pk):
+            Interview.objects.filter(pk=interview.pk).update(
+                candidate_email_error='Could not queue the email: the background queue is unavailable.')
+    transaction.on_commit(send)
+
+
+def _evaluation_for(interview, user):
+    return InterviewEvaluation(interview=interview, evaluator=user,
+                               interviewer_name=staff_label(user), interviewer_email=user.email)
+
+
+def _panel_of(interview):
+    return list(interview.evaluations.exclude(evaluator=None).values_list('evaluator_id', flat=True))
+
+
 @login_required
 def interview_create(request, resume_uuid):
-    resume = get_object_or_404(Resume, uuid=resume_uuid)
-    form = InterviewCreateForm(request.POST or None)
+    resume = get_object_or_404(Resume.objects.select_related('job'), uuid=resume_uuid)
+    held = Interview.objects.filter(resume=resume, is_deleted=False).exclude(status=Interview.CANCELLED)
+    done_phases = set(held.values_list('phase', flat=True))
+    next_phase = next((key for key, _ in Interview.PHASE_CHOICES if key not in done_phases), '3')
+    form = InterviewCreateForm(request.POST or None, initial={'phase': next_phase})
     if request.method == 'POST':
         if form.is_valid():
             phase = form.cleaned_data['phase']
             required_prior = {'2': '1', '3': '2'}
             prior_phase = required_prior.get(phase)
-            if prior_phase and not Interview.objects.filter(
-                resume=resume, phase=prior_phase, is_deleted=False
-            ).exclude(status=Interview.CANCELLED).exists():
+            if prior_phase and prior_phase not in done_phases:
                 phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
                 form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
             else:
-                interview = form.save(commit=False)
-                interview.resume = resume
-                interview.save()
+                with transaction.atomic():
+                    interview = form.save(commit=False)
+                    interview.resume = resume
+                    interview.save()
+                    evaluations = [_evaluation_for(interview, user) for user in form.cleaned_data['evaluators']]
+                    for ev in evaluations:
+                        ev.save()
+                    _queue_invites(interview, evaluations, candidate=interview.notify_candidate)
                 from apps.core.status import advance
                 advance(resume, 'interviewing', reason='Interview scheduled', user=request.user)
-                messages.success(request, 'Interview scheduled.')
+                sent_to = f'{len(evaluations)} evaluator{"s" if len(evaluations) != 1 else ""}'
+                if interview.notify_candidate:
+                    sent_to += ' and the candidate'
+                messages.success(request, f'Interview scheduled. Invitations are on their way to {sent_to}.')
                 return redirect('interviews:detail', pk=interview.pk)
         if form.errors:
             form_errors_to_messages(request, form)
-    return render(request, 'interviews/create.html', {'form': form, 'resume': resume})
+
+    # Panels to reuse in one click: this candidate's last round, else this job's last interview.
+    panels = []
+    mine = held.order_by('-scheduled_date', '-created_at').first()
+    if mine and _panel_of(mine):
+        panels.append({'label': f'Same panel as {mine.get_phase_display()}', 'ids': _panel_of(mine)})
+    recent = (Interview.objects.filter(resume__job=resume.job, is_deleted=False).exclude(resume=resume)
+              .exclude(status=Interview.CANCELLED).order_by('-created_at'))
+    for other in recent[:10]:
+        ids = _panel_of(other)
+        if ids:
+            panels.append({'label': f'Last panel for this job ({other.resume.candidate_name.title()})', 'ids': ids})
+            break
+    staff = [{'id': u.pk, 'name': staff_label(u), 'email': u.email} for u in staff_evaluators()]
+    chosen = [int(pk) for pk in (form['evaluators'].value() or []) if str(pk).isdigit()]
+    return render(request, 'interviews/create.html', {
+        'form': form, 'resume': resume, 'staff': staff, 'panels': panels, 'chosen': chosen,
+    })
 
 
 @login_required
@@ -53,16 +105,17 @@ def interview_detail(request, pk):
     if not _can_access_interview(request.user, interview):
         messages.error(request, 'You do not have permission to view this interview.')
         return redirect('core:dashboard')
-    add_form = InterviewerAddForm(request.POST or None)
+    add_form = StaffEvaluatorForm(request.POST or None, interview=interview)
 
     if request.method == 'POST' and interview.status == Interview.CANCELLED:
         messages.error(request, 'This interview is cancelled. Reopen it before adding an evaluator.')
         return redirect('interviews:detail', pk=pk)
     if request.method == 'POST' and add_form.is_valid():
-        ev = add_form.save(commit=False)
-        ev.interview = interview
-        ev.save()
-        messages.success(request, f'Evaluation link created for {ev.interviewer_name}.')
+        with transaction.atomic():
+            ev = _evaluation_for(interview, add_form.cleaned_data['evaluator'])
+            ev.save()
+            _queue_invites(interview, [ev], candidate=False)
+        messages.success(request, f'{ev.interviewer_name} added. Their evaluation link is on its way by email.')
         return redirect('interviews:detail', pk=pk)
     elif request.method == 'POST':
         form_errors_to_messages(request, add_form)
@@ -74,6 +127,48 @@ def interview_detail(request, pk):
         'add_form': add_form,
         'criteria': EVALUATION_CRITERIA,
     })
+
+
+@login_required
+@require_POST
+def evaluation_resend(request, token):
+    """Email an evaluator their link again."""
+    from apps.core.utils import claim_send, queue_task
+    from .tasks import send_evaluator_invite
+    ev = get_object_or_404(InterviewEvaluation.objects.select_related('interview'), token=token)
+    if ev.is_submitted or ev.interview.status != Interview.SCHEDULED:
+        messages.error(request, 'Only a pending evaluator on a scheduled interview can be emailed.')
+    elif not ev.interviewer_email:
+        messages.error(request, f'{ev.interviewer_name} has no email address. Copy the link instead.')
+    elif not claim_send('interview_evaluator', ev.pk, seconds=60):
+        messages.info(request, 'The email was sent a moment ago.')
+    elif queue_task(send_evaluator_invite, ev.pk):
+        InterviewEvaluation.objects.filter(pk=ev.pk).update(invite_error='')
+        messages.success(request, f'Evaluation link emailed again to {ev.interviewer_name}.')
+    else:
+        messages.error(request, 'The email could not be queued right now. Try again in a minute.')
+    return redirect('interviews:detail', pk=ev.interview_id)
+
+
+@login_required
+@require_POST
+def candidate_resend(request, pk):
+    """Email the candidate the interview details again."""
+    from apps.core.utils import claim_send, queue_task
+    from .tasks import send_candidate_invite
+    interview = get_object_or_404(Interview.objects.select_related('resume'), pk=pk)
+    if interview.status != Interview.SCHEDULED:
+        messages.error(request, 'Only a scheduled interview can be sent to the candidate.')
+    elif not (interview.resume.email or '').strip():
+        messages.error(request, 'The candidate has no email address on file.')
+    elif not claim_send('interview_candidate', interview.pk, seconds=60):
+        messages.info(request, 'The email was sent a moment ago.')
+    elif queue_task(send_candidate_invite, interview.pk):
+        Interview.objects.filter(pk=interview.pk).update(candidate_email_error='', notify_candidate=True)
+        messages.success(request, f'Interview details emailed to {interview.resume.email}.')
+    else:
+        messages.error(request, 'The email could not be queued right now. Try again in a minute.')
+    return redirect('interviews:detail', pk=interview.pk)
 
 
 @login_required
@@ -142,7 +237,12 @@ def evaluation_renew(request, token):
         ev.token = uuid.uuid4()
         ev.token_expires_at = timezone.now() + timedelta(days=InterviewEvaluation.TOKEN_VALIDITY_DAYS)
         ev.save(update_fields=['token', 'token_expires_at'])
-        messages.success(request, f'New link generated for {ev.interviewer_name}.')
+        if ev.interviewer_email:
+            # The old link stops working, so the new one goes out at once.
+            _queue_invites(ev.interview, [ev], candidate=False)
+            messages.success(request, f'New link generated and emailed to {ev.interviewer_name}.')
+        else:
+            messages.success(request, f'New link generated for {ev.interviewer_name}.')
     return redirect('interviews:detail', pk=ev.interview_id)
 
 

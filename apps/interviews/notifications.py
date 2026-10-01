@@ -1,0 +1,116 @@
+"""Interview emails: the invitation, the day-before reminder, and the calendar file.
+
+Evaluators are office staff and get their own evaluation link; the candidate
+gets the time and place. Internal notes go to neither. Every email carries an
+.ics file so the interview lands in Outlook or Google Calendar in one click.
+"""
+import logging
+from datetime import timezone as dt_timezone
+
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.core.links import absolute_url
+
+logger = logging.getLogger(__name__)
+
+
+def _ics_text(value: str) -> str:
+    return (value or '').replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,') \
+        .replace('\r\n', '\\n').replace('\n', '\\n')
+
+
+def _fold(line: str) -> str:
+    """RFC 5545 lines are at most 75 octets; longer ones continue after CRLF + space."""
+    out, chunk = [], ''
+    for ch in line:
+        if len((chunk + ch).encode('utf-8')) > (75 if not out else 74):
+            out.append(chunk)
+            chunk = ''
+        chunk += ch
+    out.append(chunk)
+    return '\r\n '.join(out)
+
+
+def calendar_file(interview, *, for_evaluator=None) -> str:
+    """One VEVENT for this interview, in UTC, safe for Outlook and Google."""
+    start, end = interview.starts_at, interview.ends_at
+    stamp = '%Y%m%dT%H%M%SZ'
+    job = interview.resume.job.title
+    if for_evaluator is not None:
+        summary = f'Interview: {interview.resume.candidate_name.title()} · {job}'
+        description = (f'{interview.get_phase_display()} for {job}.\n'
+                       f'Evaluation form: {evaluation_url(for_evaluator)}')
+    else:
+        summary = f'Interview with SSL Wireless · {job}'
+        description = f'Your interview for {job} at SSL Wireless.'
+    if interview.location and interview.is_online:
+        description += f'\nJoin: {interview.location}'
+    lines = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//SSL Wireless//Careers//EN',
+        'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+        f'UID:interview-{interview.pk}-{interview.created_at:%Y%m%d%H%M%S}@sslwireless.com',
+        f'DTSTAMP:{timezone.now().astimezone(dt_timezone.utc).strftime(stamp)}',
+        f'DTSTART:{start.astimezone(dt_timezone.utc).strftime(stamp)}',
+        f'DTEND:{end.astimezone(dt_timezone.utc).strftime(stamp)}',
+        f'SUMMARY:{_ics_text(summary)}',
+        f'DESCRIPTION:{_ics_text(description)}',
+    ]
+    if interview.location:
+        lines.append(f'LOCATION:{_ics_text(interview.location)}')
+    lines += ['END:VEVENT', 'END:VCALENDAR']
+    return '\r\n'.join(_fold(line) for line in lines) + '\r\n'
+
+
+def evaluation_url(evaluation) -> str:
+    return absolute_url(reverse('interviews:evaluate', kwargs={'token': evaluation.token}))
+
+
+def _context(interview):
+    return {
+        'interview': interview,
+        'candidate_name': ' '.join((interview.resume.candidate_name or '').split()).title() or 'Candidate',
+        'job_title': interview.resume.job.title,
+        'starts_at': interview.starts_at,
+        'ends_at': interview.ends_at,
+        'support_email': settings.CAREERS_REPLY_TO,
+    }
+
+
+def _send(subject, template, context, recipient, calendar):
+    message = EmailMultiAlternatives(
+        subject=' '.join(subject.split()),
+        body=render_to_string(f'interviews/email/{template}.txt', context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient],
+        reply_to=[settings.CAREERS_REPLY_TO],
+    )
+    message.attach_alternative(render_to_string(f'interviews/email/{template}.html', context), 'text/html')
+    if calendar:
+        message.attach('interview.ics', calendar, 'text/calendar; charset=utf-8; method=PUBLISH')
+    message.send(fail_silently=False)
+
+
+def send_evaluator_email(evaluation, *, reminder=False):
+    interview = evaluation.interview
+    context = {**_context(interview), 'evaluation': evaluation,
+               'evaluator_name': evaluation.interviewer_name, 'evaluation_url': evaluation_url(evaluation),
+               'reminder': reminder}
+    when = timezone.localtime(interview.starts_at).strftime('%-d %b, %-I:%M %p') if interview.starts_at else ''
+    prefix = 'Reminder: interview tomorrow' if reminder else 'Interview panel'
+    subject = f'{prefix} · {context["candidate_name"]} · {context["job_title"]} · {when}'
+    calendar = calendar_file(interview, for_evaluator=evaluation) if interview.starts_at else None
+    _send(subject, 'evaluator', context, evaluation.interviewer_email, calendar)
+
+
+def send_candidate_email(interview, *, reminder=False):
+    context = {**_context(interview), 'reminder': reminder}
+    if reminder:
+        subject = f'Reminder: your interview tomorrow for {context["job_title"]} at SSL Wireless'
+    else:
+        subject = f'Interview invitation: {context["job_title"]} at SSL Wireless'
+    calendar = calendar_file(interview) if interview.starts_at else None
+    _send(subject, 'candidate', context, interview.resume.email, calendar)

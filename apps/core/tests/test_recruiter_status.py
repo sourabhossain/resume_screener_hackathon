@@ -140,8 +140,12 @@ def test_an_automatic_update_is_marked_as_such(candidate):
 def test_scheduling_an_interview_moves_the_candidate_to_interviewing(authenticated_client, candidate):
     candidate.recruiter_status = 'assessment'
     candidate.save()
+    from django.contrib.auth.models import User
+    panel = User.objects.create_user('panel', email='panel@example.com', password='x')
     authenticated_client.post(reverse('interviews:create', kwargs={'resume_uuid': candidate.uuid}),
-                              {'phase': '1', 'scheduled_date': timezone.localdate().isoformat()})
+                              {'phase': '1', 'scheduled_date': (timezone.localdate() + timedelta(days=2)).isoformat(),
+                               'scheduled_time': '10:00', 'duration_minutes': '60', 'mode': 'in_person',
+                               'location': 'Room 3', 'evaluators': [panel.pk]})
     candidate.refresh_from_db()
     assert candidate.recruiter_status == 'interviewing'
 

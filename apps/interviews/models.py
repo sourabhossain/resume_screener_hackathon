@@ -40,17 +40,52 @@ class Interview(SoftDeleteModel):
     resume = models.ForeignKey(
         'core.Resume', on_delete=models.CASCADE, related_name='interviews'
     )
+    IN_PERSON, ONLINE = 'in_person', 'online'
+    MODE_CHOICES = [(IN_PERSON, 'In person'), (ONLINE, 'Online')]
+    DURATION_CHOICES = [(30, '30 minutes'), (45, '45 minutes'), (60, '1 hour'),
+                        (90, '1 hour 30 minutes'), (120, '2 hours')]
+
     phase = models.CharField(max_length=5, choices=PHASE_CHOICES, default='1')
     scheduled_date = models.DateField()
+    # Blank only on interviews scheduled before the time was asked for.
+    scheduled_time = models.TimeField(null=True, blank=True)
+    duration_minutes = models.PositiveSmallIntegerField(choices=DURATION_CHOICES, default=60)
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=IN_PERSON)
+    # A room or address in person, a meeting link online.
+    location = models.CharField(max_length=500, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    # Internal: never sent to the candidate.
     notes = models.TextField(blank=True)
+
+    notify_candidate = models.BooleanField(default=True)
+    candidate_notified_at = models.DateTimeField(null=True, blank=True)
+    candidate_reminded_at = models.DateTimeField(null=True, blank=True)
+    candidate_email_error = models.CharField(max_length=500, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-scheduled_date']
+        ordering = ['-scheduled_date', '-scheduled_time']
 
     def __str__(self):
         return f"{self.resume.candidate_name} - Interview {self.phase} ({self.scheduled_date})"
+
+    @property
+    def starts_at(self):
+        """The start as an aware datetime in Dhaka, or None without a time."""
+        if self.scheduled_time is None:
+            return None
+        from datetime import datetime
+        return timezone.make_aware(datetime.combine(self.scheduled_date, self.scheduled_time))
+
+    @property
+    def ends_at(self):
+        start = self.starts_at
+        return start + timedelta(minutes=self.duration_minutes or 60) if start else None
+
+    @property
+    def is_online(self) -> bool:
+        return self.mode == self.ONLINE
 
     @property
     def submitted_count(self):
@@ -93,10 +128,19 @@ class InterviewEvaluation(models.Model):
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
-    # Interviewer info
+    # Interviewer info. A staff member is linked through `evaluator`; the name
+    # and email are copied so the record survives the account being removed.
+    evaluator = models.ForeignKey(
+        'auth.User', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='interview_evaluations')
     interviewer_name = models.CharField(max_length=200)
+    interviewer_email = models.EmailField(blank=True)
     interviewer_position = models.CharField(max_length=200, blank=True)
     interviewer_department = models.CharField(max_length=200, blank=True)
+
+    invited_at = models.DateTimeField(null=True, blank=True)
+    reminded_at = models.DateTimeField(null=True, blank=True)
+    invite_error = models.CharField(max_length=500, blank=True)
 
     # Scores: {"educational_background": 4, "job_related_knowledge": 3, ...}
     scores = models.JSONField(default=dict, blank=True)

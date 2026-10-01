@@ -29,6 +29,9 @@ REQUIRED_TASKS = (
     'apps.sei_assessment.tasks.send_assessment_invite',
     'apps.sei_assessment.tasks.send_sei_invite',
     'apps.sei_assessment.tasks.close_expired_sittings',
+    'apps.interviews.tasks.send_evaluator_invite',
+    'apps.interviews.tasks.send_candidate_invite',
+    'apps.interviews.tasks.send_interview_reminders',
 )
 
 # Work that only ever runs because the scheduler fires it. A worker can be
@@ -38,6 +41,7 @@ SCHEDULED_TASKS = (
     'apps.core.tasks.release_stale_screenings',
     'apps.core.tasks.clear_expired_sessions',
     'apps.sei_assessment.tasks.close_expired_sittings',
+    'apps.interviews.tasks.send_interview_reminders',
 )
 
 

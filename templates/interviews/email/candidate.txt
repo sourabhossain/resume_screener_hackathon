@@ -1,0 +1,18 @@
+{% autoescape off %}Dear {{ candidate_name }},
+
+{% if reminder %}This is a friendly reminder of your interview tomorrow for the {{ job_title }} position at SSL Wireless.{% else %}Thank you for your interest in the {{ job_title }} position at SSL Wireless. We are pleased to invite you to an interview.{% endif %}
+
+When:  {% if starts_at %}{{ starts_at|date:"l, j F Y, g:i A" }} (Bangladesh time){% else %}{{ interview.scheduled_date|date:"l, j F Y" }}{% endif %}
+Where: {% if interview.is_online %}Online{% if interview.location %} – {{ interview.location }}{% endif %}{% else %}In person{% if interview.location %} – {{ interview.location }}{% endif %}{% endif %}
+Duration: about {{ interview.get_duration_minutes_display }}
+
+{% if interview.is_online %}Please join a few minutes early from a quiet place with a stable connection.{% else %}Please arrive about 10 minutes early and bring a copy of your CV and a photo ID.{% endif %}
+
+If you cannot attend at this time, reply to this email or write to {{ support_email }} as soon as possible. A calendar invitation is attached.
+
+We look forward to meeting you.
+
+Kind regards,
+SSL Wireless HR
+{{ support_email }}
+{% endautoescape %}

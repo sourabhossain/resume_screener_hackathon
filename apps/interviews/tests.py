@@ -135,32 +135,33 @@ class TestRecruiterViews:
     def test_create_get_and_post(self, authenticated_client, sample_resume):
         url = reverse('interviews:create', kwargs={'resume_uuid': sample_resume.uuid})
         assert authenticated_client.get(url).status_code == 200
-        resp = authenticated_client.post(url, {'phase': '1', 'scheduled_date': '2026-07-01', 'notes': 'x'})
+        resp = authenticated_client.post(url, {
+            'phase': '1', 'scheduled_date': (timezone.localdate() + timedelta(days=3)).isoformat(),
+            'scheduled_time': '11:30', 'duration_minutes': '45', 'mode': 'in_person',
+            'location': 'Room 3', 'notes': 'x', 'evaluators': [sample_resume.job.owner.pk]})
         assert resp.status_code == 302
-        assert Interview.objects.filter(resume=sample_resume).exists()
+        interview = Interview.objects.get(resume=sample_resume)
+        assert interview.evaluations.get().interviewer_email == sample_resume.job.owner.email
 
     def test_detail_renders(self, authenticated_client, interview):
         resp = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk}))
         assert resp.status_code == 200
 
-    def test_detail_add_interviewer(self, authenticated_client, interview):
+    def test_detail_add_interviewer(self, authenticated_client, interview, django_user_model):
         url = reverse('interviews:detail', kwargs={'pk': interview.pk})
-        resp = authenticated_client.post(url, {'interviewer_name': 'Carol', 'interviewer_position': 'Lead'})
+        carol = django_user_model.objects.create_user('carol', email='carol@example.com', password='x',
+                                                      first_name='Carol')
+        resp = authenticated_client.post(url, {'evaluator': carol.pk})
         assert resp.status_code == 302
-        assert interview.evaluations.filter(interviewer_name='Carol').exists()
+        assert interview.evaluations.filter(interviewer_name='Carol', evaluator=carol).exists()
 
     def test_detail_rejects_invalid_interviewer_input(self, authenticated_client, interview):
         url = reverse('interviews:detail', kwargs={'pk': interview.pk})
         before = interview.evaluations.count()
-        resp = authenticated_client.post(url, {
-            'interviewer_name': 'bad@name',
-            'interviewer_position': 'Lead',
-            'interviewer_department': '',
-        })
+        resp = authenticated_client.post(url, {'evaluator': '999999'})
         assert resp.status_code == 200
         assert interview.evaluations.count() == before
         assert b'dj-messages' in resp.content
-        assert b'invalid characters' in resp.content.lower()
         assert b'ring-red-400/50' not in resp.content
 
     def test_delete_soft_deletes(self, authenticated_client, interview):

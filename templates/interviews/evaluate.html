@@ -55,7 +55,7 @@
                     <span class="rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">{{ ev.interview.get_phase_display }}</span>
                 </div>
                 <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                    {{ ev.interview.resume.job.title }} &middot; {{ ev.interview.scheduled_date|date:"F j, Y" }}
+                    {{ ev.interview.resume.job.title }} &middot; {{ ev.interview.scheduled_date|date:"F j, Y" }}{% if ev.interview.starts_at %}, {{ ev.interview.starts_at|date:"g:i A" }}{% endif %}
                 </p>
                 <p class="mt-0.5 text-xs text-zinc-400">
                     Evaluator: <span class="font-semibold text-zinc-600 dark:text-zinc-300">{{ ev.interviewer_name }}</span>

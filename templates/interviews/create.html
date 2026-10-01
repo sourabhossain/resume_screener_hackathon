@@ -1,41 +1,161 @@
 {% extends 'base.html' %}
 {% block title %}Schedule Interview - {{ resume.candidate_name|title }}{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-xl">
+{{ panels|json_script:"iv-panels" }}
+<div class="mx-auto max-w-3xl"
+     x-data="{
+        mode: '{{ form.mode.value|default:'in_person'|escapejs }}',
+        q: '',
+        chosen: {{ chosen|default:'[]' }},
+        panels: JSON.parse(document.getElementById('iv-panels').textContent),
+        has(id) { return this.chosen.includes(id); },
+        toggle(id) { this.chosen = this.has(id) ? this.chosen.filter(x => x !== id) : [...this.chosen, id]; },
+        use(ids) { this.chosen = [...ids]; },
+        shows(text) { return !this.q.trim() || text.toLowerCase().includes(this.q.trim().toLowerCase()); }
+     }">
     <nav class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
-        <a href="{% url 'core:resume_detail' resume.uuid %}" class="hover:text-primary-600 transition">{{ resume.candidate_name|title }}</a>
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        <span class="text-zinc-900 dark:text-white font-medium">Schedule Interview</span>
+        <a href="{% url 'core:resume_detail' resume.uuid %}" class="transition hover:text-primary-600">{{ resume.candidate_name|title }}</a>
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="font-medium text-zinc-900 dark:text-white">Schedule Interview</span>
     </nav>
 
-    <div class="rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 class="text-xl font-bold text-zinc-900 dark:text-white">Schedule Interview</h1>
-        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">For <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ resume.candidate_name|title }}</span> - {{ resume.job.title }}</p>
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Schedule Interview</h1>
+        <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">For <span class="font-semibold text-zinc-700 dark:text-zinc-300">{{ resume.candidate_name|title }}</span> &middot; {{ resume.job.title }}</p>
+    </div>
 
-        <form method="post" hx-boost="false" class="mt-6 space-y-5">
-            {% csrf_token %}
-            <div class="grid gap-5 sm:grid-cols-2">
+    <form method="post" hx-boost="false" class="space-y-5">
+        {% csrf_token %}
+
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 class="text-sm font-bold text-zinc-900 dark:text-white">When</h2>
+            <div class="mt-4 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Interview Phase</label>
+                    <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Round</label>
                     {% include 'core/partials/choice_field.html' with field=form.phase preset='interview_phase' %}
                 </div>
                 <div>
-                    <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Scheduled Date</label>
+                    <label for="{{ form.duration_minutes.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Duration</label>
+                    {% include 'core/partials/choice_field.html' with field=form.duration_minutes %}
+                </div>
+                <div>
+                    <label for="{{ form.scheduled_date.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Date <span class="text-rose-500">*</span></label>
                     {{ form.scheduled_date }}
+                    {% for e in form.scheduled_date.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+                </div>
+                <div>
+                    <label for="{{ form.scheduled_time.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Time <span class="text-rose-500">*</span> <span class="font-normal text-zinc-400">(Bangladesh time)</span></label>
+                    {{ form.scheduled_time }}
+                    {% for e in form.scheduled_time.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
                 </div>
             </div>
-            <div>
-                <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Notes <span class="font-normal text-zinc-400">(optional)</span></label>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 class="text-sm font-bold text-zinc-900 dark:text-white">Where</h2>
+            <div class="mt-4 inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800" role="radiogroup" aria-label="Interview format">
+                {% for value, label in form.fields.mode.choices %}
+                <label class="cursor-pointer">
+                    <input type="radio" name="mode" value="{{ value }}" class="sr-only" x-model="mode"{% if form.mode.value == value or not form.mode.value and value == 'in_person' %} checked{% endif %}>
+                    <span class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition"
+                          :class="mode === '{{ value }}' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'">
+                        {% if value == 'online' %}
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        {% else %}
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                        {% endif %}
+                        {{ label }}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="mt-4">
+                <label for="{{ form.location.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                    <span x-text="mode === 'online' ? 'Meeting link' : 'Room or address'">Room or address</span> <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="location" id="{{ form.location.id_for_label }}" value="{{ form.location.value|default:'' }}" maxlength="500"
+                       :placeholder="mode === 'online' ? 'https://meet.google.com/… or Teams / Zoom link' : 'e.g. Conference Room 3, SSL Wireless, Gulshan 1'"
+                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                {% for e in form.location.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-sm font-bold text-zinc-900 dark:text-white">Panel <span class="text-rose-500">*</span></h2>
+                    <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Each evaluator is emailed their own evaluation link and a calendar invitation.</p>
+                </div>
+                <span class="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" x-text="chosen.length + ' selected'"></span>
+            </div>
+
+            {% if panels %}
+            <div class="mt-4 flex flex-wrap gap-2">
+                <template x-for="panel in panels" :key="panel.label">
+                    <button type="button" @click="use(panel.ids)"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span x-text="panel.label"></span>
+                    </button>
+                </template>
+            </div>
+            {% endif %}
+
+            {% if staff %}
+            <div class="relative mt-4">
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="search" x-model="q" placeholder="Search staff by name or email" aria-label="Search staff"
+                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+            </div>
+            <div class="mt-3 max-h-72 divide-y divide-zinc-100 overflow-y-auto rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">
+                {% for person in staff %}
+                <label class="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                       x-show="shows('{{ person.name|escapejs }} {{ person.email|escapejs }}')"
+                       :class="has({{ person.id }}) && 'bg-primary-50/60 dark:bg-zinc-800/60'">
+                    <input type="checkbox" name="evaluators" value="{{ person.id }}" :checked="has({{ person.id }})" @change="toggle({{ person.id }})"
+                           class="h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600 dark:bg-zinc-900">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" aria-hidden="true">{{ person.name|slice:":1"|upper }}</span>
+                    <span class="min-w-0">
+                        <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ person.name }}</span>
+                        <span class="block truncate text-xs text-zinc-500 dark:text-zinc-400">{{ person.email }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">No staff account has an email address yet. Add emails on the Users page first.</p>
+            {% endif %}
+            {% for e in form.evaluators.errors %}<p class="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-soft dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 class="text-sm font-bold text-zinc-900 dark:text-white">Candidate</h2>
+            {% if resume.email %}
+            <label class="mt-3 flex cursor-pointer items-start gap-3">
+                <input type="checkbox" name="notify_candidate" value="on"{% if form.notify_candidate.value %} checked{% endif %}
+                       class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600 dark:bg-zinc-900">
+                <span class="text-sm text-zinc-700 dark:text-zinc-300">
+                    Email the interview time and place to <span class="font-semibold">{{ resume.email }}</span>
+                    <span class="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">With a calendar invitation, and a reminder the day before. Internal notes are never included.</span>
+                </span>
+            </label>
+            {% else %}
+            <p class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">This candidate has no email address, so they cannot be emailed. Let them know another way.</p>
+            {% endif %}
+
+            <div class="mt-5">
+                <label for="{{ form.notes.id_for_label }}" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Internal notes <span class="font-normal text-zinc-400">(optional)</span></label>
                 {{ form.notes }}
             </div>
-            <div class="flex gap-3 pt-2">
-                <button type="submit" class="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                    Schedule
-                </button>
-                <a href="{% url 'core:resume_detail' resume.uuid %}" class="inline-flex items-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancel</a>
-            </div>
-        </form>
-    </div>
+        </section>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" class="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                Schedule &amp; send invitations
+            </button>
+            <a href="{% url 'core:resume_detail' resume.uuid %}" class="inline-flex items-center rounded-xl border border-zinc-200 px-6 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancel</a>
+        </div>
+    </form>
 </div>
 {% endblock %}

@@ -32,6 +32,9 @@ app.conf.task_routes = {
     'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'notifications'},
     'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'notifications'},
     'apps.core.tasks.send_rejection_email': {'queue': 'notifications'},
+    'apps.interviews.tasks.send_evaluator_invite': {'queue': 'notifications'},
+    'apps.interviews.tasks.send_candidate_invite': {'queue': 'notifications'},
+    'apps.interviews.tasks.send_interview_reminders': {'queue': 'notifications'},
 }
 app.conf.task_default_queue = 'screening'
 
@@ -56,6 +59,11 @@ app.conf.beat_schedule = {
     'release-stale-screenings': {
         'task': 'apps.core.tasks.release_stale_screenings',
         'schedule': crontab(minute='*/10'),
+    },
+    # 10:00 Dhaka: the day before each interview, its panel and candidate.
+    'interview-reminders-daily': {
+        'task': 'apps.interviews.tasks.send_interview_reminders',
+        'schedule': crontab(hour=10, minute=0),
     },
     'clear-expired-sessions-daily': {
         'task': 'apps.core.tasks.clear_expired_sessions',

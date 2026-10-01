@@ -1,0 +1,18 @@
+{% autoescape off %}Dear {{ evaluator_name }},
+
+{% if reminder %}A reminder that you are on the interview panel tomorrow.{% else %}You have been added to an interview panel.{% endif %}
+
+Candidate: {{ candidate_name }}
+Position:  {{ job_title }}
+Round:     {{ interview.get_phase_display }}
+When:      {% if starts_at %}{{ starts_at|date:"l, j F Y, g:i A" }} – {{ ends_at|date:"g:i A" }} (Bangladesh time){% else %}{{ interview.scheduled_date|date:"l, j F Y" }}{% endif %}
+Where:     {{ interview.get_mode_display }}{% if interview.location %} – {{ interview.location }}{% endif %}
+
+Please record your evaluation after the interview using your personal link:
+{{ evaluation_url }}
+
+This link is for you only; please do not forward it. A calendar invitation is attached.
+
+SSL Wireless HR
+{{ support_email }}
+{% endautoescape %}
