@@ -52,8 +52,17 @@ def test_a_cv_saved_as_a_picture_is_read_by_ocr(tmp_path):
     assert 'Python Developer' in text and 'Django' in text
 
 
+def _full_text_pdf():
+    doc = pymupdf.open()
+    page = doc.new_page()
+    lines = CV_LINES + [f'Project {n}: built and ran payment services with Django and Celery' for n in range(12)]
+    for i, line in enumerate(lines):
+        page.insert_text((50, 60 + 20 * i), line, fontsize=11)
+    return doc.tobytes()
+
+
 def test_a_normal_pdf_is_not_sent_through_ocr(tmp_path):
-    path = _write(tmp_path, _text_pdf())
+    path = _write(tmp_path, _full_text_pdf())
     with patch.object(DocumentExtractor, '_extract_pdf_ocr') as ocr:
         text = DocumentExtractor.extract(path)
     assert 'Jane Candidate' in text
@@ -106,3 +115,42 @@ def test_hr_can_still_upload_a_scanned_cv_for_ocr(authenticated_client, sample_j
 
     assert response.status_code == 302
     assert Resume.objects.filter(candidate_name='Scanned Candidate').exists()
+
+
+def _headings_over_a_pictured_body():
+    """A few real headings, the rest a picture: what some design tools export."""
+    body = pymupdf.open(stream=_text_pdf(), filetype='pdf')[0].get_pixmap(dpi=200).tobytes('png')
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_image(pymupdf.Rect(0, 150, page.rect.width, page.rect.height), stream=body)
+    page.insert_text((72, 60), 'CURRICULUM VITAE - CONTACT AND SKILLS', fontsize=14)
+    return doc.tobytes(deflate=True)
+
+
+def test_a_cv_with_only_its_headings_as_text_is_read_in_full(tmp_path):
+    path = _write(tmp_path, _headings_over_a_pictured_body())
+
+    text = DocumentExtractor.extract(path)
+
+    assert 'Python Developer' in text and 'Django' in text
+
+
+def test_running_out_of_time_during_ocr_stops_the_task(tmp_path):
+    from celery.exceptions import SoftTimeLimitExceeded
+    path = _write(tmp_path, _image_only_pdf())
+    with patch('pymupdf.Page.get_textpage_ocr', side_effect=SoftTimeLimitExceeded()):
+        with pytest.raises(SoftTimeLimitExceeded):
+            DocumentExtractor.extract(path)
+
+
+@pytest.mark.django_db
+def test_the_checked_file_is_stored_whole(client, sample_job):
+    data = _text_pdf()
+    _apply(client, sample_job, data)
+
+    stored = Resume.objects.get(email='jane@example.com').file
+    stored.open('rb')
+    try:
+        assert stored.read() == data
+    finally:
+        stored.close()

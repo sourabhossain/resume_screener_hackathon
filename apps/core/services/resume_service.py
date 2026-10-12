@@ -1,5 +1,7 @@
 import os
 import logging
+
+from celery.exceptions import SoftTimeLimitExceeded
 import re
 from typing import Dict, Any
 
@@ -68,6 +70,9 @@ class ResumeService:
         except DocumentExtractionError:
             raise
         except Exception as e:
+            from celery.exceptions import SoftTimeLimitExceeded
+            if isinstance(e, SoftTimeLimitExceeded):
+                raise
             raise DocumentExtractionError(str(e), file_path=resume.file.path)
 
     # Matches BD numbers (+8801x / 01x) and generic international numbers
@@ -245,6 +250,10 @@ class ResumeService:
                 'tier': resume.tier,
                 'recommendation': resume.recommendation
             }
+
+        except SoftTimeLimitExceeded:
+            # The task's own handler marks the row failed with a timeout reason.
+            raise
 
         except DocumentExtractionError as e:
             logger.error(f"Document extraction failed for resume {resume.id}: {e}")

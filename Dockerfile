@@ -28,6 +28,9 @@ RUN apt-get -o Acquire::Retries=5 update \
     && rm -rf /var/lib/apt/lists/* \
     && test -f /usr/share/tesseract-ocr/5/tessdata/eng.traineddata
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+# One thread per OCR run: the screening worker runs several tasks at once, and
+# Tesseract's own threading on top of that slows every one of them down.
+ENV OMP_THREAD_LIMIT=1
 
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt

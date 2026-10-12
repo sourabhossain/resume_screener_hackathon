@@ -80,6 +80,9 @@ class DocumentExtractor:
     # A scanned or "flattened" PDF has no text layer at all; a handful of
     # stray characters (a page number, a watermark) is not a CV either.
     MIN_READABLE_CHARS = 40
+    # Below this the text layer is only a few headings over a pictured body
+    # (some design-tool exports): OCR is tried and the longer reading kept.
+    SHORT_TEXT_CHARS = 400
     # OCR is slow (seconds a page): enough pages for any CV, and the screening
     # task's time limit is never at risk on a long scanned bundle.
     OCR_MAX_PAGES = 6
@@ -131,18 +134,20 @@ class DocumentExtractor:
         files and matches pypdf on plain PDFs, so it is the primary extractor;
         pypdf stays as a fallback if PyMuPDF is unavailable or errors.
         """
-        text = DocumentExtractor._extract_pdf_pymupdf(file_path)
-        if DocumentExtractor.is_readable(text):
+        cls = DocumentExtractor
+        text = cls._extract_pdf_pymupdf(file_path)
+        if not cls.is_readable(text):
+            text = cls._extract_pdf_pypdf(file_path) or text
+        if cls._chars(text) >= cls.SHORT_TEXT_CHARS:
             return text
-        fallback = DocumentExtractor._extract_pdf_pypdf(file_path)
-        if DocumentExtractor.is_readable(fallback):
-            return fallback
-        # No text layer: a scanned CV or one exported as a picture. Read the
-        # page images instead.
-        ocr = DocumentExtractor._extract_pdf_ocr(file_path)
-        if DocumentExtractor.is_readable(ocr):
-            return ocr
-        return text or fallback
+        # No text layer, or only a few headings: a scanned CV or one exported
+        # as a picture. Read the page images and keep whichever says more.
+        ocr = cls._extract_pdf_ocr(file_path)
+        return ocr if cls._chars(ocr) > cls._chars(text) else text
+
+    @staticmethod
+    def _chars(text: str) -> int:
+        return len(re.sub(r'\s+', '', text or ''))
 
     @classmethod
     def _extract_pdf_ocr(cls, file_path: str) -> str:
@@ -163,11 +168,13 @@ class DocumentExtractor:
                     textpage = page.get_textpage_ocr(language=language, dpi=cls.OCR_DPI, full=True)
                     parts.append(page.get_text(textpage=textpage))
             text = '\n'.join(parts)
-            logger.info('document.ocr_used file=%s pages=%s chars=%s',
-                        os.path.basename(file_path), len(parts), len(text.strip()))
+            logger.info('document.ocr_used pages=%s chars=%s', len(parts), len(text.strip()))
             return text
         except Exception as exc:
-            logger.warning('document.ocr_failed file=%s (%s)', os.path.basename(file_path), exc)
+            from celery.exceptions import SoftTimeLimitExceeded
+            if isinstance(exc, SoftTimeLimitExceeded):
+                raise
+            logger.warning('document.ocr_failed (%s)', exc)
             return ''
 
     @staticmethod
