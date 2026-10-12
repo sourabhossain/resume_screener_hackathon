@@ -57,9 +57,9 @@ class ResumeService:
             text = DocumentExtractor.extract(resume.file.path)
             if not text or not text.strip():
                 raise DocumentExtractionError(
-                    "No text could be extracted from the file. "
-                    "It may be a scanned image or an empty document. "
-                    "Please upload a text-based PDF or DOCX.",
+                    "No text could be read from the file, even with OCR. "
+                    "It may be a blank page, a very low-quality scan, or a picture "
+                    "without readable writing. Please upload a text-based PDF or DOCX.",
                     file_path=resume.file.path
                 )
             resume.raw_text = text

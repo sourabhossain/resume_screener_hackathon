@@ -2,6 +2,8 @@
 Document text extraction from PDF and DOCX files.
 """
 import logging
+import os
+import re
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -75,6 +77,50 @@ class DocumentExtractor:
 
         return text
     
+    # A scanned or "flattened" PDF has no text layer at all; a handful of
+    # stray characters (a page number, a watermark) is not a CV either.
+    MIN_READABLE_CHARS = 40
+    # OCR is slow (seconds a page): enough pages for any CV, and the screening
+    # task's time limit is never at risk on a long scanned bundle.
+    OCR_MAX_PAGES = 6
+    OCR_DPI = 220
+
+    @classmethod
+    def is_readable(cls, text: str) -> bool:
+        return len(re.sub(r'\s+', '', text or '')) >= cls.MIN_READABLE_CHARS
+
+    @classmethod
+    def has_text_layer(cls, upload, extension: str) -> bool:
+        """Whether an uploaded file carries real text, checked without OCR.
+
+        Used on the public application form, so a candidate who uploads a
+        scanned image hears it at once and can send a proper file. Any parser
+        error answers True: the form must not turn a candidate away over a
+        file this check could not open; screening will deal with it.
+        """
+        try:
+            upload.seek(0)
+            data = upload.read()
+            upload.seek(0)
+            if extension == 'pdf':
+                import pymupdf
+                with pymupdf.open(stream=data, filetype='pdf') as doc:
+                    text = ''.join(doc[i].get_text() for i in range(min(len(doc), 4)))
+                if not cls.is_readable(text):
+                    import io
+                    reader = PdfReader(io.BytesIO(data))
+                    text = ''.join((page.extract_text() or '') for page in reader.pages[:4])
+                return cls.is_readable(text)
+            if extension == 'docx':
+                import io
+                document = docx.Document(io.BytesIO(data))
+                text = ''.join(p.text for p in document.paragraphs)
+                text += ''.join(cell.text for table in document.tables for row in table.rows for cell in row.cells)
+                return cls.is_readable(text)
+        except Exception as exc:
+            logger.warning('document.text_check_failed extension=%s (%s)', extension, exc)
+        return True
+
     @staticmethod
     def _extract_from_pdf(file_path: str) -> str:
         """Extract text from PDF, preferring PyMuPDF.
@@ -86,9 +132,43 @@ class DocumentExtractor:
         pypdf stays as a fallback if PyMuPDF is unavailable or errors.
         """
         text = DocumentExtractor._extract_pdf_pymupdf(file_path)
-        if text and text.strip():
+        if DocumentExtractor.is_readable(text):
             return text
-        return DocumentExtractor._extract_pdf_pypdf(file_path)
+        fallback = DocumentExtractor._extract_pdf_pypdf(file_path)
+        if DocumentExtractor.is_readable(fallback):
+            return fallback
+        # No text layer: a scanned CV or one exported as a picture. Read the
+        # page images instead.
+        ocr = DocumentExtractor._extract_pdf_ocr(file_path)
+        if DocumentExtractor.is_readable(ocr):
+            return ocr
+        return text or fallback
+
+    @classmethod
+    def _extract_pdf_ocr(cls, file_path: str) -> str:
+        """Text from the page images via Tesseract (PyMuPDF's built-in OCR).
+
+        Returns '' when Tesseract is not installed or fails, so the caller
+        reports an unreadable file rather than crashing the screening task.
+        """
+        try:
+            import pymupdf
+        except ImportError:
+            return ''
+        language = os.environ.get('OCR_LANGUAGES', 'eng')
+        try:
+            parts = []
+            with pymupdf.open(file_path) as doc:
+                for page in list(doc)[:cls.OCR_MAX_PAGES]:
+                    textpage = page.get_textpage_ocr(language=language, dpi=cls.OCR_DPI, full=True)
+                    parts.append(page.get_text(textpage=textpage))
+            text = '\n'.join(parts)
+            logger.info('document.ocr_used file=%s pages=%s chars=%s',
+                        os.path.basename(file_path), len(parts), len(text.strip()))
+            return text
+        except Exception as exc:
+            logger.warning('document.ocr_failed file=%s (%s)', os.path.basename(file_path), exc)
+            return ''
 
     @staticmethod
     def _extract_pdf_pymupdf(file_path: str) -> str:

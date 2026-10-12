@@ -11,14 +11,23 @@ COPY templates ./templates
 RUN npx tailwindcss -i ./static/src/input.css -o ./static/css/app.css --minify
 
 # ── Stage 2: Python application (web, screening, beat) ───────────────────
-# No apt/playwright browser install — avoids Debian mirror timeouts during
-# build. Playwright is only used by the verification worker (see target below).
+# No playwright browser install here: it is only used by the verification
+# worker (see target below).
 FROM python:3.11-slim AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
+
+# Tesseract reads CVs that arrive as scanned images or as pictures (PyMuPDF's
+# built-in OCR calls it). Retried, because the Debian mirrors time out now and
+# then; the check fails the build if the English model did not arrive.
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/* \
+    && test -f /usr/share/tesseract-ocr/5/tessdata/eng.traineddata
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt

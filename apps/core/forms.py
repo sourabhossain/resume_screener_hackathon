@@ -212,8 +212,9 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
             'file': 'Resume File',
         }
 
-    def __init__(self, *args, require_contact=False, **kwargs):
+    def __init__(self, *args, require_contact=False, require_readable=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.require_readable = require_readable
         self.fields['email'].required = False
         self.fields['phone'].required = False
         # The model field is blank=True for flexibility, but a submitted
@@ -225,9 +226,21 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
             self.fields['email'].required = True
             self.fields['phone'].required = True
 
+    UNREADABLE_MESSAGE = (
+        'We could not read any text in this file. It looks like a scanned image or a picture '
+        'of your CV. Please upload it as a text-based PDF (for example "Save as PDF" from Word '
+        'or Google Docs, or "PDF Standard" from Canva) or as a Word (.docx) file.'
+    )
+
     def clean_file(self):
-        """Validate uploaded file using mixin."""
-        return self.validate_resume_file(self.cleaned_data.get('file'))
+        """Validate uploaded file using mixin; on the public form, insist on readable text."""
+        upload = self.validate_resume_file(self.cleaned_data.get('file'))
+        if upload and self.require_readable:
+            from apps.core.services.document_extractor import DocumentExtractor
+            extension = os.path.splitext(upload.name)[1].lstrip('.').lower()
+            if not DocumentExtractor.has_text_layer(upload, extension):
+                raise forms.ValidationError(self.UNREADABLE_MESSAGE)
+        return upload
 
     def clean_candidate_name(self):
         return clean_person_text(self.cleaned_data.get('candidate_name'), required=True)

@@ -950,7 +950,7 @@ def careers_apply(request, slug):
 
     if request.method == 'POST':
         # require_contact: applicants must give an email so recruiters can reply.
-        form = ResumeForm(request.POST, request.FILES, require_contact=True)
+        form = ResumeForm(request.POST, request.FILES, require_contact=True, require_readable=True)
         if form.is_valid():
             email = form.cleaned_data.get('email', '').strip().lower()
             # Strip all spaces, dashes, and parentheses so "+880 1711-123456" == "+8801711123456".
