@@ -392,7 +392,6 @@ def test_without_the_code_the_closed_pages_do_not_name_the_candidate(client, bot
 
 @pytest.mark.django_db
 def test_the_second_part_running_first_is_not_called_the_last(client, both):
-    from django.utils import timezone
     _enter(client, both)
     _part(both, SEI).start_clock()
 

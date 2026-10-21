@@ -135,7 +135,7 @@ class MatchingResult(BaseModel):
 
 class DetectorResult(BaseModel):
     """Contract for the job-type detector prompt. Label validity against the
-    family catalog is enforced by the caller (detect_job_type)."""
+    family catalog is enforced by the caller (detect_job_type_with_reason)."""
     model_config = ConfigDict(extra="ignore")
 
     job_type: str = "uncertain"

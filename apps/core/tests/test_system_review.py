@@ -298,8 +298,8 @@ def test_the_interview_link_to_copy_uses_the_public_address(authenticated_client
     from apps.interviews.models import Interview, InterviewEvaluation
     resume = Resume.objects.create(job=sample_job, candidate_name='Panel Case')
     interview = Interview.objects.create(resume=resume, scheduled_date=timezone.localdate())
-    ev = InterviewEvaluation.objects.create(interview=interview, interviewer_name='P',
-                                            token_expires_at=timezone.now() + timedelta(days=3))
+    InterviewEvaluation.objects.create(interview=interview, interviewer_name='P',
+                                       token_expires_at=timezone.now() + timedelta(days=3))
 
     with override_settings(SITE_BASE_URL='https://careers.example.com'):
         html = authenticated_client.get(reverse('interviews:detail', kwargs={'pk': interview.pk})).content.decode()

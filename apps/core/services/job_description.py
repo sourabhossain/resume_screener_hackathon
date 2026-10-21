@@ -145,7 +145,7 @@ def generate(title: str, brief: str = '', archetype: str = '') -> tuple:
 
     try:
         text = llm_client.invoke_text(
-            _build_prompt(title, brief), build_system_prompt(archetype))
+            _build_prompt(title, brief), build_system_prompt(archetype), use_cache=False)
     except RuntimeError as exc:
         # No API key configured -- a deployment problem, not the recruiter's.
         logger.exception('job_description.unavailable title=%r', title)

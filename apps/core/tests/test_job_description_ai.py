@@ -42,6 +42,21 @@ def test_the_recruiters_notes_reach_the_prompt():
     assert 'Must know Django and payments.' in prompt
 
 
+def test_try_again_reaches_the_model_instead_of_the_cache():
+    # A too-short draft is an error the recruiter retries with the same box
+    # content; a cached reply would return the same stub for an hour.
+    with patch.object(jd.llm_client, 'invoke_text', return_value=_plausible_draft()) as call:
+        jd.generate('Backend Engineer')
+    assert call.call_args.kwargs['use_cache'] is False
+
+    from unittest.mock import MagicMock
+    model = MagicMock()
+    model.invoke.side_effect = [MagicMock(content='too short'), MagicMock(content='second reply')]
+    with patch.object(jd.llm_client, '_llm', model):
+        assert jd.llm_client.invoke_text('p', 's', use_cache=False) == 'too short'
+        assert jd.llm_client.invoke_text('p', 's', use_cache=False) == 'second reply'
+
+
 def test_the_chosen_shape_is_what_the_model_is_asked_for():
     with patch.object(jd.llm_client, 'invoke_text',
                       return_value=_plausible_draft()) as call:

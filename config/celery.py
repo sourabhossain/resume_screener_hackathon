@@ -10,12 +10,12 @@ app = Celery('config')
 # the configuration object to child processes.
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Route the two kinds of work to separate queues so they can scale
-# independently (see docker-compose):
-#   - 'screening'    : LLM calls, I/O-bound (waiting on OpenAI). Run with a
-#                      high-concurrency thread pool — many CVs in parallel.
-#   - 'verification' : Playwright/Chromium, CPU+RAM-heavy. Run with low
-#                      concurrency so many headless browsers don't OOM the box.
+# Three queues, each with its own worker so they scale independently (see
+# docker-compose):
+#   - 'screening'     : LLM calls, I/O-bound, high concurrency.
+#   - 'verification'  : Playwright/Chromium link checks, CPU+RAM-heavy, low
+#                       concurrency so headless browsers don't exhaust memory.
+#   - 'notifications' : emails and the scheduled sweeps.
 app.conf.task_routes = {
     'apps.core.tasks.screen_resume_task': {'queue': 'screening'},
     'apps.core.tasks.batch_screen_resumes': {'queue': 'screening'},
@@ -24,8 +24,6 @@ app.conf.task_routes = {
     'apps.core.tasks.release_stale_screenings': {'queue': 'notifications'},
     'apps.core.tasks.clear_expired_sessions': {'queue': 'notifications'},
     'apps.core.tasks.draft_job_description_task': {'queue': 'screening'},
-    # Invitation emails and the scheduled sweeps: short and I/O-bound, on their
-    # own queue and worker so a batch of LLM screening calls never delays them.
     'apps.employee_form.tasks.send_employee_form_invite': {'queue': 'notifications'},
     'apps.reference_checks.tasks.send_reference_check_request': {'queue': 'notifications'},
     'apps.sei_assessment.tasks.send_assessment_invite': {'queue': 'notifications'},

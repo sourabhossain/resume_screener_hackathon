@@ -4,7 +4,6 @@ from unittest import mock
 
 import pytest
 from django.core import mail
-from django.core.cache import cache
 from django.utils import timezone
 
 from apps.core.models import Resume

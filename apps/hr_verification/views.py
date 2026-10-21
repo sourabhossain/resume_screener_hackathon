@@ -24,12 +24,8 @@ from .prefill import pending_prefill
 
 logger = logging.getLogger(__name__)
 
-# The point in the pipeline from which a background check makes sense. The
-# Offer & Joining Clearance section covers events that happen after
-# interviewing, so the gate has to stay open past it -- otherwise moving a
-# candidate to "Offer Extended" would lock HR out of the section that records
-# the offer.
-# From Selected on (see apps.core.status).
+# A background check opens at Selected and stays open through onboarding: the
+# Offer & Joining Clearance section records events after the offer.
 from apps.core.status import POST_SELECTION as STATUSES_ALLOWING_START  # noqa: E402
 
 
@@ -93,7 +89,7 @@ def _require_record(resume):
 @_hr_admin_required
 @require_POST
 def start(request, uuid):
-    """Open a verification record for a candidate who has reached interviewing."""
+    """Open a verification record for a candidate who has reached Selected."""
     resume = _get_resume(uuid)
 
     existing = _existing(resume)

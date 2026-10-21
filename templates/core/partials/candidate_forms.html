@@ -1,18 +1,3 @@
-{% comment %}
-The three form cards, re-rendered in place when the recruiter status changes --
-Selected sends the information form and opens the HR instruments, so the
-cards go stale the moment the status control is swapped.
-
-hx-target and hx-select are set explicitly, not left to inherit: <body> carries
-hx-boost with hx-target="#main-content" and hx-select="#main-content", and
-inheriting those would swap this fragment over the entire page.
-
-hx-disinherit stops those same two travelling the other way. htmx attributes are
-inherited by descendants, and this block is full of boosted links ("View
-responses", "View record", "Continue"). Without it they pick up target="this" /
-select="unset" and paste a whole page -- nav, footer and all -- inside this card
-instead of navigating.
-{% endcomment %}
 <div id="candidate-forms"
      hx-get="{% url 'core:resume_forms' uuid=resume.uuid %}"
      hx-trigger="recruiter-status-changed from:body"

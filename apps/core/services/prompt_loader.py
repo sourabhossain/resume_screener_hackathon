@@ -28,7 +28,7 @@ ROLES_DIR = PROMPTS_DIR / 'roles'
 DEFAULT_ROLE = FALLBACK_ROLE
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=64)
 def _read_text(path: str) -> str:
     p = Path(path)
     if not p.exists():
@@ -44,7 +44,7 @@ def _fragment_path(role: str) -> Path:
     return ROLES_DIR / f"{DEFAULT_ROLE}.fragment.txt"
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=64)
 def parse_fragment(role: str) -> Dict[str, str]:
     """Parse a role fragment into {SECTION_NAME: text}. Falls back to default role."""
     text = _read_text(str(_fragment_path(role)))

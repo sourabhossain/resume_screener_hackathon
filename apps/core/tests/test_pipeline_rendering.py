@@ -18,7 +18,7 @@ import pytest
 from django.template.loader import render_to_string
 from django.urls import reverse
 
-from apps.core.models import Job, Resume
+from apps.core.models import Resume
 
 
 @pytest.fixture

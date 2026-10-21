@@ -70,7 +70,6 @@ class ResumeService:
         except DocumentExtractionError:
             raise
         except Exception as e:
-            from celery.exceptions import SoftTimeLimitExceeded
             if isinstance(e, SoftTimeLimitExceeded):
                 raise
             raise DocumentExtractionError(str(e), file_path=resume.file.path)

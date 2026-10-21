@@ -98,14 +98,6 @@ def markdown(value):
     return mark_safe(html)
 
 
-_MD_SYNTAX_RE = re.compile(
-    r'^#{1,6}\s+'          # ATX headings
-    r'|^[\s>*+\-]+'        # leading bullets / blockquotes (line start)
-    r'|[*_`~]+'            # emphasis / code / strike markers
-    r'|\[(.*?)\]\(.*?\)',  # links → keep label only (handled below)
-)
-
-
 @register.filter
 def plaintext(value):
     """Strip markdown/markup so previews don't leak raw syntax (## , **, etc.)."""

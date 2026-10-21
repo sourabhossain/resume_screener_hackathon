@@ -7,12 +7,11 @@ import re
 import pytest
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client
 from django.urls import reverse
 
-from apps.core.models import Job, Resume
+from apps.core.models import Resume
 from apps.employee_form import schema
-from apps.employee_form.models import EmployeeForm, EmployeeFormFile
+from apps.employee_form.models import EmployeeForm
 from apps.employee_form.services import issue_invite
 
 PDF = b'%PDF-1.4 test'
@@ -231,17 +230,18 @@ def test_otp_attempts_are_per_form_not_per_ip(client, candidate, other_candidate
 
 
 # ── The From address must match the authenticated mailbox ────────────────
-def test_from_address_defaults_to_the_authenticated_mailbox(settings):
-    """Microsoft 365 rejects a mismatched From with 554 SendAsDenied.
-
-    Regression guard: a no-reply@ default silently broke every invitation.
-    """
-    from importlib import reload
+def test_from_address_defaults_to_the_authenticated_mailbox(monkeypatch):
+    """Microsoft 365 rejects a From that differs from the login: 554 SendAsDenied."""
+    import importlib
     import config.settings.base as base
 
-    settings.EMAIL_HOST_USER = 'jobs@sslwireless.com'
-    settings.DEFAULT_FROM_EMAIL = f'SSL Wireless Careers <{settings.EMAIL_HOST_USER}>'
-    assert settings.EMAIL_HOST_USER in settings.DEFAULT_FROM_EMAIL
+    monkeypatch.setenv('EMAIL_HOST_USER', 'jobs@sslwireless.com')
+    monkeypatch.delenv('DEFAULT_FROM_EMAIL', raising=False)
+    try:
+        assert importlib.reload(base).DEFAULT_FROM_EMAIL == 'SSL Wireless Careers <jobs@sslwireless.com>'
+    finally:
+        monkeypatch.undo()
+        importlib.reload(base)
 
 
 def test_invitation_is_sent_from_the_configured_address(candidate, settings):

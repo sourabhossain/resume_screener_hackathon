@@ -60,8 +60,11 @@ def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     ip = _effective_ip(ip)
     if ip == ipaddress.ip_address('169.254.169.254'):
         return True
+    # not is_global also covers ranges is_private misses, such as the 100.64/10
+    # shared space (Alibaba Cloud's metadata service is 100.100.100.200).
     return bool(
-        ip.is_private
+        not ip.is_global
+        or ip.is_private
         or ip.is_loopback
         or ip.is_link_local
         or ip.is_reserved

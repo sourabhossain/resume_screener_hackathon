@@ -22,6 +22,13 @@ class TestLinkExtractor:
         urls = [l.url for l in links]
         assert not any('gmail.com' in u for u in urls)
 
+    def test_email_addresses_degrees_and_file_names_are_not_links(self):
+        from apps.core.services.link_extractor import LinkExtractor
+        text = ("Asha Rahman, asha.rahman@sslwireless.com. B.Sc in CSE, M.Com, B.Tech. "
+                "CV: asha_resume.pdf. Portfolio: asha.dev, https://www.behance.net/asha")
+        urls = [l.url for l in LinkExtractor.extract(text)]
+        assert urls == ['https://asha.dev', 'https://www.behance.net/asha']
+
     def test_deduplicates_same_url(self):
         from apps.core.services.link_extractor import LinkExtractor
         text = "github.com/sourab and also github.com/sourab again"

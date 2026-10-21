@@ -30,10 +30,8 @@
     <script>window.CSRF_TOKEN = '{{ csrf_token }}';</script>
     {% if request.method == 'POST' and request.FILES %}
     <script>
-        // This page answers a form POST that carried a file (a validation error).
-        // Make its history entry a plain GET, so a refresh or the phone restoring
-        // the tab never re-sends the form: once the file has changed on the device,
-        // Chrome refuses that re-send with ERR_UPLOAD_FILE_CHANGED.
+        // A refresh must not re-send the file: Chrome fails with
+        // ERR_UPLOAD_FILE_CHANGED once it has changed on the device.
         history.replaceState(history.state, '', location.href);
     </script>
     {% endif %}

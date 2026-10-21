@@ -1,5 +1,4 @@
 """Numbers and chart geometry for the recruiter dashboard."""
-import math
 from collections import Counter
 from datetime import datetime, time, timedelta
 

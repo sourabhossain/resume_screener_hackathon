@@ -180,7 +180,7 @@ LOGGING = {
     'handlers': {
         'file': {
             'level': 'INFO',
-            # One file per calendar day: logs/app_YYYY-MM-DD.log (uses TIME_ZONE, UTC in base settings).
+            # One file per calendar day in TIME_ZONE: logs/app_YYYY-MM-DD.log.
             '()': 'config.logging_handlers.DateNamedFileHandler',
             'logs_dir': LOGS_DIR,
             'prefix': 'app',
@@ -322,17 +322,12 @@ OPENAI_MODEL = 'gpt-5-nano-2025-08-07'
 AI_SCREENING_CONFIG = {
     'TOP_TIER_THRESHOLD': 80,
     'MID_TIER_THRESHOLD': 60,
-    # Extraction truncates the resume to this many chars BEFORE parsing. Real
-    # 2-3 page resumes run 8-11k chars, so a 4000 cap silently dropped the
-    # second half (experience/education/achievements) and starved the scorer,
-    # pushing long resumes to artificially low scores. gpt-5-nano handles the
-    # larger input cheaply, especially with extraction on reasoning_effort=minimal.
+    # The resume is cut to this many chars before extraction. Real 2-3 page
+    # resumes run 8-11k chars; a tighter cap drops the experience and education
+    # at the end and scores long resumes too low.
     'MAX_RESUME_CHARS': 16000,
-    # Same truncation trap as MAX_RESUME_CHARS, on the job side. The JD is cut to
-    # this length for BOTH job-type detection and candidate matching, so a long
-    # multi-domain JD (e.g. a Head-of-Data role spanning 7 areas) lost its tail
-    # requirements -> misrouted family and candidates scored against a partial
-    # spec. 8000 covers realistic JDs; cheap for gpt-5-nano.
+    # The job description is cut to this length for both job-type detection and
+    # matching, so it must hold a long multi-area JD's last requirements too.
     'MAX_JOB_DESC_CHARS': 8000,
     # Detector results below this confidence are flagged for manual review
     # rather than routed to a guessed family.
@@ -364,10 +359,9 @@ FAMILY_WEIGHTS = {
 
 
 # ── Email ────────────────────────────────────────────────────────────────
-# Used to send Employee Information Form invitations (link + one-time code) to
-# shortlisted candidates. All values come from the environment so no credential
-# is committed; dev.py overrides the backend with the console one, so nothing is
-# actually delivered locally until real SMTP details are supplied here.
+# Every candidate, referee and interviewer email. All values come from the
+# environment so no credential is committed. dev.py defaults to the console
+# backend: locally nothing is delivered unless EMAIL_BACKEND is set to SMTP.
 EMAIL_BACKEND = os.environ.get(
     'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend'
 )
@@ -381,7 +375,6 @@ EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 # Defaults to the authenticated mailbox: Microsoft 365 (which hosts
 # sslwireless.com mail) rejects a From address that differs from the account
 # that logged in — "554 5.2.252 SendAsDenied" — unless Send As has been granted.
-# A no-reply@ default silently broke every invitation for that reason.
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or (
     f'SSL Wireless Careers <{EMAIL_HOST_USER}>' if EMAIL_HOST_USER
     else 'SSL Wireless Careers <careers@localhost>'

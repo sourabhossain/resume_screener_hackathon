@@ -13,7 +13,7 @@ PDF's own wording makes it optional ("if applicable", "when available").
 The PDF's repeatable employer block (Q50/Q61 "Do you have another previous
 employer?") is capped at EMPLOYER_MAX employers.
 """
-from apps.core.form_logic import all_of, any_of, negate, when
+from apps.core.form_logic import all_of, negate, when
 
 # ── Question types ───────────────────────────────────────────────────────
 TEXT = 'text'

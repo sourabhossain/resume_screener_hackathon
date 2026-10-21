@@ -57,6 +57,8 @@ class LinkExtractor:
         seen_urls = set()
 
         for match in cls.URL_PATTERN.finditer(text):
+            if cls._is_not_a_link(text, match):
+                continue
             raw_url = match.group(0)
             url = cls._normalize_url(raw_url)
 
@@ -83,6 +85,21 @@ class LinkExtractor:
             ))
 
         return links[:10]  # max 10 links per CV
+
+    # A bare "word.word" is often no link at all: either half of an email address
+    # (asha.rahman@...), a degree (B.Sc, M.Com) or a file name. Crawling one fails
+    # and drags the candidate's verification score to 0.
+    FILE_SUFFIXES = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'js', 'py', 'html', 'csv', 'xlsx'}
+
+    @classmethod
+    def _is_not_a_link(cls, text: str, match) -> bool:
+        if '@' in (text[match.start() - 1:match.start()], text[match.end():match.end() + 1]):
+            return True
+        raw = match.group(0)
+        if re.match(r'(?:https?://|www\.)', raw, re.IGNORECASE) or '/' in raw:
+            return False
+        labels = raw.rstrip('.,)').split('.')
+        return len(labels[0]) < 2 or labels[-1].lower() in cls.FILE_SUFFIXES
 
     @classmethod
     def _normalize_url(cls, url: str) -> str:

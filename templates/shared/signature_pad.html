@@ -1,9 +1,3 @@
-{% comment %}
-Drives every [data-signature] block rendered by employee_form/partials/field.html.
-Included by each step template that can render a signature question -- kept here
-rather than copied per template, because a copy that goes missing renders a pad
-that accepts strokes and posts nothing.
-{% endcomment %}
 <script>
     // Signature pad. Only posted when something was actually drawn -- an
     // untouched pad would otherwise submit a blank image and satisfy a required

@@ -14,7 +14,7 @@ from django.urls import reverse
 
 from apps.core.models import Resume
 from apps.employee_form import schema
-from apps.employee_form.models import EmployeeForm, EmployeeFormFile
+from apps.employee_form.models import EmployeeForm
 from apps.employee_form.services import issue_invite
 
 PDF = b'%PDF-1.4 test'
@@ -1018,3 +1018,18 @@ def test_declining_consent_asks_for_confirmation_before_ending_the_form(verified
     assert not form.is_submitted
     assert form.answers.get('verification_consent') == 'no'
     assert 'Yes, end and submit my form' in response.content.decode()
+
+
+def test_resend_never_writes_back_a_stale_copy_of_the_form(candidate):
+    form = issue_invite(candidate)
+    stale = Resume.objects.get(pk=candidate.pk)
+    assert stale.employee_form.pk == form.pk
+    # The candidate submits after HR's page loaded the form, before Resend lands.
+    EmployeeForm.objects.filter(pk=form.pk).update(
+        answers={'personal_email': 'probe@example.com'}, is_submitted=True)
+
+    issue_invite(stale, resend=True)
+
+    form.refresh_from_db()
+    assert form.is_submitted
+    assert form.answers == {'personal_email': 'probe@example.com'}

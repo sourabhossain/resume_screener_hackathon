@@ -25,6 +25,14 @@ def test_blocks_metadata_ip_literal():
     assert ok is False
 
 
+@pytest.mark.parametrize('host', ['100.100.100.200', '100.64.0.1', '198.18.0.1'])
+def test_blocks_non_global_ranges_is_private_misses(host):
+    ok, _ = is_safe_public_http_url(f'http://{host}/')
+    assert ok is False
+    with pytest.raises(UnsafeHostError):
+        pinned_ip_for_host(host)
+
+
 def test_blocks_non_http_scheme():
     ok, _ = is_safe_public_http_url('file:///etc/passwd')
     assert ok is False

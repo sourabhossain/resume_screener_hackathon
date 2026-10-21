@@ -7,7 +7,7 @@ from django.contrib import messages
 # Bangla keyboards put zero-width (non-)joiners inside conjuncts, and names are
 # written "মো: রহিম", "Md. Rahim, Jr." or "Abu Sayeed (Rony)".
 _PERSON_TEXT_EXTRA = frozenset(" -.':,()\u200c\u200d")
-_LABEL_TEXT_EXTRA = frozenset(" -.'&,()/")
+_LABEL_TEXT_EXTRA = _PERSON_TEXT_EXTRA | frozenset("&/+#")
 _UNICODE_MARK_CATEGORIES = frozenset({'Mn', 'Mc', 'Me', 'Zs'})
 _PHONE_EXTRA = frozenset("+-() ")
 
@@ -89,7 +89,7 @@ def clean_person_text(value, *, required=False):
 
 
 def clean_label_text(value, *, required=False):
-    """Titles, departments, locations: person rules + common punctuation."""
+    """Titles, departments, locations: person rules plus & / + # ("C++ / C# Developer")."""
     return _validate_text(
         value,
         required=required,

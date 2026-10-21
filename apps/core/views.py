@@ -3,7 +3,6 @@ import logging
 import os
 import re
 import uuid
-from datetime import timedelta
 
 from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
@@ -12,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
-from django.db.models import Avg, Case, Count, IntegerField, Prefetch, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Prefetch, Q, Value, When
 from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.utils import timezone
@@ -201,13 +200,9 @@ def job_detail(request, slug):
     resumes = _ordered_active_resumes_queryset(job.resumes).prefetch_related('interviews__evaluations')
 
     # Every count on this page describes the whole pipeline, so all of them are
-    # taken before any filter narrows the rows below.
-    #
-    # Computing them after the search was a quiet bug: a term matching nobody
-    # made pipeline_stats.total zero, and the template hides the entire table
-    # behind that number -- so a job with eight applicants announced "No
-    # applicants yet", and the "No candidates match X" message the template
-    # already carries could never be reached.
+    # taken before any filter narrows the rows below: the template hides the
+    # table when pipeline_stats.total is zero, and a search matching nobody
+    # must say "No candidates match", not "No applicants yet".
     pipeline_stats = _pipeline_stats(resumes)
     seen_counts = resumes.order_by().aggregate(
         unseen=Count('id', filter=Q(seen_status='unseen')),
@@ -555,9 +550,12 @@ def resume_detail(request, uuid):
 def resume_forms(request, uuid):
     """The three form cards, re-rendered after a recruiter-status change.
 
-    Shortlisting sends the information form and Interviewing opens the two HR
-    instruments, so a status change alters these cards -- and swapping only the
-    status control left them stale until the recruiter reloaded the page.
+    A status change sends the information form and opens the HR instruments, so
+    the cards are fetched again on the `recruiter-status-changed` event.
+
+    The fragment's wrapper sets hx-target / hx-select itself and disinherits
+    them: <body> is hx-boosted onto #main-content, and inheriting either way
+    would paste a whole page into the card, or this card over the page.
     """
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
     return render(request, 'core/partials/candidate_forms.html',
@@ -600,9 +598,8 @@ def resume_edit(request, uuid):
                 instance.raw_text = ''
                 instance.screening_status = 'processing'
             if changed:
-                from django.utils import timezone as tz
                 instance.score_manually_edited = True
-                instance.score_edited_at = tz.now()
+                instance.score_edited_at = timezone.now()
                 instance.score_edited_by = request.user
                 # Keep tier + recommendation consistent with the (edited) final score,
                 # using the same thresholds the AI screener applies (rank_node).
@@ -720,12 +717,8 @@ def resume_row_fragment(request, uuid):
     # Recompute pipeline stats so the polling response can OOB-refresh the
     # "pending screening" badge as rows finish (otherwise it goes stale).
     pipeline_stats = _pipeline_stats(ordered)
-    # Recover this row's rank (its 1-based position in the same ordering the full
-    # table uses). The initial page render passes rank=forloop.counter; without
-    # recomputing it here, a polled row would lose its rank badge once screening
-    # completes and shows "—" until a full reload.
-    # A filtered table numbers its own rows, so the rank it drew is sent back
-    # and kept; recomputing over the whole job would make the badge jump.
+    # A polled row keeps its rank badge. A filtered table numbers its own rows
+    # and sends that rank back; otherwise it is recomputed over the whole job.
     shown = request.GET.get('rank', '')
     if shown.isdigit():
         rank = int(shown)
@@ -1138,8 +1131,11 @@ def resume_note_delete(request, uuid, note_id):
     from .models import ResumeNote
     note = get_object_or_404(ResumeNote, pk=note_id, resume=resume)
     if request.method == 'POST':
-        note.delete()
-        messages.success(request, 'Note deleted.')
+        if note.author_id != request.user.pk and not request.user.is_superuser:
+            messages.error(request, 'Only the author or a superuser can delete this note.')
+        else:
+            note.delete()
+            messages.success(request, 'Note deleted.')
     return redirect('core:resume_detail', uuid=uuid)
 
 
@@ -1190,8 +1186,6 @@ def resume_status_update(request, uuid):
         )
         # Announce the change so anything whose state depends on the status can
         # re-render itself -- the candidate page's form cards listen for this.
-        # Only the control itself was swapped, so without it the cards would sit
-        # stale until the recruiter reloaded.
         triggers = {'recruiter-status-changed': {'status': resume.recruiter_status}}
         if invite_note:
             # A fragment swap never includes #dj-messages, so a Django flash here
@@ -1345,7 +1339,6 @@ def screening_rescreen_bulk(request):
 @login_required
 def job_export_csv(request, slug):
     import csv
-    from django.http import StreamingHttpResponse
 
     job = get_object_or_404(Job, slug=slug)
     resumes = (
@@ -1422,6 +1415,8 @@ def download_resumes_zip(request, slug):
     job = get_object_or_404(Job, slug=slug)
 
     filter_type = request.GET.get('filter', 'all')
+    if filter_type not in ('all', 'shortlisted', 'interview', 'talent_pool', 'reject'):
+        filter_type = 'all'
     logger.info('media.zip_export user=%s job=%s filter=%s', request.user.pk, job.pk, filter_type)
 
     resumes = (

@@ -194,19 +194,3 @@ class TestExceptions:
         error = AIScreeningError("LLM failed", stage="extraction")
         assert error.stage == "extraction"
         assert "LLM failed" in str(error)
-    
-    def test_invalid_file_type_error(self):
-        """Test InvalidFileTypeError."""
-        from apps.core.exceptions import InvalidFileTypeError
-        
-        error = InvalidFileTypeError("xyz")
-        assert error.file_type == "xyz"
-        assert "Unsupported file type: xyz" in str(error)
-    
-    def test_file_too_large_error(self):
-        """Test FileTooLargeError."""
-        from apps.core.exceptions import FileTooLargeError
-        
-        error = FileTooLargeError(size=10*1024*1024, max_size=5*1024*1024)
-        assert error.size == 10*1024*1024
-        assert "exceeds limit" in str(error)

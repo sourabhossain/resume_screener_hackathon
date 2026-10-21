@@ -262,7 +262,6 @@ def score_node(state: ResumeScreeningState) -> ResumeScreeningState:
         return state
 
     try:
-        config = settings.AI_SCREENING_CONFIG
         job_type = state.get('job_type', FALLBACK_ROLE)
 
         total_skills = len(state['matched_skills']) + len(state['missing_skills'])

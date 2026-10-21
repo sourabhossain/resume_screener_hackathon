@@ -338,7 +338,7 @@ class TestResumeViews:
     
     def test_needs_review_list_shows_only_needs_review(self, authenticated_client, sample_job, sample_resume):
         from apps.core.models import Resume
-        nr = Resume.objects.create(job=sample_job, candidate_name="Uncertain Uma", screening_status="needs_review")
+        Resume.objects.create(job=sample_job, candidate_name="Uncertain Uma", screening_status="needs_review")
         resp = authenticated_client.get(reverse('core:needs_review'))
         assert resp.status_code == 200
         names = [r.candidate_name for r in resp.context['page_obj']]
@@ -751,3 +751,54 @@ class TestDownloadResumesZip:
         url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
         response = authenticated_client.get(url + '?filter=all')
         assert '_summary.txt' in self._zip_names(response)
+
+    def test_unknown_filter_is_all_and_never_reaches_the_filename(self, authenticated_client, job_with_resumes):
+        url = reverse('core:download_resumes_zip', kwargs={'slug': job_with_resumes.slug})
+        response = authenticated_client.get(url, {'filter': 'x"; evil'})
+        assert response.status_code == 200
+        assert 'evil' not in response['Content-Disposition']
+        assert len([n for n in self._zip_names(response) if n != '_summary.txt']) == 3
+
+
+@pytest.mark.django_db
+class TestResumeNoteDelete:
+    def _note(self, resume, author):
+        from apps.core.models import ResumeNote
+        return ResumeNote.objects.create(resume=resume, author=author, text='Strong systems design.')
+
+    def _delete(self, client, note):
+        url = reverse('core:resume_note_delete', kwargs={'uuid': note.resume.uuid, 'note_id': note.pk})
+        return client.post(url)
+
+    def test_another_recruiter_cannot_delete_it(self, client, sample_resume, user, django_user_model):
+        from apps.core.models import ResumeNote
+        note = self._note(sample_resume, user)
+        colleague = django_user_model.objects.create_user('colleague', password='pw-12345')
+        client.force_login(colleague)
+        self._delete(client, note)
+        assert ResumeNote.objects.filter(pk=note.pk).exists()
+
+    def test_author_can_delete_it(self, authenticated_client, sample_resume, user):
+        from apps.core.models import ResumeNote
+        note = self._note(sample_resume, user)
+        self._delete(authenticated_client, note)
+        assert not ResumeNote.objects.filter(pk=note.pk).exists()
+
+    def test_superuser_can_delete_it(self, client, sample_resume, user, django_user_model):
+        from apps.core.models import ResumeNote
+        note = self._note(sample_resume, user)
+        admin = django_user_model.objects.create_superuser('boss', password='pw-12345')
+        client.force_login(admin)
+        self._delete(client, note)
+        assert not ResumeNote.objects.filter(pk=note.pk).exists()
+
+
+@pytest.mark.django_db
+def test_admin_lists_soft_deleted_jobs_and_resumes(client, sample_resume, django_user_model):
+    sample_resume.soft_delete()
+    sample_resume.job.soft_delete()
+    client.force_login(django_user_model.objects.create_superuser('boss', password='pw-12345'))
+    jobs = client.get(reverse('admin:core_job_changelist'), {'is_deleted__exact': '1'})
+    resumes = client.get(reverse('admin:core_resume_changelist'), {'is_deleted__exact': '1'})
+    assert sample_resume.job.title in jobs.content.decode()
+    assert sample_resume.candidate_name in resumes.content.decode()

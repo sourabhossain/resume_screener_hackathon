@@ -3,7 +3,7 @@ import secrets
 import uuid
 from datetime import timedelta
 
-from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.hashers import make_password
 from django.db import models
 from django.utils import timezone
 

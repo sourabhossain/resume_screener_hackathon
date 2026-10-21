@@ -74,11 +74,6 @@ def send_invite(form, *, otp: str) -> None:
             form.pk, backend, recipient,
         )
 
-    logger.info(
-        'employee_form.invite_sent resume=%s form=%s attempt=%s',
-        form.resume_id, form.pk, form.invite_count + 1,
-    )
-
 
 def issue_invite(resume, *, user=None, resend=False):
     """Create (or refresh) the candidate's form and queue the invitation email.
@@ -122,7 +117,12 @@ def issue_invite(resume, *, user=None, resend=False):
         form.renew()
     if user is not None:
         form.invited_by = user
-    form.save()
+    if form.pk:
+        # Never the whole row: a stale copy would put back the answers, or undo
+        # a submission, the candidate made since `form` was loaded.
+        form.save(update_fields=['token_expires_at', 'invited_by', 'updated_at'])
+    else:
+        form.save()
 
     if not queue_task(send_employee_form_invite, form.pk):
         EmployeeForm.objects.filter(pk=form.pk).update(
@@ -147,3 +147,4 @@ def issue_otp_only(form) -> None:
         'otp_hash', 'otp_expires_at', 'otp_attempts', 'otp_verified_at', 'updated_at',
     ])
     send_invite(form, otp=otp)
+    logger.info('employee_form.code_resent form=%s', form.pk)

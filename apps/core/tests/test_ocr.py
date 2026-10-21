@@ -1,5 +1,4 @@
 """CVs that arrive as pictures: read by OCR, and caught on the public form."""
-import io
 from unittest.mock import patch
 
 import pymupdf

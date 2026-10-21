@@ -32,8 +32,8 @@ class JobAdmin(admin.ModelAdmin):
     )
     
     def get_queryset(self, request):
-        """Annotate resume count to avoid N+1 queries."""
-        return super().get_queryset(request).annotate(
+        """Deleted jobs included, so the is_deleted filter can find and restore them."""
+        return Job.all_objects.annotate(
             _resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
         )
     
@@ -54,7 +54,11 @@ class ResumeAdmin(admin.ModelAdmin):
     list_per_page = 25
     
     readonly_fields = ('created_at', 'updated_at')
-    
+
+    def get_queryset(self, request):
+        """Deleted resumes included, so the is_deleted filter can find and restore them."""
+        return Resume.all_objects.select_related('job')
+
     fieldsets = (
         ('Candidate Info', {
             'fields': ('candidate_name', 'job')

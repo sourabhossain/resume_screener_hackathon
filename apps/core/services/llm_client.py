@@ -30,11 +30,10 @@ class LLMClient:
 
     CACHE_TIMEOUT = 3600
 
-    # Per-call ceiling so a hung OpenAI request can't pin a screening worker
-    # forever. gpt-5-nano is a reasoning model and can take 30-50s on a large
-    # resume, so 30s was too tight and caused spurious timeout failures; 60s
-    # lets a slow-but-valid call finish. The Celery soft_time_limit (180s) covers
-    # the whole 3-4 call pipeline.
+    # Per-call ceiling so a hung OpenAI request can't pin a screening worker.
+    # gpt-5-nano is a reasoning model and can take 30-50s on a large resume.
+    # The screening task's soft_time_limit (180s) still bounds the whole
+    # pipeline, so a run whose calls all crawl fails as a timeout.
     REQUEST_TIMEOUT = 60  # seconds
     # We already retry transient errors ourselves via tenacity below; disable
     # the SDK's own retries so we don't get retries-on-retries (timeout blowup).
@@ -71,14 +70,10 @@ class LLMClient:
                 model_kwargs={"response_format": {"type": "json_object"}}
             )
 
-            # Extraction is a retrieval task (pull name/skills/dates out of the
-            # resume), not a judgment task, so it doesn't need the model's default
-            # reasoning budget. reasoning_effort='minimal' cuts the per-call latency
-            # that was making extraction blow past REQUEST_TIMEOUT. Scoring stays on
-            # the default client above so match/score quality is unchanged.
-            # Passed as a top-level kwarg (not model_kwargs): it's a declared field
-            # on ChatOpenAI, so nesting it in model_kwargs triggers a warning and is
-            # ambiguous.
+            # Extraction is a retrieval task, not a judgment task, so it runs with
+            # reasoning_effort='minimal' to keep it well inside REQUEST_TIMEOUT;
+            # scoring stays on the default client above. A top-level kwarg, not
+            # model_kwargs: it is a declared field on ChatOpenAI.
             self._llm_json_minimal = ChatOpenAI(
                 model=model,
                 temperature=0.0,
@@ -101,8 +96,8 @@ class LLMClient:
         retry=retry_if_exception_type(
             (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError, JSONDecodeError)
         ),
-        # 2 attempts (was 3): with a 60s per-call timeout, 3 retries could exceed
-        # the pipeline's Celery budget; 2 still covers a transient blip.
+        # Two attempts: enough for a transient blip without a 60s call
+        # eating the screening task's whole time budget.
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=4, max=30),
         reraise=True,
@@ -135,7 +130,6 @@ class LLMClient:
             logger.debug("LLM cache hit")
             return cached
 
-
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=prompt)
@@ -143,45 +137,35 @@ class LLMClient:
 
         response = llm.invoke(messages)
         result = json.loads(response.content)
-        
-
         cache.set(cache_key, result, self.CACHE_TIMEOUT)
-        
         return result
-    
+
     @_llm_retry
-    def invoke_text(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> str:
-        """
-        Invoke LLM and return text response.
-        Uses caching to avoid duplicate API calls.
-        
-        Args:
-            prompt: The user prompt
-            system_prompt: The system prompt
-            
-        Returns:
-            Text response
+    def invoke_text(self, prompt: str, system_prompt: str = "You are a helpful assistant.",
+                    use_cache: bool = True) -> str:
+        """Invoke the LLM and return its text.
+
+        `use_cache=False` is for callers whose "try again" must reach the model,
+        such as a job description draft that came back unusable.
         """
         if not self._llm:
             raise RuntimeError("LLM not initialized. Check OPENAI_API_KEY.")
-        
+
         cache_key = self._get_cache_key(f"text:{system_prompt}:{prompt}")
-        cached = cache.get(cache_key)
-        if cached:
-            logger.debug("LLM text cache hit")
-            return cached
-        
+        if use_cache:
+            cached = cache.get(cache_key)
+            if cached:
+                logger.debug("LLM text cache hit")
+                return cached
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=prompt)
         ]
-        
-        response = self._llm.invoke(messages)
-        result = response.content
-        
 
-        cache.set(cache_key, result, self.CACHE_TIMEOUT)
-        
+        result = self._llm.invoke(messages).content
+        if use_cache:
+            cache.set(cache_key, result, self.CACHE_TIMEOUT)
         return result
 
 

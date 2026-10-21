@@ -11,7 +11,7 @@ from django.core import mail
 from django.urls import reverse
 
 from apps.core.forms import JobForm
-from apps.core.models import Job, Resume
+from apps.core.models import Resume
 from apps.sei_assessment import instruments
 from apps.sei_assessment.models import SEIAssessment
 

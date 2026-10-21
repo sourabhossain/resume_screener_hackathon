@@ -79,15 +79,10 @@ class Job(SoftDeleteModel):
         ('hybrid', 'Hybrid'),
     ]
 
-    # The recruiter who created this job, recorded for attribution.
-    #
-    # NOT an access boundary in the web portal: the HTML views deliberately do
-    # not filter by owner, so any signed-in recruiter can open any job, any
-    # candidate, and the candidate's information-form documents. That is the
-    # intended behaviour here — everyone in the company shares one pipeline.
-    # The DRF API in api_views.py *does* enforce ownership on writes, so the two
-    # surfaces differ on purpose; don't "fix" one to match the other without
-    # deciding which rule is wanted.
+    # The recruiter who created this job, recorded for attribution. Not an
+    # access boundary: everyone in the company shares one pipeline, so any
+    # signed-in recruiter can open and edit any job and candidate. The API's
+    # job `restore` action is the one place that checks it.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -320,19 +315,11 @@ class Resume(SoftDeleteModel):
                          name='resume_job_seen_idx'),
         ]
         constraints = [
-            # Intended as a backstop against duplicate submissions: the same file
-            # can't be submitted twice for one job. Scoped to non-deleted rows with
-            # a real hash so re-uploads after a delete, and rows without a file,
-            # are unaffected.
-            #
-            # CAVEAT — this is NOT enforced on MySQL, our deployment database:
-            # conditional unique constraints are unsupported there, so `migrate`
-            # skips it with a models.W036 warning and no index is created. It only
-            # takes effect on backends that support partial indexes (e.g. Postgres).
-            # So on MySQL, duplicates are prevented *only* by the app-level
-            # .exists() checks in careers_apply, which leaves a real check-then-save
-            # race: two concurrent submissions of the same file can both pass the
-            # check and both insert. Don't rely on this constraint to close it.
+            # The same file cannot be submitted twice for one job. MySQL does not
+            # support conditional unique constraints, so `migrate` skips this one
+            # (models.W036) and duplicates there are stopped only by the
+            # .exists() checks before each save, which two concurrent identical
+            # submissions can both pass.
             models.UniqueConstraint(
                 fields=['job', 'file_hash'],
                 condition=Q(is_deleted=False) & ~Q(file_hash=''),

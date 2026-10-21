@@ -109,12 +109,10 @@ def test_single_file_dropzones_do_not_read_the_file_size(template):
     """Reading File.size when a file is picked pins its size and timestamp in Chrome
     at that moment. If the file changes before Submit -- a CV re-saved, a cloud copy
     refreshed -- the upload fails with ERR_UPLOAD_FILE_CHANGED. The server checks the size."""
-    import pathlib
     assert 'file.size' not in pathlib.Path('templates', template).read_text()
 
 
 def test_css_cache_buster_is_consistent_everywhere():
-    import pathlib
     versions = set()
     for p in pathlib.Path('templates').rglob('*.html'):
         versions |= set(re.findall(r"app\.css'\s*%\}\?v=(\d+)", p.read_text()))

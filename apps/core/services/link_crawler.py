@@ -42,6 +42,9 @@ def _pinned_async_client() -> httpx.AsyncClient:
 # Timeout for all requests
 REQUEST_TIMEOUT = 15  # seconds
 MAX_CONTENT_LENGTH = 50_000  # chars
+# A CV can link to anything, including a multi-gigabyte download: the body is
+# read up to this many bytes and the rest is never fetched into memory.
+MAX_BODY_BYTES = 512 * 1024
 MAX_REDIRECTS = 5
 
 
@@ -58,10 +61,7 @@ class CrawlResult:
 class LinkCrawler:
 
     HEADERS = {
-        'User-Agent': (
-            'Mozilla/5.0 (compatible; ResumeVerifier/1.0; '
-            '+https://your-domain.com/bot)'
-        )
+        'User-Agent': 'Mozilla/5.0 (compatible; ResumeVerifier/1.0)'
     }
 
     # Sites that need JS rendering
@@ -119,24 +119,31 @@ class LinkCrawler:
                     return CrawlResult(url=url, success=False, error=f'blocked: {reason}')
 
                 try:
-                    response = await client.get(current)
+                    async with client.stream('GET', current) as response:
+                        if response.is_redirect and response.headers.get('location'):
+                            nxt = response.next_request
+                            current = (str(nxt.url) if nxt is not None
+                                       else urljoin(current, response.headers['location']))
+                            continue
+                        body = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            body += chunk
+                            if len(body) >= MAX_BODY_BYTES:
+                                break
+                        text = bytes(body[:MAX_BODY_BYTES]).decode(
+                            response.encoding or 'utf-8', errors='replace')
+                        status_code = response.status_code
                 except UnsafeHostError as e:
                     logger.info('Blocked crawl hop (SSRF pin): %s — %s', current, e)
                     return CrawlResult(url=url, success=False, error=f'blocked: {e}')
 
-                if response.is_redirect and response.headers.get('location'):
-                    nxt = response.next_request
-                    current = str(nxt.url) if nxt is not None else urljoin(current, response.headers['location'])
-                    continue
-
-                content = response.text[:MAX_CONTENT_LENGTH]
-                title = cls._extract_title(content)
+                content = text[:MAX_CONTENT_LENGTH]
                 return CrawlResult(
                     url=url,
-                    success=response.status_code < 400,
+                    success=status_code < 400,
                     content=content,
-                    title=title,
-                    status_code=response.status_code
+                    title=cls._extract_title(content),
+                    status_code=status_code
                 )
 
             return CrawlResult(url=url, success=False, error='too many redirects')

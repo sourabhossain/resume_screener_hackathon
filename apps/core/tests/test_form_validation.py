@@ -3,7 +3,7 @@ import pytest
 from django import forms
 
 from apps.core.form_utils import clean_label_text, clean_person_text, clean_phone_text
-from apps.core.forms import JobForm, ResumeForm, ResumeEditForm
+from apps.core.forms import JobForm, ResumeForm
 from apps.interviews.forms import InterviewerAddForm
 
 
@@ -27,6 +27,10 @@ class TestCleanLabelText:
     def test_rejects_at_sign(self):
         with pytest.raises(forms.ValidationError):
             clean_label_text('bad@title', required=True)
+
+    @pytest.mark.parametrize('title', ['C++ Developer', 'C# / .NET Engineer', 'Engineer: Backend'])
+    def test_allows_programming_language_titles(self, title):
+        assert clean_label_text(title, required=True) == title
 
 
 class TestCleanPhoneText:
