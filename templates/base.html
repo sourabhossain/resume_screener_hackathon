@@ -28,6 +28,15 @@
             integrity="sha384-nLoOnA/BDh8A/jxqtckg4DumuCGOBYUnNJLZdQz/zfYNp3wcjGSoWTAzgko06G/2"
             crossorigin="anonymous"></script>
     <script>window.CSRF_TOKEN = '{{ csrf_token }}';</script>
+    {% if request.method == 'POST' and request.FILES %}
+    <script>
+        // This page answers a form POST that carried a file (a validation error).
+        // Make its history entry a plain GET, so a refresh or the phone restoring
+        // the tab never re-sends the form: once the file has changed on the device,
+        // Chrome refuses that re-send with ERR_UPLOAD_FILE_CHANGED.
+        history.replaceState(history.state, '', location.href);
+    </script>
+    {% endif %}
     <script>
         document.addEventListener('htmx:afterSettle', function (evt) {
             if (typeof Alpine !== 'undefined') {

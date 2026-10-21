@@ -1,11 +1,9 @@
 <div x-data="{
   dragCounter: 0,
   fileName: '',
-  fileSize: '',
   fileType: '',
   handleFile(file) {
     this.fileName = file.name;
-    this.fileSize = file.size > 1048576 ? (file.size / 1048576).toFixed(1) + ' MB' : Math.round(file.size / 1024) + ' KB';
     this.fileType = file.name.split('.').pop().toLowerCase();
     const dt = new DataTransfer();
     dt.items.add(file);
@@ -14,7 +12,6 @@
   clearFile() {
     this.dragCounter = 0;
     this.fileName = '';
-    this.fileSize = '';
     this.fileType = '';
     this.$refs.fileInput.value = '';
   }
@@ -54,7 +51,7 @@
         <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white"
                x-text="fileName.length > 40 ? fileName.slice(0, 37) + '…' : fileName"></p>
-            <p class="text-xs text-zinc-500 dark:text-zinc-400" x-text="fileSize"></p>
+            <p class="text-xs text-zinc-500 dark:text-zinc-400" x-text="fileType.toUpperCase() + ' file'"></p>
         </div>
         <svg class="h-5 w-5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>

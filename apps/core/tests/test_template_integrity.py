@@ -102,6 +102,17 @@ def test_error_pages_are_self_contained_for_styling(template):
     assert not re.search(r'<link[^>]+stylesheet[^>]+https://(?!fonts\.googleapis)', html)
 
 
+@pytest.mark.parametrize('template', [
+    'core/partials/file_dropzone.html', 'core/resume_form.html', 'core/resume_edit_form.html',
+])
+def test_single_file_dropzones_do_not_read_the_file_size(template):
+    """Reading File.size when a file is picked pins its size and timestamp in Chrome
+    at that moment. If the file changes before Submit -- a CV re-saved, a cloud copy
+    refreshed -- the upload fails with ERR_UPLOAD_FILE_CHANGED. The server checks the size."""
+    import pathlib
+    assert 'file.size' not in pathlib.Path('templates', template).read_text()
+
+
 def test_css_cache_buster_is_consistent_everywhere():
     import pathlib
     versions = set()

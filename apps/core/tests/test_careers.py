@@ -285,6 +285,31 @@ class TestCareersApplyContactValidation:
 
 
 @pytest.mark.django_db
+class TestCareersApplyResubmission:
+    """A form error re-renders the page as the answer to the POST. Refreshing it --
+    or a phone restoring the tab -- re-sent the form with the CV attached, and once
+    the CV had changed on the device Chrome showed ERR_UPLOAD_FILE_CHANGED instead
+    of the page. The error page rewrites its history entry into a plain GET."""
+
+    REWRITE = "history.replaceState(history.state, '', location.href)"
+
+    def test_error_page_after_an_upload_rewrites_history(self, client, sample_job):
+        resp = _post_apply(client, sample_job, extra={"email": ""})
+        assert resp.status_code == 200
+        assert self.REWRITE in resp.content.decode()
+
+    def test_error_page_without_an_upload_leaves_history_alone(self, client, sample_job):
+        url = reverse("core:careers_apply", kwargs={"slug": sample_job.slug})
+        resp = client.post(url, {"candidate_name": "Ali Hassan", "email": "ali@example.com"})
+        assert resp.status_code == 200
+        assert self.REWRITE not in resp.content.decode()
+
+    def test_form_page_leaves_history_alone(self, client, sample_job):
+        resp = client.get(reverse("core:careers_apply", kwargs={"slug": sample_job.slug}))
+        assert self.REWRITE not in resp.content.decode()
+
+
+@pytest.mark.django_db
 class TestCareersThanks:
     def test_thanks_page_renders(self, client, sample_job):
         resp = client.get(
