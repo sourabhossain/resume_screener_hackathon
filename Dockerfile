@@ -32,8 +32,10 @@ ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 # Tesseract's own threading on top of that slows every one of them down.
 ENV OMP_THREAD_LIMIT=1
 
-COPY requirements.txt /app/
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# requirements.lock pins every package to the versions the tests passed with,
+# so a build on another day cannot pull in an untested release.
+COPY requirements.txt requirements.lock /app/
+RUN pip install --upgrade pip && pip install -r requirements.txt -c requirements.lock
 
 COPY . /app/
 
@@ -51,8 +53,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt /app/
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY requirements.txt requirements.lock /app/
+RUN pip install --upgrade pip && pip install -r requirements.txt -c requirements.lock
 
 COPY . /app/
 

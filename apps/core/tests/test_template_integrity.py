@@ -61,6 +61,18 @@ def test_error_page_html_is_balanced(client, path, kind):
 
 
 @pytest.mark.django_db
+def test_pages_load_scripts_only_from_this_site(client, sample_job):
+    """htmx, Alpine and SweetAlert2 drive every form: a third-party CDN that is
+    slow or down would leave candidates with pages that cannot be submitted."""
+    html = client.get(reverse("core:careers_apply", kwargs={"slug": sample_job.slug})).content.decode()
+    sources = re.findall(r'<script[^>]+src="([^"]+)"', html)
+    assert sources and all(src.startswith("/static/") for src in sources), sources
+    script_src = next(d for d in CSP.split(";") if d.strip().startswith("script-src"))
+    assert "https://" not in script_src
+    for src in sources:
+        assert pathlib.Path("static", src.split("/static/", 1)[1].split("?")[0]).is_file(), src
+
+
 def test_no_unrendered_template_syntax_leaks_into_any_page(client, sample_job):
     """A stray {# #} or {% %} in the output means a template bug."""
     sample_job.status = "closed"

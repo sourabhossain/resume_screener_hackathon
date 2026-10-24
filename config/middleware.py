@@ -21,9 +21,9 @@ class RequestCorrelationMiddleware:
 class ContentSecurityPolicyMiddleware:
     """Emits a Content-Security-Policy header on every response.
 
-    Allows the CDNs already referenced in base.html (htmx via unpkg,
-    AlpineJS and SweetAlert2 via jsdelivr, Google Fonts) while blocking
-    inline frames and object embeds. 'unsafe-inline' is required because
+    Scripts come only from this site (htmx, AlpineJS and SweetAlert2 are
+    served from static/js/vendor); Google Fonts is the one outside origin.
+    Inline frames and object embeds are blocked. 'unsafe-inline' is required because
     AlpineJS (x-data/x-show) and inline <script> blocks in base.html
     cannot use nonces without template-level changes.
     """
@@ -34,7 +34,7 @@ class ContentSecurityPolicyMiddleware:
         # constructor internally to evaluate x-data/x-show/x-text expressions.
         # Without it, Alpine silently drops all bindings (blank buttons, empty
         # dropdowns, wrong visibility states).
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
