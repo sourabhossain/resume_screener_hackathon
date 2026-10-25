@@ -144,7 +144,7 @@ def interview_detail(request, pk):
             ev = _evaluation_for(interview, add_form.cleaned_data['evaluator'])
             ev.save()
             _queue_invites(interview, [ev], candidate=False)
-        messages.success(request, f'{ev.interviewer_name} added. Their evaluation link is on its way by email.')
+        messages.success(request, f'{ev.display_name} added. Their evaluation link is on its way by email.')
         return redirect('interviews:detail', pk=pk)
     elif request.method == 'POST':
         form_errors_to_messages(request, add_form)
@@ -229,15 +229,15 @@ def evaluation_resend(request, token):
     if ev.is_submitted or ev.interview.status != Interview.SCHEDULED:
         messages.error(request, 'Only a pending evaluator on a scheduled interview can be emailed.')
     elif not ev.interviewer_email:
-        messages.error(request, f'{ev.interviewer_name} has no email address. Copy the link instead.')
+        messages.error(request, f'{ev.display_name} has no email address. Copy the link instead.')
     elif ev.evaluator_id and not ev.evaluator.is_active:
-        messages.error(request, f'{ev.interviewer_name} is no longer an active staff account, so the link '
+        messages.error(request, f'{ev.display_name} is no longer an active staff account, so the link '
                                 'was not sent. Remove them from the panel.')
     elif not claim_send('interview_evaluator', ev.pk, seconds=60):
         messages.info(request, 'The email was sent a moment ago.')
     elif queue_task(send_evaluator_invite, ev.pk):
         InterviewEvaluation.objects.filter(pk=ev.pk).update(invite_error='')
-        messages.success(request, f'Evaluation link emailed again to {ev.interviewer_name}.')
+        messages.success(request, f'Evaluation link emailed again to {ev.display_name}.')
     else:
         _release('interview_evaluator', ev.pk)
         messages.error(request, 'The email could not be queued right now. Try again in a minute.')
@@ -345,9 +345,9 @@ def evaluation_renew(request, token):
         if ev.interviewer_email:
             # The old link stops working, so the new one goes out at once.
             _queue_invites(ev.interview, [ev], candidate=False)
-            messages.success(request, f'New link generated and emailed to {ev.interviewer_name}.')
+            messages.success(request, f'New link generated and emailed to {ev.display_name}.')
         else:
-            messages.success(request, f'New link generated for {ev.interviewer_name}.')
+            messages.success(request, f'New link generated for {ev.display_name}.')
     return redirect('interviews:detail', pk=ev.interview_id)
 
 

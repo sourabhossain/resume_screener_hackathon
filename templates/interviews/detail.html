@@ -149,10 +149,10 @@
                 <div class="flex items-center gap-3">
                     <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm
                         {% if ev.is_submitted %}bg-emerald-500{% else %}bg-zinc-400 dark:bg-zinc-600{% endif %}">
-                        {{ ev.interviewer_name|slice:":1"|upper }}
+                        {{ ev.display_name|slice:":1"|upper }}
                     </div>
                     <div class="min-w-0">
-                        <p class="font-semibold text-zinc-900 dark:text-white">{{ ev.interviewer_name }}</p>
+                        <p class="font-semibold text-zinc-900 dark:text-white">{{ ev.display_name }}</p>
                         {% if ev.interviewer_email %}
                         <p class="truncate text-xs text-zinc-400">{{ ev.interviewer_email }}</p>
                         {% elif ev.interviewer_position or ev.interviewer_department %}
@@ -249,7 +249,7 @@
                           hx-boost="false"
                           data-confirm
                           data-confirm-title="Remove this evaluator?"
-                          data-confirm-strong="{{ ev.interviewer_name }}"
+                          data-confirm-strong="{{ ev.display_name }}"
                           data-confirm-text="This evaluator will be removed from the interview."
                           data-confirm-button="Remove">
                         {% csrf_token %}
@@ -296,10 +296,10 @@
         <div class="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <div class="flex items-center gap-3">
                 <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white">
-                    {{ ev.interviewer_name|slice:":1"|upper }}
+                    {{ ev.display_name|slice:":1"|upper }}
                 </div>
                 <div>
-                    <p class="font-bold text-zinc-900 dark:text-white">{{ ev.interviewer_name }}</p>
+                    <p class="font-bold text-zinc-900 dark:text-white">{{ ev.display_name }}</p>
                     {% if ev.interviewer_position or ev.interviewer_department %}
                     <p class="text-xs text-zinc-400">{{ ev.interviewer_position }}{% if ev.interviewer_position and ev.interviewer_department %} &middot; {% endif %}{{ ev.interviewer_department }}</p>
                     {% endif %}

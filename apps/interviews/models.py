@@ -198,7 +198,16 @@ class InterviewEvaluation(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.interviewer_name} → {self.interview}"
+        return f"{self.display_name} → {self.interview}"
+
+    @property
+    def display_name(self):
+        """The staff account's full name as it is now, else its username; the
+        copied name for an outside evaluator or a removed account."""
+        user = self.evaluator
+        if user is not None:
+            return user.get_full_name().strip() or user.username
+        return self.interviewer_name
 
     @property
     def is_expired(self):

@@ -58,7 +58,7 @@
                     {{ ev.interview.resume.job.title }} &middot; {{ ev.interview.scheduled_date|date:"F j, Y" }}{% if ev.interview.starts_at %}, {{ ev.interview.starts_at|date:"g:i A" }}{% endif %}
                 </p>
                 <p class="mt-0.5 text-xs text-zinc-400">
-                    Evaluator: <span class="font-semibold text-zinc-600 dark:text-zinc-300">{{ ev.interviewer_name }}</span>
+                    Evaluator: <span class="font-semibold text-zinc-600 dark:text-zinc-300">{{ ev.display_name }}</span>
                     {% if ev.interviewer_position %} &middot; {{ ev.interviewer_position }}{% endif %}
                     {% if ev.interviewer_department %} &middot; {{ ev.interviewer_department }}{% endif %}
                 </p>

@@ -131,7 +131,7 @@ def send_evaluator_email(evaluation, *, reminder=False, cancelled=False, previou
     """`previous` is the old start time as text, for a reschedule notice."""
     interview = evaluation.interview
     context = {**_context(interview), 'evaluation': evaluation,
-               'evaluator_name': evaluation.interviewer_name, 'evaluation_url': evaluation_url(evaluation),
+               'evaluator_name': evaluation.display_name, 'evaluation_url': evaluation_url(evaluation),
                'cv_url': cv_url(evaluation) if interview.resume.file else '',
                'reminder': reminder, 'cancelled': cancelled, 'previous': previous}
     when = timezone.localtime(interview.starts_at).strftime('%-d %b, %-I:%M %p') if interview.starts_at else ''
