@@ -164,3 +164,15 @@ def test_interview_marks_are_stored_and_bad_marks_stop_the_import(bundle):
     (bundle / 'ranking.json').write_text(json.dumps(sheet))
     with pytest.raises(CommandError, match='adaptability=6'):
         _import(bundle, '--commit')
+
+
+@pytest.mark.django_db
+def test_equal_scores_share_the_place_written_in_the_analysis(bundle):
+    sheet = json.loads((bundle / 'ranking.json').read_text())
+    sheet['candidates'][2]['score'] = sheet['candidates'][1]['score']
+    (bundle / 'ranking.json').write_text(json.dumps(sheet))
+    _import(bundle, '--commit')
+    places = {r.candidate_name: r.reasoning.split('Ranked ')[1].split(' of')[0] for r in Resume.objects.all()}
+    assert places == {'Asha Rahman': '#1', 'Nabil Hasan': '#2', 'Rafiq Uddin': '#2'}
+    rafiq = Resume.objects.get(candidate_name='Rafiq Uddin')
+    assert rafiq.score_standing is None or rafiq.score_standing.get('position', 2) == 2

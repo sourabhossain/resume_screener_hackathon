@@ -108,6 +108,11 @@ class Command(BaseCommand):
                 f'Dry run: {len(checked)} candidates look right. Run again with --commit to write them.'))
             return
 
+        # Equal scores share a place, the same rule as the candidate page and the Excel sheet.
+        scores = [row['score'] for row in checked]
+        for row in checked:
+            row['place'] = 1 + sum(1 for score in scores if score > row['score'])
+
         with transaction.atomic():
             job = self._job(job_data, user, root)
             created = sum(self._save(job, row, user, len(checked)) for row in checked)
@@ -226,7 +231,7 @@ class Command(BaseCommand):
 
         position = row.get('position', '').strip()
         resume.reasoning = ' '.join(part for part in (
-            f'{_sentence(row.get("verdict"))} Ranked #{row["rank"]} of {total} candidates for this role.',
+            f'{_sentence(row.get("verdict"))} Ranked #{row["place"]} of {total} candidates for this role.',
             f'Current / last position: {_sentence(position)}' if position else '',
             f'Strengths: {_sentence(row.get("strengths"))}' if row.get('strengths') else '',
             f'Gaps: {_sentence(row.get("gaps"))}' if row.get('gaps') else '',
