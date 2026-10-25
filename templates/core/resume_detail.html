@@ -127,8 +127,8 @@
     <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
         {% for iv in interviews %}
         <a href="{% url 'interviews:detail' iv.pk %}"
-           class="flex items-center justify-between px-6 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-            <div class="flex items-center gap-3">
+           class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+            <div class="flex min-w-0 items-center gap-3">
                 <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
                     <svg class="h-4 w-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 </div>
@@ -137,7 +137,7 @@
                     <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.scheduled_date|date:"F j, Y" }}{% if iv.starts_at %} &middot; {{ iv.starts_at|date:"g:i A" }}{% endif %}{% if iv.location %} &middot; {{ iv.get_mode_display }}{% endif %}</p>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="ml-auto flex shrink-0 items-center gap-3">
                 <span class="text-xs text-zinc-500 dark:text-zinc-400">{{ iv.submitted_count }} of {{ iv.evaluations.count }} submitted</span>
                 {% with avg=iv.avg_score %}{% if avg %}
                 <span class="rounded-full px-3 py-1 text-xs font-bold

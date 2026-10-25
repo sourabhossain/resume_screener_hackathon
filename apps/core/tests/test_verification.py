@@ -29,6 +29,19 @@ class TestLinkExtractor:
         urls = [l.url for l in LinkExtractor.extract(text)]
         assert urls == ['https://asha.dev', 'https://www.behance.net/asha']
 
+    def test_no_part_of_an_email_address_is_a_link(self):
+        from apps.core.services.link_extractor import LinkExtractor
+        text = ("md.rahim2024@yahoo.com | nabil.hasan.1995@gmail.com | Email:rahim.uddin-bd@company.com.bd "
+                "| medium.com/@nabil")
+        urls = [l.url for l in LinkExtractor.extract(text)]
+        assert urls == ['https://medium.com/@nabil']
+
+    def test_technology_names_are_not_links(self):
+        from apps.core.services.link_extractor import LinkExtractor
+        text = "Skills: ASP.NET Core, VB.NET, Socket.IO, Node.js. Worked at Brain.Station 23. Site: rahim.io"
+        urls = [l.url for l in LinkExtractor.extract(text)]
+        assert urls == ['https://rahim.io']
+
     def test_deduplicates_same_url(self):
         from apps.core.services.link_extractor import LinkExtractor
         text = "github.com/sourab and also github.com/sourab again"

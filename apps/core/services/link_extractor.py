@@ -55,9 +55,10 @@ class LinkExtractor:
         """Extract and classify all URLs from CV text."""
         links = []
         seen_urls = set()
+        emails = [m.span() for m in cls.EMAIL_PATTERN.finditer(text)]
 
         for match in cls.URL_PATTERN.finditer(text):
-            if cls._is_not_a_link(text, match):
+            if cls._is_not_a_link(match, emails):
                 continue
             raw_url = match.group(0)
             url = cls._normalize_url(raw_url)
@@ -86,20 +87,23 @@ class LinkExtractor:
 
         return links[:10]  # max 10 links per CV
 
-    # A bare "word.word" is often no link at all: either half of an email address
-    # (asha.rahman@...), a degree (B.Sc, M.Com) or a file name. Crawling one fails
-    # and drags the candidate's verification score to 0.
+    # A bare "word.word" is often no link at all: part of an email address
+    # (md.rahim2024@...), a degree (B.Sc, M.Com), a file name, or a technology
+    # written with a capital ending (ASP.NET, Socket.IO). Crawling one fails and
+    # drags the candidate's verification score to 0.
     FILE_SUFFIXES = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'js', 'py', 'html', 'csv', 'xlsx'}
+    EMAIL_PATTERN = re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+')
 
     @classmethod
-    def _is_not_a_link(cls, text: str, match) -> bool:
-        if '@' in (text[match.start() - 1:match.start()], text[match.end():match.end() + 1]):
-            return True
+    def _is_not_a_link(cls, match, emails) -> bool:
         raw = match.group(0)
         if re.match(r'(?:https?://|www\.)', raw, re.IGNORECASE) or '/' in raw:
             return False
+        if any(start <= match.start() < end for start, end in emails):
+            return True
         labels = raw.rstrip('.,)').split('.')
-        return len(labels[0]) < 2 or labels[-1].lower() in cls.FILE_SUFFIXES
+        return (len(labels[0]) < 2 or labels[-1].lower() in cls.FILE_SUFFIXES
+                or labels[-1] != labels[-1].lower())
 
     @classmethod
     def _normalize_url(cls, url: str) -> str:
