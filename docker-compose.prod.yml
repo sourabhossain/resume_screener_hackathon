@@ -1,13 +1,27 @@
 # Production stack: needs an external MySQL DB and a populated .env (prod.py lists required vars).
+#
+# Every service shares the host's network instead of a Docker bridge, so the
+# stack never depends on Docker's iptables rules: a host whose firewall reload
+# wipes them would otherwise lose the database and refuse to start. Redis and
+# gunicorn listen on 127.0.0.1 only.
+
+x-app-env: &app-env
+  - DJANGO_SETTINGS_MODULE=config.settings.prod
+  - DEBUG=False
+  - CELERY_BROKER_URL=redis://127.0.0.1:6390/0
+  - CELERY_RESULT_BACKEND=redis://127.0.0.1:6390/0
+  - CACHE_URL=redis://127.0.0.1:6390/1
 
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    network_mode: host
+    command: redis-server --bind 127.0.0.1 --port 6390
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-p", "6390", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -17,25 +31,20 @@ services:
       context: .
       target: app
     restart: unless-stopped
+    network_mode: host
+    # Localhost only: the proxy in front terminates TLS and sets X-Real-IP /
+    # X-Forwarded-Proto, which the app trusts. Reachable from outside, anyone
+    # could skip TLS and forge both headers.
     command:
       - sh
       - -c
-      - "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 4 --worker-class gthread --timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"
-    ports:
-      # Localhost only: nginx in front terminates TLS and sets X-Real-IP /
-      # X-Forwarded-Proto, which the app trusts. Reachable from outside, anyone
-      # could skip TLS and forge both headers.
-      - "127.0.0.1:4060:8000"
+      - "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 127.0.0.1:4060 --workers 3 --threads 4 --worker-class gthread --timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    environment: *app-env
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -46,7 +55,7 @@ services:
       # urlopen and then hang on the TLS handshake.
       # Host is the first ALLOWED_HOSTS entry: Django refuses "localhost" with
       # a 400 once ALLOWED_HOSTS names only the public domain.
-      test: ["CMD", "python", "-c", "import json,os,sys,urllib.request as u; h=(os.environ.get('ALLOWED_HOSTS','').split(',')[0].strip().lstrip('.') or 'localhost').replace('*','localhost'); r=u.urlopen(u.Request('http://localhost:8000/health/', headers={'X-Forwarded-Proto':'https','Host':h}), timeout=5); sys.exit(0 if r.status==200 and json.load(r).get('status')=='healthy' else 1)"]
+      test: ["CMD", "python", "-c", "import json,os,sys,urllib.request as u; h=(os.environ.get('ALLOWED_HOSTS','').split(',')[0].strip().lstrip('.') or 'localhost').replace('*','localhost'); r=u.urlopen(u.Request('http://127.0.0.1:4060/health/', headers={'X-Forwarded-Proto':'https','Host':h}), timeout=5); sys.exit(0 if r.status==200 and json.load(r).get('status')=='healthy' else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -57,17 +66,14 @@ services:
       context: .
       target: app
     restart: unless-stopped
+    network_mode: host
     command: celery -A config worker -Q screening --concurrency=8 -n screening@%h -l info
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    environment: *app-env
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -85,17 +91,14 @@ services:
       context: .
       target: app
     restart: unless-stopped
+    network_mode: host
     command: celery -A config worker -Q notifications --concurrency=4 -n notifications@%h -l info
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    environment: *app-env
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -111,17 +114,14 @@ services:
       context: .
       target: verification
     restart: unless-stopped
+    network_mode: host
     command: celery -A config worker -Q verification --concurrency=2 -n verification@%h -l info
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    environment: *app-env
     volumes:
       - media_data:/app/media
       - logs_data:/app/logs
@@ -138,17 +138,14 @@ services:
       context: .
       target: app
     restart: unless-stopped
+    network_mode: host
     command: celery -A config beat -l info
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - DEBUG=False
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    environment: *app-env
     volumes:
       - logs_data:/app/logs
 
