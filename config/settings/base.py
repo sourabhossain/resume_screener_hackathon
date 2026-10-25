@@ -39,6 +39,8 @@ MIDDLEWARE = [
     # Serves collected static files directly from the app process so gunicorn
     # works with DEBUG=False without needing nginx in front for static.
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # After WhiteNoise, which serves its own pre-compressed static files.
+    'config.middleware.TextGZipMiddleware',
     # Attach a per-request correlation ID (X-Request-ID header) so web and
     # Celery logs can be linked. Must come early so all downstream middleware
     # and views can read request.request_id.

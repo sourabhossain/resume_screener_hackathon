@@ -56,7 +56,31 @@ def _ordered_active_resumes_queryset(resume_qs):
             default=Value(0),
             output_field=IntegerField(),
         ),
-    ).order_by('-decision_rank', '-final_score', '-created_at')
+    ).order_by('-decision_rank', '-final_score', '-created_at', '-pk')
+
+
+PIPELINE_PAGE_SIZE = 50
+
+
+def _pipeline_page(resumes, request):
+    """One page of the pipeline table and where the next one starts. A job
+    with a thousand CVs rendered every row at once: tens of megabytes of HTML
+    that froze the browser."""
+    try:
+        offset = max(0, int(request.GET.get('offset', 0)))
+    except ValueError:
+        offset = 0
+    total = resumes.count()
+    rows = list(resumes[offset:offset + PIPELINE_PAGE_SIZE])
+    remaining = max(0, total - offset - len(rows))
+    return {
+        'rows': rows,
+        'offset': offset,
+        'queue_count': total,
+        'remaining': remaining,
+        'next_offset': offset + len(rows) if remaining else None,
+        'next_count': min(PIPELINE_PAGE_SIZE, remaining),
+    }
 
 
 def _recruiter_status_filter(request):
@@ -242,6 +266,7 @@ def job_detail(request, slug):
         {
             'job': job,
             'resumes': resumes,
+            **_pipeline_page(resumes, request),
             'pipeline_stats': pipeline_stats,
             'search_q': search_q,
             'recruiter_status_filter': status_filter,
@@ -308,6 +333,7 @@ def pipeline_search(request, job_slug):
     resumes = _apply_seen_filter(resumes, seen_filter)
     return render(request, 'core/partials/pipeline_search_results.html', {
         'resumes': resumes,
+        **_pipeline_page(resumes, request),
         'search_q': search_q,
         'recruiter_status_filter': status_filter,
         'seen_filter': seen_filter,

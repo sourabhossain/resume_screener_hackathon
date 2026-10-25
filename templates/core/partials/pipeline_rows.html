@@ -1,0 +1,29 @@
+{% for resume in rows %}
+{% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter|add:offset %}
+{% empty %}
+{% if not offset %}
+<tr>
+    <td colspan="11" class="px-6 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+        <p class="block w-full text-center">{% if search_q %}No candidates match <strong class="text-zinc-600 dark:text-zinc-300">{{ search_q }}</strong>{% else %}No candidates with this recruiter status. Switch the filter to <strong class="text-zinc-600 dark:text-zinc-300">All statuses</strong> to see everyone.{% endif %}</p>
+    </td>
+</tr>
+{% endif %}
+{% endfor %}
+{% if next_offset %}
+<tr id="pipeline-more">
+    <td colspan="11" class="px-6 py-5 text-center" style="justify-content:center">
+        <button type="button"
+                hx-get="{% url 'core:pipeline_search' job.slug %}"
+                hx-vals='{"offset": "{{ next_offset }}"}'
+                hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-seen-filter"
+                hx-trigger="click, intersect once"
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+            Show {{ next_count }} more
+            <span class="font-normal text-zinc-500 dark:text-zinc-400">· {{ remaining }} left</span>
+        </button>
+    </td>
+</tr>
+{% endif %}

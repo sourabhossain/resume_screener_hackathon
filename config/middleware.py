@@ -1,6 +1,8 @@
 import logging
 import uuid
 
+from django.middleware.gzip import GZipMiddleware
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,3 +53,20 @@ class ContentSecurityPolicyMiddleware:
         if 'Content-Security-Policy' not in response:
             response['Content-Security-Policy'] = self._CSP
         return response
+
+
+class TextGZipMiddleware(GZipMiddleware):
+    """Gzips pages and JSON; files and archives go out untouched.
+
+    A pipeline page repeats the same row markup dozens of times and shrinks
+    about twentyfold. PDFs, ZIPs and spreadsheets are already compressed, and
+    gzipping a download would only drop its Content-Length. Django's own
+    middleware pads every response against BREACH (Heal The Breach).
+    """
+
+    _COMPRESSIBLE = ('text/', 'application/json', 'application/javascript')
+
+    def process_response(self, request, response):
+        if not response.get('Content-Type', '').startswith(self._COMPRESSIBLE):
+            return response
+        return super().process_response(request, response)
