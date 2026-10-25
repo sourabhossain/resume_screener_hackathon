@@ -27,6 +27,7 @@ distro==1.9.0
 django-ratelimit==4.1.0
 djangorestframework==3.18.3
 drf-spectacular==0.30.0
+et_xmlfile==2.0.0
 factory_boy==3.3.3
 flatbuffers==25.12.19
 greenlet==3.5.6
@@ -59,6 +60,7 @@ networkx==3.6.1
 numpy==2.4.6
 onnxruntime==1.31.0
 openai==3.35.1
+openpyxl==3.1.5
 orjson==3.13.0
 ormsgpack==1.13.0
 packaging==26.3

@@ -146,6 +146,15 @@
                     {% else %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
                     Avg {{ avg }}%
                 </span>
+                {% else %}
+                {% for ev in iv.evaluations.all %}{% if ev.is_submitted and ev.recommendation %}
+                <span class="rounded-full px-3 py-1 text-xs font-bold
+                    {% if ev.recommendation == 'yes' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                    {% elif ev.recommendation == 'no' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
+                    {% else %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% endif %}">
+                    {{ ev.get_recommendation_display }}
+                </span>
+                {% endif %}{% endfor %}
                 {% endif %}{% endwith %}
                 <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </div>

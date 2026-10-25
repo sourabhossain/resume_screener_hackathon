@@ -71,6 +71,9 @@
         </div>
     </div>
 
+    {% include 'core/partials/score_standing.html' %}
+
+    {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.experience_score is not None or resume.education_score is not None or resume.skills_score is not None or resume.certification_score is not None %}
     <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">
         <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
             <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,6 +157,7 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
 
     {% if resume.achievements %}
     <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-zinc-200/90 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8">

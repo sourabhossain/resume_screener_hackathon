@@ -1400,6 +1400,24 @@ def job_export_csv(request, slug):
 
 
 @login_required
+def job_ranking_xlsx(request, slug):
+    """The master ranking sheet for the job, as Excel."""
+    from django.http import HttpResponse
+    from .ranking_export import build_workbook
+
+    job = get_object_or_404(Job, slug=slug)
+    logger.info('media.ranking_export user=%s job=%s', request.user.pk, job.pk)
+    response = HttpResponse(
+        build_workbook(job),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    safe_title = re.sub(r'[^\w\-]', '_', job.title)[:50]
+    response['Content-Disposition'] = (
+        f'attachment; filename="{safe_title}_ranking_{timezone.localdate():%Y-%m-%d}.xlsx"')
+    return response
+
+
+@login_required
 def download_resumes_zip(request, slug):
     """
     Stream all (or filtered) resume files for a job as a ZIP.

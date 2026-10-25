@@ -1,0 +1,107 @@
+{% with s=resume.score_standing %}{% if s %}
+<div class="ss bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-5 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8" x-data="{ explain: false }">
+    <style>
+        .ss .ss-grid{stroke:#e4e4e7;stroke-width:1}
+        .dark .ss .ss-grid{stroke:#3f3f46}
+        .ss .ss-current{fill:rgba(249,115,22,.10)}
+        .ss .ss-area{fill:rgba(113,113,122,.08)}
+        .ss .ss-curve{fill:none;stroke:#3f3f46;stroke-width:2}
+        .dark .ss .ss-curve{stroke:#d4d4d8}
+        .ss .ss-lead{stroke:#52525b;stroke-width:1.5;stroke-dasharray:2 3}
+        .dark .ss .ss-lead{stroke:#a1a1aa}
+        .ss .ss-dot{fill:#fff;stroke:#18181b;stroke-width:2}
+        .dark .ss .ss-dot{fill:#18181b;stroke:#fafafa}
+        .ss .ss-dot-text{font-size:12px;font-weight:700;fill:#18181b}
+        .dark .ss .ss-dot-text{fill:#fafafa}
+        .ss .ss-star{fill:#f59e0b}
+        .ss .ss-band-current{background:rgba(249,115,22,.10)}
+    </style>
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+            <h2 class="text-base font-semibold text-zinc-900 dark:text-white">AI Benchmark</h2>
+            <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">Weighted</span>
+        </div>
+        {% if s.enough %}
+        <div class="flex flex-wrap items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+            <span class="inline-flex items-center gap-1.5">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                Candidate score
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 16 16" aria-hidden="true"><path class="ss-star" d="M8 1.5l1.9 4 4.4.5-3.3 3 .9 4.4L8 11.2 4.1 13.4 5 9 1.7 6l4.4-.5z"/></svg>
+                Highest score for this job
+            </span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if s.enough %}
+    <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3 sm:items-center">
+        <div>
+            <p class="text-3xl font-black leading-none tracking-tight text-zinc-900 dark:text-white">{{ s.percentile }}<sup class="text-base">{{ s.suffix }}</sup> percentile</p>
+            <dl class="mt-4 grid grid-cols-2 gap-3">
+                <div class="rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-800">
+                    <dt class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Final score</dt>
+                    <dd class="text-lg font-bold tabular-nums text-zinc-900 dark:text-white">{{ s.raw }}%</dd>
+                </div>
+                <div class="rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-800">
+                    <dt class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Position</dt>
+                    <dd class="text-lg font-bold tabular-nums text-zinc-900 dark:text-white">#{{ s.position }} <span class="text-sm font-medium text-zinc-400">of {{ s.pool }}</span></dd>
+                </div>
+            </dl>
+            <button type="button" @click="explain = !explain" :aria-expanded="explain"
+                    class="mt-4 w-fit text-sm font-semibold text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white">
+                How to interpret results
+            </button>
+        </div>
+
+        <div class="sm:col-span-2">
+            <svg viewBox="0 0 500 120" class="block w-full overflow-visible" role="img"
+                 aria-label="{{ s.percentile }}{{ s.suffix }} percentile, {{ s.band }}. Highest score for this job: {{ s.top }}%.">
+                {% for b in s.svg.bands %}
+                {% if b.current %}<rect x="{{ b.x }}" y="0" width="100" height="120" class="ss-current"/>{% endif %}
+                {% if not forloop.first %}<line x1="{{ b.x }}" x2="{{ b.x }}" y1="0" y2="120" class="ss-grid"/>{% endif %}
+                {% endfor %}
+                <line x1="0" x2="500" y1="120" y2="120" class="ss-grid"/>
+                <path d="{{ s.svg.area }}" class="ss-area"/>
+                <path d="{{ s.svg.curve }}" class="ss-curve"/>
+                <g>
+                    <title>Highest score for this job: {{ s.top }}%</title>
+                    <path class="ss-star" transform="translate({{ s.svg.top_x|add:'-8' }} 0)" d="M8 1.5l1.9 4 4.4.5-3.3 3 .9 4.4L8 11.2 4.1 13.4 5 9 1.7 6l4.4-.5z"/>
+                </g>
+                <line x1="{{ s.svg.x }}" x2="{{ s.svg.x }}" y1="18" y2="{{ s.svg.y }}" class="ss-lead"/>
+                <g>
+                    <title>{{ resume.candidate_name }}: {{ s.percentile }}{{ s.suffix }} percentile, {{ s.raw }}% raw score</title>
+                    <circle cx="{{ s.svg.x }}" cy="{{ s.svg.y }}" r="13" class="ss-dot"/>
+                    <text x="{{ s.svg.x }}" y="{{ s.svg.y }}" dy="4" text-anchor="middle" class="ss-dot-text">{{ s.percentile }}</text>
+                </g>
+            </svg>
+            <div class="grid border-t border-zinc-200 text-center text-xs font-semibold dark:border-zinc-700" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+                {% for b in s.svg.bands %}
+                <span class="py-1.5 {% if b.current %}ss-band-current text-orange-700 dark:text-orange-400{% else %}text-zinc-500 dark:text-zinc-400{% endif %}">{{ b.label }}</span>
+                {% endfor %}
+            </div>
+            <div class="mt-1 flex justify-between text-xs tabular-nums text-zinc-400">
+                <span>1</span><span>20</span><span>40</span><span>60</span><span>80</span><span>99</span>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="explain" x-cloak class="mt-5 rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+        Position is the candidate's place by final score among everyone scored for {{ resume.job.title }}. The percentile is the share of the other candidates with a lower score: #{{ s.position }} of {{ s.pool }} scores higher than {{ s.lower }} of the other {{ s.others }}, which is the {{ s.percentile }}{{ s.suffix }} percentile.
+        Bands: Well below (under the 20th percentile), Below (20th–39th), Average (40th–59th), Above (60th–79th), Well above (80th and up).
+    </div>
+
+    <p class="mt-5 rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+        {% if s.is_top %}
+        {{ resume.candidate_name }} is <strong class="font-semibold">#1 of {{ s.pool }}</strong>, the highest score for {{ resume.job.title }}.
+        {% else %}
+        {{ resume.candidate_name }} is <strong class="font-semibold">#{{ s.position }} of {{ s.pool }}</strong> for {{ resume.job.title }}, scoring higher than {{ s.lower }} of the other {{ s.others }} candidates ({{ s.percentile }}%).
+        {% endif %}
+    </p>
+    {% else %}
+    <p class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">The percentile appears once {{ s.needed }} candidates for this job are scored ({{ s.pool }} so far).</p>
+    {% endif %}
+</div>
+{% endif %}{% endwith %}

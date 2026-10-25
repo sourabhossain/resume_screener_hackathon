@@ -91,7 +91,7 @@ class ResumeService:
         for at_m in re.finditer(r'@', text):
             pos = at_m.start()
             window = text[max(0, pos - 60): pos + 60]
-            cleaned = re.sub(r'(?<=[A-Za-z0-9._%+\-]) (?=[A-Za-z0-9._%+\-])', '', window)
+            cleaned = re.sub(r'(?<=[A-Za-z0-9._%+\-@]) (?=[A-Za-z0-9._%+\-@])', '', window)
             m2 = cls._EMAIL_RE.search(cleaned)
             if m2:
                 return m2.group(0), pos

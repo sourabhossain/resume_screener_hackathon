@@ -46,6 +46,8 @@ openai>=1.0
 pypdf>=4.0.0
 pymupdf>=1.24
 python-docx>=1.0
+# The job ranking sheet download (Excel)
+openpyxl>=3.1
 pydantic>=2.0
 tenacity>=8.0
 

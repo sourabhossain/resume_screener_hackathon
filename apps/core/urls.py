@@ -66,6 +66,7 @@ urlpatterns = [
 
     # CSV export
     path('jobs/<slug:slug>/export/', views.job_export_csv, name='job_export_csv'),
+    path('jobs/<slug:slug>/ranking.xlsx', views.job_ranking_xlsx, name='job_ranking_xlsx'),
 
     # Bulk CV download (streaming ZIP)
     path('jobs/<slug:slug>/resumes/download/', views.download_resumes_zip, name='download_resumes_zip'),

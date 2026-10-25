@@ -143,7 +143,7 @@ class Interview(SoftDeleteModel):
 
 class InterviewEvaluation(models.Model):
     RECOMMENDATION_CHOICES = [
-        ('yes', 'Yes - Hire'),
+        ('yes', 'Yes - Next round'),
         ('no', 'No - Reject'),
         ('maybe', 'Maybe - Further Review'),
     ]
@@ -229,7 +229,7 @@ class InterviewEvaluation(models.Model):
     def impression_label(self):
         pct = self.percentage
         if pct is None:
-            return ''
+            return self.impression
         if pct >= 80:
             return 'Good'
         if pct >= 60:

@@ -206,6 +206,10 @@ class Resume(SoftDeleteModel):
     certification_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     achievement_score = models.FloatField(null=True, blank=True, validators=_score_validators)
     reasoning = models.TextField(blank=True, help_text="AI reasoning for recommendation")
+    # The ranking sheet's own wording, kept apart for the Excel download:
+    # verdict, experience ("20+ yrs"), position, education, certifications,
+    # strengths and gaps.
+    screening_summary = models.JSONField(default=dict, blank=True)
 
     # Whether HR has reviewed this CV. Set by hand, exactly like recruiter
     # status: opening the page is not the same as having read it, and a queue
@@ -380,6 +384,12 @@ class Resume(SoftDeleteModel):
     @property
     def is_seen(self) -> bool:
         return self.seen_status == 'seen'
+
+    @property
+    def score_standing(self):
+        """Percentile among everyone scored for the same job (see apps.core.standing)."""
+        from apps.core.standing import score_standing
+        return score_standing(self)
 
     @property
     def seen_status_tone(self) -> str:

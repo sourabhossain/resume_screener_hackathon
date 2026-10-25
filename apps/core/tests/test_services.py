@@ -194,3 +194,9 @@ class TestExceptions:
         error = AIScreeningError("LLM failed", stage="extraction")
         assert error.stage == "extraction"
         assert "LLM failed" in str(error)
+
+
+def test_an_email_spelled_out_letter_by_letter_is_still_found():
+    from apps.core.services.resume_service import ResumeService
+    text = 'Contact\n+8801711000000 | n a s h i d . a l i @ g m a i l . c o m | Dhaka'
+    assert ResumeService._extract_email(text)[0] == 'nashid.ali@gmail.com'
