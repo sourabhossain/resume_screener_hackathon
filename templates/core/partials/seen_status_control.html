@@ -1,4 +1,4 @@
-<form method="post"
+<form method="post" data-current="{{ resume.seen_status|default:'unseen' }}"
       action="{% url 'core:resume_seen_update' resume.uuid %}"
       hx-post="{% url 'core:resume_seen_update' resume.uuid %}"
       hx-target="closest td"

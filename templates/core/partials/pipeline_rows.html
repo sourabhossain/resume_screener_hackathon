@@ -1,5 +1,5 @@
 {% for resume in rows %}
-{% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter|add:offset %}
+{% include 'core/partials/resume_row.html' with resume=resume rank=forloop.counter|add:rank_base %}
 {% empty %}
 {% if not offset %}
 <tr>
@@ -14,7 +14,7 @@
     <td colspan="11" class="skel-host px-6 py-5 text-center" style="justify-content:center">
         <button type="button"
                 hx-get="{% url 'core:pipeline_search' job.slug %}"
-                hx-vals='{"offset": "{{ next_offset }}"}'
+                hx-vals='js:{offset: pipelineNextOffset({{ next_offset }}), rank_from: pipelineLoadedCount()}'
                 hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-seen-filter, #pipeline-sort"
                 hx-trigger="click, intersect once"
                 hx-target="closest tr"

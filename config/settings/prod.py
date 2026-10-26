@@ -26,10 +26,12 @@ DEBUG = False
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
-# The proxy sets X-Real-IP (nginx) or X-Forwarded-For (Apache) to the visitor's
-# address; the app port is bound to localhost (docker-compose.prod.yml), so only
-# the proxy can set them. See config/client_ip.py.
-CLIENT_IP_HEADER = os.environ.get('CLIENT_IP_HEADER', 'HTTP_X_REAL_IP')
+# The visitor's address for rate limiting (config/client_ip.py). Apache's
+# mod_proxy appends the address it saw to X-Forwarded-For, so the last entry is
+# genuine. X-Real-IP is not the default: Apache passes a client's own X-Real-IP
+# through untouched, and trusting it let anyone pick a fresh address for every
+# login attempt. Set HTTP_X_REAL_IP only behind a proxy that overwrites it.
+CLIENT_IP_HEADER = os.environ.get('CLIENT_IP_HEADER', 'HTTP_X_FORWARDED_FOR')
 
 # Django 4.0+ checks the Origin header against this list for CSRF on HTTPS.
 # Must include every public hostname (and port if non-standard) the app serves.

@@ -97,12 +97,19 @@ def _pipeline_page(resumes, request):
         offset = max(0, int(request.GET.get('offset', 0)))
     except ValueError:
         offset = 0
+    # The table's numbering continues from the rows already on screen, which
+    # can differ from the offset once some of them have left the filter.
+    try:
+        rank_base = max(0, int(request.GET.get('rank_from', offset)))
+    except ValueError:
+        rank_base = offset
     total = resumes.count()
     rows = list(resumes[offset:offset + PIPELINE_PAGE_SIZE])
     remaining = max(0, total - offset - len(rows))
     return {
         'rows': rows,
         'offset': offset,
+        'rank_base': rank_base,
         'queue_count': total,
         'remaining': remaining,
         'next_offset': offset + len(rows) if remaining else None,

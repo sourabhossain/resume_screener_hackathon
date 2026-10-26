@@ -191,3 +191,30 @@ def test_changing_the_filter_refreshes_the_chips_with_the_rows(authenticated_cli
     searched = _more(authenticated_client, mixed, 0, recruiter_status='all', q='Mixed 1')
     assert _chip(searched, 'unseen') + _chip(searched, 'seen') == len(_row_ids(searched))
     assert 'pipeline-unseen-count' not in _more(authenticated_client, mixed, 50, recruiter_status='all')
+
+
+@pytest.mark.django_db
+def test_rows_that_left_the_filter_on_screen_do_not_cost_the_next_page_any_candidates(authenticated_client, crowded_job):
+    first = _first_page(authenticated_client, crowded_job, recruiter_status='new')
+    assert "hx-vals='js:{offset: pipelineNextOffset(50), rank_from: pipelineLoadedCount()}'" in first
+    on_screen = _row_ids(first)
+    Resume.objects.filter(pk__in=on_screen[:3]).update(recruiter_status='shortlisted')
+
+    rest = _more(authenticated_client, crowded_job, 47, recruiter_status='new', rank_from=50)
+    left = set(Resume.objects.filter(recruiter_status='new').exclude(pk__in=on_screen).values_list('pk', flat=True))
+    assert len(_row_ids(rest)) == len(left) == 40 and set(_row_ids(rest)) == left
+    ranks = [int(n) for n in re.findall(r'tabular-nums">(\d+)</span>', rest)]
+    assert ranks[0] == 51
+
+
+@pytest.mark.django_db
+def test_rank_from_falls_back_to_the_offset(authenticated_client, crowded_job):
+    for junk in ('junk', '-5'):
+        page = _more(authenticated_client, crowded_job, 50, recruiter_status='all', rank_from=junk)
+        assert re.findall(r'tabular-nums">(\d+)</span>', page)[0] == ('51' if junk == 'junk' else '1')
+
+
+@pytest.mark.django_db
+def test_the_seen_control_says_where_the_row_stands(authenticated_client, mixed):
+    html = _first_page(authenticated_client, mixed, recruiter_status='all')
+    assert html.count('data-current="seen"') == 6 and html.count('data-current="unseen"') == 8

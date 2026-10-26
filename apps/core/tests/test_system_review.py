@@ -274,6 +274,24 @@ def test_behind_apache_the_address_it_appended_to_x_forwarded_for_is_used():
     assert client_ip(both) == '198.51.100.1'
 
 
+@override_settings(CLIENT_IP_HEADER='HTTP_X_FORWARDED_FOR')
+def test_behind_apache_a_forged_x_real_ip_is_ignored():
+    """Apache passes a client's X-Real-IP through; keyed on it, every login
+    attempt could claim a new address and slip past the throttle."""
+    from config.client_ip import client_ip
+    request = RequestFactory().get('/', REMOTE_ADDR='127.0.0.1', HTTP_X_REAL_IP='9.9.9.9',
+                                   HTTP_X_FORWARDED_FOR='9.9.9.9, 203.0.113.9')
+    assert client_ip(request) == '203.0.113.9'
+
+
+def test_production_keys_rate_limits_on_x_forwarded_for():
+    """Read from the file: importing prod settings needs the live environment."""
+    from pathlib import Path
+    from django.conf import settings as django_settings
+    source = (Path(django_settings.BASE_DIR) / 'config' / 'settings' / 'prod.py').read_text()
+    assert "CLIENT_IP_HEADER = os.environ.get('CLIENT_IP_HEADER', 'HTTP_X_FORWARDED_FOR')" in source
+
+
 @override_settings(CLIENT_IP_HEADER='')
 def test_without_a_proxy_header_the_connecting_address_is_used():
     from config.client_ip import client_ip

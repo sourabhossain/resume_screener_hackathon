@@ -100,8 +100,11 @@
                 this.busy = true;
                 return new Promise(function (resolve) {
                     let done = false;
-                    function finish() {
-                        if (done) return;
+                    // The next page has arrived once its swap has replaced the
+                    // button; a live update or a Seen mark settling first
+                    // would stop the wait too early.
+                    function finish(e) {
+                        if (done || (e && more.isConnected)) return;
                         done = true;
                         document.body.removeEventListener('htmx:afterSettle', finish);
                         self.busy = false;
@@ -205,3 +208,35 @@ window.rsFillOptions = function (box) {
         }
     });
 };
+
+/* Where the table's next page starts. Rows already loaded can leave the
+ * filter -- shortlisted from the viewer while "New CV" is shown, or marked Seen
+ * under "Not seen" -- and the server's list closes up behind them, so asking
+ * for the next page at the plain offset would skip that many candidates. The
+ * offset is the number of loaded rows that still match the filters. */
+window.pipelineLoadedCount = function () {
+    return document.querySelectorAll('#pipeline-tbody tr[id^="resume-row-"]').length;
+};
+window.pipelineNextOffset = function (fallback) {
+    const field = function (id) { const el = document.getElementById(id); return (el && el.value) || 'all'; };
+    const status = field('pipeline-status-filter');
+    const seen = field('pipeline-seen-filter');
+    const rows = document.querySelectorAll('#pipeline-tbody tr[id^="resume-row-"]');
+    if (!rows.length) return fallback;
+    let matching = 0;
+    rows.forEach(function (tr) {
+        const st = tr.querySelector('td[data-label="Recruiter Status"] [data-current]');
+        const se = tr.querySelector('td[data-label="Reviewed"] [data-current]');
+        if ((status === 'all' || !st || st.dataset.current === status)
+                && (seen === 'all' || !se || se.dataset.current === seen)) matching += 1;
+    });
+    return matching;
+};
+// A candidate who applies while the table is open moves the list the other
+// way; a row the next page brings twice is dropped.
+document.addEventListener('htmx:afterSettle', function () {
+    const seenIds = {};
+    document.querySelectorAll('#pipeline-tbody tr[id^="resume-row-"]').forEach(function (tr) {
+        if (seenIds[tr.id]) tr.remove(); else seenIds[tr.id] = true;
+    });
+});
