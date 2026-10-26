@@ -61,20 +61,39 @@ def test_opening_the_candidate_marks_the_cv_seen_and_hr_can_set_it_back(authenti
 
 
 @pytest.mark.django_db
-def test_view_cv_in_the_table_marks_seen_only_while_unseen(authenticated_client, sample_resume):
+def test_the_row_cv_button_carries_what_the_viewer_needs(authenticated_client, sample_resume):
+    """The viewer marks a CV seen and sets statuses from these attributes."""
     from django.core.files.base import ContentFile
     sample_resume.file.save('cv.pdf', ContentFile(b'%PDF-1.4 test'), save=False)
     sample_resume.screening_status = 'completed'
+    sample_resume.final_score = 72
     sample_resume.save()
-    url = reverse('core:job_detail', kwargs={'slug': sample_resume.job.slug})
-    seen_post = reverse('core:resume_seen_update', kwargs={'uuid': sample_resume.uuid})
+    html = authenticated_client.get(reverse('core:job_detail', kwargs={'slug': sample_resume.job.slug}),
+                                    {'recruiter_status': 'all'}).content.decode()
+    for needle in ('data-cv-open', f'data-uuid="{sample_resume.uuid}"', 'data-seen="unseen"', 'data-score="72"',
+                   f'data-seen-url="{reverse("core:resume_seen_update", kwargs={"uuid": sample_resume.uuid})}"',
+                   f'data-status-url="{reverse("core:resume_status_update", kwargs={"uuid": sample_resume.uuid})}"',
+                   'x-data="cvViewer()"'):
+        assert needle in html, needle
+    assert html.count('>\n                        View CV\n') >= 1
 
-    html = authenticated_client.get(url, {'recruiter_status': 'all'}).content.decode()
-    assert f'hx-post="{seen_post}"' in html and '"seen_status": "seen"' in html
 
-    type(sample_resume).objects.filter(pk=sample_resume.pk).update(seen_status='seen')
-    html = authenticated_client.get(url, {'recruiter_status': 'all'}).content.decode()
-    assert '"seen_status": "seen"' not in html
+@pytest.mark.django_db
+def test_rows_without_a_cv_have_no_cv_button(authenticated_client, sample_resume):
+    sample_resume.screening_status = 'completed'
+    sample_resume.save()
+    html = authenticated_client.get(reverse('core:job_detail', kwargs={'slug': sample_resume.job.slug}),
+                                    {'recruiter_status': 'all'}).content.decode()
+    assert 'data-cv-open' not in html
+
+
+@pytest.mark.django_db
+def test_the_status_cell_says_the_current_status(authenticated_client, sample_resume):
+    sample_resume.screening_status = 'completed'
+    sample_resume.save()
+    response = authenticated_client.post(reverse('core:resume_status_update', kwargs={'uuid': sample_resume.uuid}),
+                                         {'recruiter_status': 'shortlisted', 'context': 'cell'}, HTTP_HX_REQUEST='true')
+    assert 'data-current="shortlisted"' in response.content.decode()
 
 
 @pytest.mark.django_db
