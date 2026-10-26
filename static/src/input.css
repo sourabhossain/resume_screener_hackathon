@@ -774,6 +774,48 @@ html.app-navigating::after {
     background: linear-gradient(90deg, transparent, #284699 35%, #e62832 65%, transparent);
     animation: appNav 0.9s linear infinite;
 }
+/* Skeleton loaders. A .skel-host is the hx-indicator of the requests that
+   refill it: while htmx marks it .htmx-request its content is hidden and its
+   .skel-placeholder drawn in the content's shape. A failed request clears the
+   class too, so the old content comes back by itself. */
+.skel {
+    border-radius: 0.5rem;
+    background: linear-gradient(90deg, #e4e4e7 0%, #f4f4f5 50%, #e4e4e7 100%);
+    background-size: 200% 100%;
+    animation: skelShimmer 1.2s ease-in-out infinite;
+}
+.dark .skel {
+    background: linear-gradient(90deg, #27272a 0%, #3f3f46 50%, #27272a 100%);
+    background-size: 200% 100%;
+}
+.skel-round { border-radius: 9999px; }
+@keyframes skelShimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .skel { animation: none; }
+}
+/* !important: the phone card layout of .resp-table sets tbody to block,
+   which would otherwise keep the skeleton rows on screen. */
+.skel-placeholder,
+#page-skeleton,
+#page-skeleton [data-variant] { display: none !important; }
+.skel-host.htmx-request > .skel-placeholder { display: block !important; }
+.skel-host.htmx-request > tbody.skel-placeholder { display: table-row-group !important; }
+@media (max-width: 767px) {
+    .resp-table.skel-host.htmx-request > tbody.skel-placeholder { display: block !important; }
+}
+.skel-host.htmx-request > :not(.skel-placeholder):not(thead):not(caption):not(colgroup) { display: none !important; }
+
+/* Boosted page loads: the next page's shape replaces the old page (base.html). */
+html.app-skeleton #main-content > :not(#page-skeleton) { display: none !important; }
+html.app-skeleton #page-skeleton { display: block !important; }
+html.app-skeleton[data-skeleton="list"] #page-skeleton [data-variant="list"],
+html.app-skeleton[data-skeleton="profile"] #page-skeleton [data-variant="profile"],
+html.app-skeleton[data-skeleton="form"] #page-skeleton [data-variant="form"],
+html.app-skeleton[data-skeleton="dashboard"] #page-skeleton [data-variant="dashboard"] { display: block !important; }
+
 @keyframes appNav {
     from { transform: translateX(-100%); }
     to { transform: translateX(100%); }

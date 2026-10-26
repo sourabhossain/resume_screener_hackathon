@@ -239,6 +239,7 @@
                                hx-get="{% url 'core:pipeline_search' job.slug %}"
                                hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
                                hx-target="#pipeline-tbody"
+                               hx-indicator="#pipeline-table"
                                hx-swap="innerHTML"
                                hx-include="#pipeline-status-filter, #pipeline-seen-filter, #pipeline-sort"
                                @input="hasValue = $event.target.value.length > 0"
@@ -265,6 +266,7 @@
                                hx-get="{% url 'core:pipeline_search' job.slug %}"
                                hx-trigger="change"
                                hx-target="#pipeline-tbody"
+                               hx-indicator="#pipeline-table"
                                hx-swap="innerHTML"
                                hx-include="#pipeline-search-input, #pipeline-seen-filter, #pipeline-sort">
                         <button type="button"
@@ -335,6 +337,7 @@
                                hx-get="{% url 'core:pipeline_search' job.slug %}"
                                hx-trigger="change"
                                hx-target="#pipeline-tbody"
+                               hx-indicator="#pipeline-table"
                                hx-swap="innerHTML"
                                hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-seen-filter">
                         <button type="button"
@@ -392,6 +395,7 @@
                        hx-get="{% url 'core:pipeline_search' job.slug %}"
                        hx-trigger="change"
                        hx-target="#pipeline-tbody"
+                       hx-indicator="#pipeline-table"
                        hx-swap="innerHTML"
                        hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-sort">
                 <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Reviewed</span>
@@ -418,7 +422,7 @@
 
         {% if pipeline_stats.total %}
         <div class="relative overflow-x-auto">
-            <table class="resp-table w-full text-left md:min-w-[68rem]">
+            <table id="pipeline-table" class="skel-host resp-table w-full text-left md:min-w-[68rem]">
                 <caption class="sr-only">Applicant pipeline, {{ sort_note }}. Updates live as you search.</caption>
                 <thead class="border-b border-zinc-100 bg-zinc-50/95 dark:border-zinc-800 dark:bg-zinc-900/95">
                     <tr>
@@ -438,6 +442,7 @@
                 <tbody id="pipeline-tbody" aria-live="polite" hx-disinherit="hx-target hx-select hx-swap hx-push-url" class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% include 'core/partials/pipeline_rows.html' %}
                 </tbody>
+                <tbody class="skel-placeholder" aria-hidden="true">{% include 'core/partials/pipeline_skeleton_rows.html' %}</tbody>
             </table>
         </div>
         {% else %}

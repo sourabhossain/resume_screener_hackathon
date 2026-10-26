@@ -199,8 +199,6 @@
     .dash-pills input:checked + span { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
     .dash-pills input:focus-visible + span { outline: 2px solid var(--s1); outline-offset: 1px; }
     .dash-select { font-size: .8125rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .45rem 2rem .45rem .7rem; max-width: 16rem; }
-    #dash-body { transition: opacity .15s; }
-    #dash-body.htmx-request { opacity: .5; }
     .sr-only-dash { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 
@@ -239,7 +237,19 @@
         <noscript><button type="submit" class="dash-toggle">Apply</button></noscript>
     </form>
 
-    <div id="dash-body" class="dash-grid">
+    <div id="dash-body" class="dash-grid skel-host">
+        <div class="skel-placeholder" aria-hidden="true">
+            <div class="dash-kpis">
+                {% for _ in "123456" %}<div class="skel h-28 rounded-2xl"></div>{% endfor %}
+            </div>
+            <div class="dash-row-2 mt-5">
+                <div class="skel h-72 rounded-2xl"></div>
+                <div class="skel h-72 rounded-2xl"></div>
+            </div>
+            <div class="dash-row-3 mt-5">
+                {% for _ in "123" %}<div class="skel h-56 rounded-2xl"></div>{% endfor %}
+            </div>
+        </div>
         <section class="dash-kpis" aria-label="Key numbers">
             {% for kpi in kpis %}
             <div class="dash-kpi">

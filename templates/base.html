@@ -439,6 +439,43 @@
         document.addEventListener('htmx:afterSettle', function () {
             document.documentElement.classList.remove('app-navigating');
         });
+        // A boosted page load draws the next page's shape (partials/page_skeleton.html)
+        // in place of the old page. Not for form posts, which keep the form on
+        // screen, and only after a short wait so a fast answer never flashes it.
+        (function () {
+            const root = document.documentElement;
+            let timer = null;
+            function variant(path) {
+                if (/\/(edit|new|create|add|bulk)\/?$/.test(path) || /^\/careers\/[^/]+\/?$/.test(path)) return 'form';
+                if (/^\/(resumes|interviews)\/[^/]+\/?$/.test(path)) return 'profile';
+                if (path === '/') return 'dashboard';
+                return 'list';
+            }
+            function stop() {
+                clearTimeout(timer);
+                root.classList.remove('app-skeleton');
+            }
+            document.addEventListener('htmx:beforeRequest', function (e) {
+                const d = e.detail || {};
+                if (!d.boosted || (d.requestConfig && d.requestConfig.verb !== 'get')) return;
+                const path = ((d.pathInfo && d.pathInfo.requestPath) || '').split('?')[0];
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                    root.dataset.skeleton = variant(path);
+                    root.classList.add('app-skeleton');
+                }, 120);
+            });
+            document.addEventListener('htmx:afterRequest', function (e) {
+                const d = e.detail || {};
+                if (d.boosted && !d.successful) stop();
+            });
+            document.addEventListener('htmx:afterSettle', function (e) {
+                const d = e.detail || {};
+                if (d.boosted || (d.target && d.target.id === 'main-content')) stop();
+            });
+            document.addEventListener('htmx:historyRestore', stop);
+            window.addEventListener('pageshow', stop);
+        })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -744,6 +781,7 @@
         {% endif %}
         {% block content %}
         {% endblock %}
+        {% include 'partials/page_skeleton.html' %}
     </main>
 
     {% block site_footer %}

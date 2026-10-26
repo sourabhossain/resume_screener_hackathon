@@ -11,7 +11,7 @@
 {% endfor %}
 {% if next_offset %}
 <tr id="pipeline-more">
-    <td colspan="11" class="px-6 py-5 text-center" style="justify-content:center">
+    <td colspan="11" class="skel-host px-6 py-5 text-center" style="justify-content:center">
         <button type="button"
                 hx-get="{% url 'core:pipeline_search' job.slug %}"
                 hx-vals='{"offset": "{{ next_offset }}"}'
@@ -20,10 +20,23 @@
                 hx-target="closest tr"
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"
+                hx-indicator="closest td"
                 class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
             Show {{ next_count }} more
             <span class="font-normal text-zinc-500 dark:text-zinc-400">· {{ remaining }} left</span>
         </button>
+        <div class="skel-placeholder w-full text-left" aria-hidden="true">
+            {% for _ in "123" %}
+            <div class="flex items-center gap-4 py-3">
+                <div class="skel skel-round h-10 w-10 shrink-0"></div>
+                <div class="min-w-0 flex-1 space-y-2">
+                    <div class="skel h-4 w-2/5"></div>
+                    <div class="skel h-3 w-3/5"></div>
+                </div>
+                <div class="skel hidden h-9 w-16 skel-round sm:block"></div>
+            </div>
+            {% endfor %}
+        </div>
     </td>
 </tr>
 {% endif %}
