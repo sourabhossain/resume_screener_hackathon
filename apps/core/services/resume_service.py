@@ -210,10 +210,10 @@ class ResumeService:
             resume.score_manually_edited = False
             resume.save()
 
-        # on_commit defers the task until the outermost transaction commits,
-        # so this is safe even when called inside a nested atomic block.
-        from apps.core.tasks import verify_resume_links_task
-        transaction.on_commit(lambda: verify_resume_links_task.delay(resume.id))
+        # Links are checked now only for a shortlisted candidate; the rest
+        # wait for shortlisting (services/verification_gate.py).
+        from apps.core.services.verification_gate import after_screening
+        after_screening(resume)
 
     @classmethod
     def process_resume(cls, resume) -> Dict[str, Any]:

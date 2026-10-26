@@ -98,8 +98,8 @@ class TestPipelineOrdering:
 
 @pytest.mark.django_db
 class TestPollingRowFragment:
-    """The pending/processing row polls itself every 3s; the fragment must keep
-    returning a real <tr> so the row is never replaced with empty content."""
+    """The single-row fragment (kept for pages loaded before the table's single
+    poll) must keep returning a real <tr> so a row is never blanked."""
 
     def test_fragment_renders_tr(self, authenticated_client, pending_resume):
         url = reverse('core:resume_row_fragment', args=[pending_resume.uuid])
@@ -120,6 +120,41 @@ class TestPollingRowFragment:
         cell = _rank_cell(authenticated_client.get(url).content.decode())
         assert 'h-7 w-7' in cell  # numeric rank badge present (not the "—" dash)
         assert '>1<' in cell  # sole scored resume → rank 1
+
+
+@pytest.mark.django_db
+class TestTablePoll:
+    """One request refreshes every row still in screening or verification."""
+
+    @pytest.fixture
+    def processing(self, sample_job):
+        return Resume.objects.create(job=sample_job, candidate_name='Being Screened', screening_status='processing')
+
+    def _poll(self, client, job, ids):
+        return client.get(reverse('core:pipeline_poll', args=[job.slug]), {'ids': ids}).content.decode()
+
+    def test_pending_rows_are_marked_and_the_page_polls_once(self, authenticated_client, sample_job, processing, scored_resume):
+        body = authenticated_client.get(reverse('core:job_detail', args=[sample_job.slug]),
+                                        {'recruiter_status': 'all'}).content.decode()
+        row = body.split(f'id="resume-row-{processing.pk}"', 1)[1].split('>', 1)[0]
+        done = body.split(f'id="resume-row-{scored_resume.pk}"', 1)[1].split('>', 1)[0]
+        assert 'data-pending' in row and 'data-pending' not in done
+        assert 'every 3s' not in body and body.count('id="pipeline-poller"') == 1
+        assert 'hx-trigger="every 8s"' in body
+
+    def test_the_poll_returns_the_rows_out_of_band_with_their_rank(self, authenticated_client, sample_job, processing, scored_resume):
+        import re
+        body = self._poll(authenticated_client, sample_job, f'{scored_resume.pk}:1,{processing.pk}:2')
+        assert len(re.findall(r'<template>\s*<tr id="resume-row-', body)) == 2 and body.count('hx-swap-oob="true"') >= 4
+        assert '>1<' in _rank_cell(body.split(f'resume-row-{scored_resume.pk}', 1)[1])
+        assert 'id="pipeline-stat-cards" hx-swap-oob="true"' in body
+
+    def test_the_poll_ignores_other_jobs_and_junk(self, authenticated_client, sample_job, pending_resume, user):
+        from apps.core.models import Job, Resume
+        other = Job.objects.create(title='Other', description='x', owner=user)
+        stranger = Resume.objects.create(job=other, candidate_name='Stranger', screening_status='processing')
+        body = self._poll(authenticated_client, sample_job, f'{stranger.pk}:1,abc,:5,{pending_resume.pk}:x')
+        assert 'Stranger' not in body and f'resume-row-{pending_resume.pk}' in body
 
 
 @pytest.mark.django_db

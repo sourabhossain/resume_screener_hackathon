@@ -212,7 +212,7 @@
         <svg class="w-5 h-5 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
-        <p class="text-sm text-zinc-500 dark:text-zinc-400">No verifiable links found in CV</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">{% if resume.verification_results.deferred %}Links are checked once the candidate is shortlisted{% else %}No verifiable links found in CV{% endif %}</p>
     </div>
     {% elif resume.verification_status == 'completed' %}
     <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 p-5 shadow-soft dark:border-zinc-800 dark:shadow-soft-dark sm:p-8" x-data="{ showDetails: false }">

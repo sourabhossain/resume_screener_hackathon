@@ -579,23 +579,23 @@ class TestResumeViews:
         assert b'hx-trigger="every 3s"' not in response.content
 
     def test_resume_row_fragment_polls_when_processing(self, authenticated_client, sample_resume):
-        """Row fragment includes polling trigger when screening is in progress."""
+        """A row still being screened is marked for the table's single poll."""
         sample_resume.screening_status = 'processing'
         sample_resume.save()
         response = authenticated_client.get(
             reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
-        assert b'hx-trigger="every 3s"' in response.content
+        assert b' data-pending' in response.content
 
     def test_resume_row_fragment_polls_when_verification_processing(self, authenticated_client, sample_resume):
-        """Row fragment keeps polling when screening is done but verification is still running."""
+        """A row stays marked while its links are being verified."""
         sample_resume.screening_status = 'completed'
         sample_resume.verification_status = 'processing'
         sample_resume.save()
         response = authenticated_client.get(
             reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
-        assert b'hx-trigger="every 3s"' in response.content
+        assert b' data-pending' in response.content
 
     def test_resume_row_fragment_no_poll_when_done(self, authenticated_client, sample_resume):
         """Row fragment stops polling only when both screening and verification are terminal."""
@@ -605,7 +605,7 @@ class TestResumeViews:
         response = authenticated_client.get(
             reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
-        assert b'hx-trigger="every 3s"' not in response.content
+        assert b' data-pending' not in response.content
 
     def test_resume_row_fragment_no_poll_when_screening_done_verification_skipped(self, authenticated_client, sample_resume):
         """Row fragment stops polling when screening is complete and verification is skipped."""
@@ -615,7 +615,7 @@ class TestResumeViews:
         response = authenticated_client.get(
             reverse('core:resume_row_fragment', kwargs={'uuid': sample_resume.uuid})
         )
-        assert b'hx-trigger="every 3s"' not in response.content
+        assert b' data-pending' not in response.content
 
 
 @pytest.mark.django_db

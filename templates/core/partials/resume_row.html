@@ -1,12 +1,9 @@
 {% load humanize %}{% firstof sort 'best' as sort_key %}
 <tr id="resume-row-{{ resume.pk }}"
     class="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-    {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.screening_status == 'completed' and resume.verification_status == 'processing' or resume.screening_status == 'completed' and resume.verification_status == 'pending' %}
-    hx-get="{% url 'core:resume_row_fragment' resume.uuid %}?sort={{ sort_key }}{% if rank %}&rank={{ rank }}{% endif %}"
-    hx-trigger="every 3s"
-    hx-target="this"
-    hx-swap="outerHTML"
-    {% endif %}>
+    data-pk="{{ resume.pk }}" data-rank="{{ rank|default:'' }}"
+    {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.screening_status == 'completed' and resume.verification_status == 'processing' or resume.screening_status == 'completed' and resume.verification_status == 'pending' %}data-pending{% endif %}
+    {% if oob %}hx-swap-oob="true"{% endif %}>
 
     <td data-label="Rank" class="px-4 py-4 text-center align-middle">
         {% if rank and resume.final_score is not None %}
@@ -164,7 +161,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
         {% elif resume.verification_status == 'skipped' or resume.verification_status == 'failed' %}
-        <span class="text-lg text-zinc-400">—</span>
+        <span class="text-lg text-zinc-400"{% if resume.verification_results.deferred %} title="Links are checked once the candidate is shortlisted"{% endif %}>—</span>
         {% elif resume.verification_score is not None %}
             {% if resume.verification_score >= 70 %}
             <svg class="mx-auto h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24" title="Verified: {{ resume.verification_score }}%">

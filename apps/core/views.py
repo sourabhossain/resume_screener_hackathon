@@ -297,6 +297,7 @@ def job_detail(request, slug):
             'resumes': resumes,
             **_pipeline_page(resumes, request),
             **_sort_context(sort),
+            'status_option_catalog': Resume.status_option_catalog(),
             'pipeline_stats': pipeline_stats,
             'search_q': search_q,
             'recruiter_status_filter': status_filter,
@@ -770,6 +771,30 @@ def resume_status_fragment(request, uuid):
     # oob=True so the response also OOB-refreshes the header action button as
     # screening transitions (e.g. processing -> completed/failed).
     return render(request, 'core/partials/resume_status.html', {'resume': resume, 'oob': True})
+
+
+@login_required
+def pipeline_poll(request, job_slug):
+    """One request refreshes every row still being screened or verified.
+
+    The table sends "pk:rank" for each such row it shows, every few seconds,
+    instead of each row polling for itself; the rows come back as out-of-band
+    swaps with the counters above the table.
+    """
+    job = get_object_or_404(Job, slug=job_slug)
+    ranks = {}
+    for pair in request.GET.get('ids', '').split(',')[:PIPELINE_PAGE_SIZE * 4]:
+        pk, _, rank = pair.partition(':')
+        if pk.isdigit():
+            ranks[int(pk)] = int(rank) if rank.isdigit() else None
+    resumes = (Resume.objects.filter(job=job, pk__in=ranks).select_related('job')
+               .prefetch_related('interviews__evaluations'))
+    return render(request, 'core/partials/pipeline_poll.html', {
+        'rows': [(r, ranks[r.pk]) for r in sorted(resumes, key=lambda r: list(ranks).index(r.pk))],
+        'pipeline_stats': _pipeline_stats(_ordered_active_resumes_queryset(job.resumes)),
+        'sort': _pipeline_sort(request),
+        'job': job,
+    })
 
 
 @login_required

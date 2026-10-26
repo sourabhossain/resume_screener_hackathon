@@ -1,0 +1,9 @@
+<div class="status-picker__group">
+    <p class="status-picker__group-label">Pipeline</p>
+    {% for opt in options %}{% if not opt.outcome %}{% include 'core/partials/recruiter_status_option.html' %}{% endif %}{% endfor %}
+</div>
+<div class="status-picker__divider" aria-hidden="true"></div>
+<div class="status-picker__group">
+    <p class="status-picker__group-label">Outcome</p>
+    {% for opt in options %}{% if opt.outcome %}{% include 'core/partials/recruiter_status_option.html' %}{% endif %}{% endfor %}
+</div>

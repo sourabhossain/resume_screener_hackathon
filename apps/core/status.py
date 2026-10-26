@@ -91,6 +91,8 @@ def advance(resume, target, *, reason, user=None) -> bool:
 
 
 def _run_entry_actions(resume, previous, new_status, user):
+    from apps.core.services.verification_gate import after_status_change
+    after_status_change(resume)
     notes = []
     if new_status in ('rejected', 'withdrawn'):
         notes += _close_open_steps(resume)

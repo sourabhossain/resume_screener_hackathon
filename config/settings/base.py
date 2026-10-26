@@ -386,6 +386,10 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or (
 # sending mailbox is often a service account nobody reads.
 CAREERS_REPLY_TO = os.environ.get('CAREERS_REPLY_TO', 'jobs@sslwireless.com')
 
+# Link verification runs a headless browser per CV; by default it waits until
+# the candidate is shortlisted (apps/core/services/verification_gate.py).
+VERIFY_LINKS_AFTER_SHORTLIST = os.environ.get('VERIFY_LINKS_AFTER_SHORTLIST', 'True').lower() in ('1', 'true', 'yes')
+
 # Absolute base URL used to build candidate-facing links in emails. Emails are
 # sent outside a request context, so the host cannot be derived from one.
 SITE_BASE_URL = os.environ.get('SITE_BASE_URL', 'http://localhost:8000')

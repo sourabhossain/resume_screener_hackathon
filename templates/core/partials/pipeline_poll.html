@@ -1,0 +1,5 @@
+{% for resume, rank in rows %}
+<template>{% include 'core/partials/resume_row.html' with resume=resume rank=rank oob=True %}</template>
+{% endfor %}
+{% include 'core/partials/pipeline_stats_cards.html' with oob=True %}
+{% include 'core/partials/pipeline_badge.html' with oob=True %}

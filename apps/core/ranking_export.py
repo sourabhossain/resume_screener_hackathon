@@ -1,4 +1,5 @@
 """The job's master ranking as an Excel sheet, laid out like the recruiters' own."""
+from copy import copy
 from io import BytesIO
 
 from django.utils import timezone
@@ -72,7 +73,8 @@ def _interviews(resume):
 def ranked_rows(job):
     """Every scored candidate for the job, best first; equal scores share a rank."""
     resumes = list(Resume.objects.filter(job=job, screening_status='completed', final_score__isnull=False)
-                   .defer('raw_text', 'reasoning', 'verification_results', 'extracted_links')
+                   .only('candidate_name', 'final_score', 'recommendation', 'recruiter_status', 'screening_summary',
+                         'experience_years', 'education', 'certifications', 'matched_skills', 'missing_skills')
                    .prefetch_related('interviews__evaluations').order_by('-final_score', 'candidate_name'))
     rows = []
     for index, resume in enumerate(resumes):
@@ -146,24 +148,33 @@ def build_workbook(job) -> bytes:
         ws.column_dimensions[get_column_letter(col)].width = width
     ws.row_dimensions[3].height = 32
 
-    # One style object per kind, not per cell: a thousand-row sheet spent most
-    # of its time building identical fonts and alignments.
+    # openpyxl hashes every style object it is handed, which made styling the
+    # cells most of a large sheet's time. Each distinct look is styled once and
+    # its style record copied to the cells that share it.
     fonts = {bold: Font(name='Arial', size=10, bold=bold) for bold in (False, True)}
     aligns = {side: Alignment(horizontal=side, vertical='center', wrap_text=True) for side in ('left', 'center')}
-    fills = {key: _fill(color) for key, color in {**ROW_FILLS, None: WHITE}.items()}
     column_styles = [(fonts[title in ('Role', 'Candidate Name')], aligns['left' if title in LEFT_ALIGNED else 'center'])
                      for title, _ in COLUMNS]
+    looks = {}
+
+    def style(cell, col, fill_color):
+        key = (col, fill_color)
+        if key not in looks:
+            cell.font, cell.alignment = column_styles[col - 1]
+            cell.fill = _fill(fill_color)
+            cell.border = BORDER
+            if col == 4:
+                cell.number_format = '0.0'
+            looks[key] = copy(cell._style)
+        else:
+            cell._style = copy(looks[key])
+
     for index, row in enumerate(rows, start=4):
-        fill = fills.get(row['resume'].recommendation, fills[None])
+        row_fill = ROW_FILLS.get(row['resume'].recommendation, WHITE)
         for col, value in enumerate(row['values'], start=1):
             cell = ws.cell(row=index, column=col)
             _put(cell, value)
-            cell.font, cell.alignment = column_styles[col - 1]
-            cell.fill = fill
-            cell.border = BORDER
-        ws.cell(row=index, column=4).number_format = '0.0'
-        if row['highlight']:
-            ws.cell(row=index, column=3).fill = _fill(row['highlight'])
+            style(cell, col, row['highlight'] if col == 3 and row['highlight'] else row_fill)
 
     end = 3 + len(rows)
     if rows:

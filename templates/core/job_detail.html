@@ -444,6 +444,12 @@
                 </tbody>
                 <tbody class="skel-placeholder" aria-hidden="true">{% include 'core/partials/pipeline_skeleton_rows.html' %}</tbody>
             </table>
+            <template id="rs-options-template">{% include 'core/partials/recruiter_status_options.html' with options=status_option_catalog %}</template>
+            <div id="pipeline-poller" hidden
+                 hx-get="{% url 'core:pipeline_poll' job.slug %}"
+                 hx-trigger="every 8s"
+                 hx-vals="js:{ids: pipelinePendingIds(), sort: (document.getElementById('pipeline-sort') || {}).value || 'best'}"
+                 hx-target="this" hx-select="unset" hx-swap="none"></div>
         </div>
         {% else %}
         <div class="px-6 py-16 text-center sm:py-20">

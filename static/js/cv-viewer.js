@@ -69,10 +69,15 @@
             },
 
             markSeen(btn) {
-                if (btn.dataset.seen === 'seen' || !window.htmx) return;
+                const cell = document.querySelector(rowCell(btn.dataset.pk, 'Reviewed'));
+                if (btn.dataset.seen === 'seen' || !window.htmx || !cell) return;
                 btn.dataset.seen = 'seen';
+                // The cell is the source as well as the target: a request from
+                // nowhere inherits the page's hx-select="#main-content" and
+                // would swap the cell for nothing.
                 window.htmx.ajax('POST', btn.dataset.seenUrl, {
-                    target: rowCell(btn.dataset.pk, 'Reviewed'),
+                    source: cell,
+                    target: cell,
                     swap: 'outerHTML',
                     values: { seen_status: 'seen' },
                     headers: { 'X-CSRFToken': window.CSRF_TOKEN },
@@ -128,10 +133,13 @@
                     : Promise.resolve(true);
                 ask.then(function (go) {
                     if (!go) return;
-                    self.busy = true;
                     const pk = btn.dataset.pk;
+                    const cell = document.querySelector(rowCell(pk, 'Recruiter Status'));
+                    if (!cell) return;
+                    self.busy = true;
                     window.htmx.ajax('POST', btn.dataset.statusUrl, {
-                        target: rowCell(pk, 'Recruiter Status'),
+                        source: cell,
+                        target: cell,
                         swap: 'outerHTML',
                         values: { recruiter_status: value, context: 'cell' },
                         headers: { 'X-CSRFToken': window.CSRF_TOKEN },
@@ -157,3 +165,43 @@
         };
     };
 })();
+
+/* The pipeline's single live-update poll (core/job_detail.html) sends "pk:rank"
+ * for every row still being screened or verified. With none on screen the
+ * tick is dropped before it leaves, so an idle table costs the server nothing. */
+window.pipelinePendingIds = function () {
+    return Array.from(document.querySelectorAll('#pipeline-tbody tr[data-pending]'))
+        .map(function (tr) { return tr.dataset.pk + ':' + (tr.dataset.rank || ''); })
+        .join(',');
+};
+document.addEventListener('htmx:beforeRequest', function (e) {
+    const elt = e.detail && e.detail.elt;
+    if (elt && elt.id === 'pipeline-poller' && !window.pipelinePendingIds()) e.preventDefault();
+});
+
+/* A pipeline row's status picker keeps an empty options box; the full list
+ * lives once per page in <template id="rs-options-template"> and is copied in
+ * the first time the picker opens, marked with the row's current status. */
+window.rsFillOptions = function (box) {
+    const tpl = document.getElementById('rs-options-template');
+    if (!box || box.childElementCount || !tpl) return;
+    const holder = box.closest('[data-current]');
+    const current = (holder && holder.dataset.current) || 'new';
+    box.appendChild(tpl.content.cloneNode(true));
+    box.querySelectorAll('[data-value]').forEach(function (btn) {
+        const on = btn.dataset.value === current;
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        if (on) {
+            btn.classList.add('status-picker__option--active', 'status-picker__option--' + btn.dataset.tone);
+            const check = btn.querySelector('.status-picker__check');
+            if (check) check.classList.add('status-picker__check--visible');
+        }
+        if (btn.dataset.value === 'hired' && !on && box.hasAttribute('data-hired-blocked')) {
+            btn.disabled = true;
+            btn.setAttribute('aria-disabled', 'true');
+            btn.style.opacity = '.45';
+            btn.style.cursor = 'not-allowed';
+            btn.title = 'Complete the Pre-Onboarding checklist first';
+        }
+    });
+};

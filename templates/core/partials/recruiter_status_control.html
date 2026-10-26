@@ -14,7 +14,7 @@
           {% if status_context == 'card' %}hx-target="closest .rs-status"{% else %}hx-target="closest td"{% endif %}
           hx-swap="outerHTML"
           hx-select="unset"
-          x-data="{ open: false, mx: 0, my: 0, up: false, mh: 420, toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); const below = window.innerHeight - r.bottom - 12; const above = r.top - 12; this.up = below < 430 && above > below; this.mh = Math.round(Math.min(420, Math.max(160, this.up ? above : below))); this.mx = Math.max(8, Math.min(r.left, document.documentElement.clientWidth - 368)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
+          x-data="{ open: false, mx: 0, my: 0, up: false, mh: 420, toggle(btn) { if (this.open) { this.open = false; return; } if (this.$refs.options) window.rsFillOptions(this.$refs.options); const r = btn.getBoundingClientRect(); const below = window.innerHeight - r.bottom - 12; const above = r.top - 12; this.up = below < 430 && above > below; this.mh = Math.round(Math.min(420, Math.max(160, this.up ? above : below))); this.mx = Math.max(8, Math.min(r.left, document.documentElement.clientWidth - 368)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; } }"
           x-on:keydown.escape.window="open = false"
           x-on:scroll.window="open = false"
           class="relative inline-block">
@@ -42,49 +42,11 @@
              :style="`top:${my}px; left:${mx}px; max-height:${mh}px; width:22.5rem; max-width:calc(100vw - 16px);${up ? ' transform: translateY(-100%);' : ''}`"
              class="fixed z-50 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
              role="listbox" style="display: none;">
-            <div class="status-picker__group">
-                <p class="status-picker__group-label">Pipeline</p>
-                {% for opt in resume.recruiter_status_options %}{% if not opt.outcome %}
-                <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
-                        aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
-                        {% if opt.blocked %}disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"{% endif %}
-                        title="{% if opt.blocked %}Complete the Pre-Onboarding checklist first{% else %}{{ opt.hint }}{% endif %}"
-                        x-on:click="open = false"
-                        class="status-picker__option{% if opt.current %} status-picker__option--active status-picker__option--{{ opt.tone }}{% endif %}">
-                    <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
-                        <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
-                    </span>
-                    <span class="status-picker__option-body">
-                        <span class="status-picker__option-label truncate">{{ opt.label }}</span>
-                    </span>
-                    <span class="status-picker__check{% if opt.current %} status-picker__check--visible{% endif %}" aria-hidden="true">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                    </span>
-                </button>
-                {% endif %}{% endfor %}
-            </div>
-            <div class="status-picker__divider" aria-hidden="true"></div>
-            <div class="status-picker__group">
-                <p class="status-picker__group-label">Outcome</p>
-                {% for opt in resume.recruiter_status_options %}{% if opt.outcome %}
-                <button type="submit" name="recruiter_status" value="{{ opt.value }}" role="option"
-                        aria-selected="{% if opt.current %}true{% else %}false{% endif %}"
-                        {% if opt.blocked %}disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"{% endif %}
-                        title="{% if opt.blocked %}Complete the Pre-Onboarding checklist first{% else %}{{ opt.hint }}{% endif %}"
-                        x-on:click="open = false"
-                        class="status-picker__option{% if opt.current %} status-picker__option--active status-picker__option--{{ opt.tone }}{% endif %}">
-                    <span class="status-picker__badge status-picker__badge--sm status-picker__badge--{{ opt.tone }}" aria-hidden="true">
-                        <span class="status-picker__dot status-picker__dot--{{ opt.tone }}"></span>
-                    </span>
-                    <span class="status-picker__option-body">
-                        <span class="status-picker__option-label truncate">{{ opt.label }}</span>
-                    </span>
-                    <span class="status-picker__check{% if opt.current %} status-picker__check--visible{% endif %}" aria-hidden="true">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                    </span>
-                </button>
-                {% endif %}{% endfor %}
-            </div>
+            {% if status_context == 'card' %}
+            {% include 'core/partials/recruiter_status_options.html' with options=resume.recruiter_status_options %}
+            {% else %}
+            <div x-ref="options"{% if not resume.onboarding_complete and resume.recruiter_status != 'hired' %} data-hired-blocked{% endif %}></div>
+            {% endif %}
         </div>
     </form>
 {% endif %}

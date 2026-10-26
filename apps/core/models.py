@@ -438,23 +438,34 @@ class Resume(SoftDeleteModel):
             return 'sent'
         return 'pending' if self.recruiter_status == 'rejected' else ''
 
-    def recruiter_status_options(self):
-        """Choices annotated with tone + current flag for the status dropdown.
-        Django templates can't index a dict by a loop variable, so the per-option
-        tone is resolved here."""
-        current = self.recruiter_status or 'new'
+    @classmethod
+    def status_option_catalog(cls):
+        """Every status with its tone, hint and group. The pipeline table keeps
+        one copy of these per page and each row's picker copies it on opening
+        (static/js/cv-viewer.js), instead of every row carrying all of them."""
         return [
             {
                 'value': value,
                 'label': label,
-                'tone': self.RECRUITER_STATUS_TONES.get(value, 'zinc'),
-                'hint': self.RECRUITER_STATUS_HINTS.get(value, ''),
-                'outcome': value in self.RECRUITER_STATUS_OUTCOMES,
-                'current': value == current,
-                # Onboarded waits for the whole Pre-Onboarding checklist.
-                'blocked': value == 'hired' and value != current and not self.onboarding_complete,
+                'tone': cls.RECRUITER_STATUS_TONES.get(value, 'zinc'),
+                'hint': cls.RECRUITER_STATUS_HINTS.get(value, ''),
+                'outcome': value in cls.RECRUITER_STATUS_OUTCOMES,
             }
-            for value, label in self.RECRUITER_STATUS_CHOICES
+            for value, label in cls.RECRUITER_STATUS_CHOICES
+        ]
+
+    def recruiter_status_options(self):
+        """The catalog with this candidate's current status marked. Django
+        templates can't index a dict by a loop variable, so it is resolved here."""
+        current = self.recruiter_status or 'new'
+        return [
+            {
+                **opt,
+                'current': opt['value'] == current,
+                # Onboarded waits for the whole Pre-Onboarding checklist.
+                'blocked': opt['value'] == 'hired' and opt['value'] != current and not self.onboarding_complete,
+            }
+            for opt in self.status_option_catalog()
         ]
 
     def assign_tier_and_recommendation_from_final_score(self) -> None:
