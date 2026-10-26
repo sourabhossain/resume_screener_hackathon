@@ -26,8 +26,9 @@ DEBUG = False
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
-# nginx overwrites X-Real-IP with the visitor's address; the app port is bound
-# to localhost (docker-compose.prod.yml), so only nginx can set it.
+# The proxy sets X-Real-IP (nginx) or X-Forwarded-For (Apache) to the visitor's
+# address; the app port is bound to localhost (docker-compose.prod.yml), so only
+# the proxy can set them. See config/client_ip.py.
 CLIENT_IP_HEADER = os.environ.get('CLIENT_IP_HEADER', 'HTTP_X_REAL_IP')
 
 # Django 4.0+ checks the Origin header against this list for CSRF on HTTPS.

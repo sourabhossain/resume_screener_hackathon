@@ -263,10 +263,22 @@ def test_rate_limits_key_on_the_visitor_behind_the_proxy():
     assert client_ip(request) == '203.0.113.9'
 
 
+@override_settings(CLIENT_IP_HEADER='HTTP_X_REAL_IP')
+def test_behind_apache_the_address_it_appended_to_x_forwarded_for_is_used():
+    """Apache sends no X-Real-IP; without this every applicant shared one limit."""
+    from config.client_ip import client_ip
+    request = RequestFactory().get('/', REMOTE_ADDR='127.0.0.1', HTTP_X_FORWARDED_FOR='6.6.6.6, 203.0.113.9')
+    assert client_ip(request) == '203.0.113.9'
+    both = RequestFactory().get('/', REMOTE_ADDR='127.0.0.1', HTTP_X_REAL_IP='198.51.100.1',
+                                HTTP_X_FORWARDED_FOR='203.0.113.9')
+    assert client_ip(both) == '198.51.100.1'
+
+
 @override_settings(CLIENT_IP_HEADER='')
 def test_without_a_proxy_header_the_connecting_address_is_used():
     from config.client_ip import client_ip
-    request = RequestFactory().get('/', REMOTE_ADDR='198.51.100.7', HTTP_X_REAL_IP='1.2.3.4')
+    request = RequestFactory().get('/', REMOTE_ADDR='198.51.100.7', HTTP_X_REAL_IP='1.2.3.4',
+                                   HTTP_X_FORWARDED_FOR='5.6.7.8')
     assert client_ip(request) == '198.51.100.7'
 
 
