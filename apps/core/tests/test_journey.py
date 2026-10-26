@@ -69,11 +69,12 @@ def test_a_candidate_goes_from_the_careers_page_to_onboarded(people):
 
     assert _status(recruiter, resume, 'shortlisted') == 'shortlisted'
     assert _status(recruiter, resume, 'phone_screen') == 'phone_screen'
-    assert _subjects('nadia@example.com') == []
+    # Applying sends the thank-you note; shortlisting and screening send nothing.
+    assert _subjects('nadia@example.com') == [f'Thank you for applying for {job.title} at SSL Wireless']
 
     # Assessment: one link, both parts taken, both reports open.
     _status(recruiter, resume, 'assessment')
-    invite = [m for m in mail.outbox if 'nadia@example.com' in m.to]
+    invite = [m for m in mail.outbox if 'nadia@example.com' in m.to and 'Thank you for applying' not in m.subject]
     assert len(invite) == 1
     invitation = AssessmentInvitation.objects.get(resume=resume)
     candidate = Client()
@@ -165,7 +166,7 @@ def test_a_candidate_goes_from_the_careers_page_to_onboarded(people):
                 .values_list('to_status', flat=True)) == [
         'shortlisted', 'phone_screen', 'assessment', 'interviewing', 'selected', 'info_received',
         'bgv_completed', 'offer_extended', 'pre_onboarding', 'hired']
-    assert len(_subjects('nadia@example.com')) == 4
+    assert len(_subjects('nadia@example.com')) == 5
     assert len(_subjects('panel@sslwireless.com')) == 2
     for url in (reverse('core:resume_detail', kwargs={'uuid': resume.uuid}), reverse('core:dashboard')):
         assert hr.get(url).status_code == 200
@@ -182,7 +183,8 @@ def test_a_rejected_candidate_gets_one_letter_and_nothing_else(people):
     recruiter.post(reverse('employee_form:send', kwargs={'uuid': resume.uuid}))
     recruiter.post(reverse('interviews:create', kwargs={'resume_uuid': resume.uuid}), {'phase': '1'})
 
-    assert len(_subjects('nadia@example.com')) == 1
+    assert _subjects('nadia@example.com') == [f'Thank you for applying for {job.title} at SSL Wireless',
+                                              f'Your application for {job.title} at SSL Wireless']
 
 
 @pytest.mark.django_db

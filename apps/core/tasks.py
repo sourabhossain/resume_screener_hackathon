@@ -286,3 +286,42 @@ def _send_rejection_email(resume_id, user_id):
         rejection_email_error='')
     logger.info('rejection_email.sent resume=%s by=%s', resume_id, user_id)
     return 'sent'
+
+
+@shared_task(name='apps.core.tasks.send_application_received_email', soft_time_limit=60, time_limit=90)
+def send_application_received_email(resume_id: int) -> str:
+    """Thank a candidate who applied on the careers page, once.
+
+    Not retried: a retry after an SMTP timeout could send the same letter twice.
+    """
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from apps.core.models import Resume
+    from apps.core.utils import claim_send
+
+    if not claim_send('application-received', resume_id, seconds=24 * 3600):
+        return 'already_sent'
+    resume = Resume.objects.select_related('job').filter(pk=resume_id).first()
+    if resume is None:
+        return 'missing'
+    if not (resume.email or '').strip():
+        return 'no_email'
+
+    context = {'candidate_name': ' '.join((resume.candidate_name or '').split()).title() or 'Candidate',
+               'job_title': resume.job.title}
+    message = EmailMultiAlternatives(
+        subject=' '.join(f'Thank you for applying for {resume.job.title} at SSL Wireless'.split()),
+        body=render_to_string('core/email/application_received.txt', context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[resume.email],
+        reply_to=[settings.CAREERS_REPLY_TO],
+    )
+    message.attach_alternative(render_to_string('core/email/application_received.html', context), 'text/html')
+    try:
+        message.send(fail_silently=False)
+    except Exception:
+        logger.exception('application_received_email.failed resume=%s', resume_id)
+        return 'failed'
+    logger.info('application_received_email.sent resume=%s', resume_id)
+    return 'sent'

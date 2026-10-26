@@ -1,8 +1,8 @@
-{% load humanize %}
+{% load humanize %}{% firstof sort 'best' as sort_key %}
 <tr id="resume-row-{{ resume.pk }}"
     class="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
     {% if resume.screening_status == 'processing' or resume.screening_status == 'pending' or resume.screening_status == 'completed' and resume.verification_status == 'processing' or resume.screening_status == 'completed' and resume.verification_status == 'pending' %}
-    hx-get="{% url 'core:resume_row_fragment' resume.uuid %}{% if rank %}?rank={{ rank }}{% endif %}"
+    hx-get="{% url 'core:resume_row_fragment' resume.uuid %}?sort={{ sort_key }}{% if rank %}&rank={{ rank }}{% endif %}"
     hx-trigger="every 3s"
     hx-target="this"
     hx-swap="outerHTML"
@@ -11,9 +11,9 @@
     <td data-label="Rank" class="px-4 py-4 text-center align-middle">
         {% if rank and resume.final_score is not None %}
         <span class="inline-flex h-7 w-7 items-center justify-center rounded-full
-            {% if rank == 1 %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 font-bold
-            {% elif rank == 2 %}bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 font-semibold
-            {% elif rank == 3 %}bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 font-semibold
+            {% if sort_key == 'best' and rank == 1 %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 font-bold
+            {% elif sort_key == 'best' and rank == 2 %}bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 font-semibold
+            {% elif sort_key == 'best' and rank == 3 %}bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 font-semibold
             {% else %}bg-zinc-50 text-zinc-400 dark:bg-zinc-800/60 dark:text-zinc-500 font-medium{% endif %}
             text-xs tabular-nums">{{ rank }}</span>
         {% else %}
@@ -215,6 +215,11 @@
                         data-cv-name="{{ resume.candidate_name|title }}"
                         data-cv-type="{{ resume.file_type|lower }}"
                         onclick="window.dispatchEvent(new CustomEvent('cv-view', {detail: this.dataset}))"
+                        {% if resume.seen_status != 'seen' %}hx-post="{% url 'core:resume_seen_update' resume.uuid %}"
+                        hx-vals='{"seen_status": "seen"}'
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        hx-target="#resume-row-{{ resume.pk }} td[data-label='Reviewed']"
+                        hx-swap="outerHTML"{% endif %}
                         x-on:click="open = false"
                         class="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium text-zinc-700 transition hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-200 dark:hover:bg-primary-950/40 dark:hover:text-primary-300">
                     <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>

@@ -30,6 +30,7 @@ app.conf.task_routes = {
     'apps.sei_assessment.tasks.send_sei_invite': {'queue': 'notifications'},
     'apps.sei_assessment.tasks.close_expired_sittings': {'queue': 'notifications'},
     'apps.core.tasks.send_rejection_email': {'queue': 'notifications'},
+    'apps.core.tasks.send_application_received_email': {'queue': 'notifications'},
     'apps.interviews.tasks.send_evaluator_invite': {'queue': 'notifications'},
     'apps.interviews.tasks.send_candidate_invite': {'queue': 'notifications'},
     'apps.interviews.tasks.send_interview_reminders': {'queue': 'notifications'},

@@ -61,6 +61,33 @@ def _ordered_active_resumes_queryset(resume_qs):
 
 PIPELINE_PAGE_SIZE = 50
 
+# key: (label in the picker, note under the table title, order). The default
+# keeps _ordered_active_resumes_queryset's decision-then-score order.
+PIPELINE_SORTS = {
+    'best': ('Final score', 'sorted by decision, then score', None),
+    'newest': ('Latest CV', 'newest first', ('-created_at', '-pk')),
+    'oldest': ('Oldest CV', 'oldest first', ('created_at', 'pk')),
+    'name': ('Name (A–Z)', 'sorted by name', ('candidate_name', 'pk')),
+}
+
+
+def _pipeline_sort(request):
+    value = request.GET.get('sort', 'best').strip()
+    return value if value in PIPELINE_SORTS else 'best'
+
+
+def _sorted_pipeline(resumes, sort):
+    order = PIPELINE_SORTS[sort][2]
+    return resumes.order_by(*order) if order else resumes
+
+
+def _sort_context(sort):
+    return {
+        'sort': sort,
+        'sort_note': PIPELINE_SORTS[sort][1],
+        'sort_options': [{'value': key, 'label': label} for key, (label, _, _) in PIPELINE_SORTS.items()],
+    }
+
 
 def _pipeline_page(resumes, request):
     """One page of the pipeline table and where the next one starts. A job
@@ -246,6 +273,8 @@ def job_detail(request, slug):
         resumes = resumes.filter(recruiter_status=status_filter)
     seen_filter = _seen_filter(request)
     resumes = _apply_seen_filter(resumes, seen_filter)
+    sort = _pipeline_sort(request)
+    resumes = _sorted_pipeline(resumes, sort)
 
     # Counts for the "Download CVs" menu — only resumes that actually have a file.
     with_files = (
@@ -267,6 +296,7 @@ def job_detail(request, slug):
             'job': job,
             'resumes': resumes,
             **_pipeline_page(resumes, request),
+            **_sort_context(sort),
             'pipeline_stats': pipeline_stats,
             'search_q': search_q,
             'recruiter_status_filter': status_filter,
@@ -331,9 +361,14 @@ def pipeline_search(request, job_slug):
         resumes = resumes.filter(recruiter_status=status_filter)
     seen_filter = _seen_filter(request)
     resumes = _apply_seen_filter(resumes, seen_filter)
+    sort = _pipeline_sort(request)
+    resumes = _sorted_pipeline(resumes, sort)
     return render(request, 'core/partials/pipeline_search_results.html', {
         'resumes': resumes,
         **_pipeline_page(resumes, request),
+        **_sort_context(sort),
+        # A fresh first page also refreshes the count and sort note above the table.
+        'oob_summary': True,
         'search_q': search_q,
         'recruiter_status_filter': status_filter,
         'seen_filter': seen_filter,
@@ -568,6 +603,7 @@ def resume_rejection_send(request, uuid):
 @login_required
 def resume_detail(request, uuid):
     resume = get_object_or_404(Resume.objects.select_related('job'), uuid=uuid)
+    _mark_seen(resume)
     return render(request, 'core/resume_detail.html',
                   _candidate_forms_context(request, resume))
 
@@ -757,7 +793,8 @@ def resume_row_fragment(request, uuid):
     return render(
         request,
         'core/partials/resume_row.html',
-        {'resume': resume, 'rank': rank, 'pipeline_stats': pipeline_stats, 'is_fragment': True},
+        {'resume': resume, 'rank': rank, 'sort': _pipeline_sort(request), 'pipeline_stats': pipeline_stats,
+         'is_fragment': True},
     )
 
 
@@ -1019,6 +1056,13 @@ def careers_apply(request, slug):
 
             from apps.core.services.screening_queue import queue_screening
             queue_screening(resume.id)
+
+            # After the commit, so the worker finds the row. A broker outage
+            # loses only the courtesy email, never the application.
+            from django.db import transaction
+            from apps.core.tasks import send_application_received_email
+            from apps.core.utils import queue_task
+            transaction.on_commit(lambda: queue_task(send_application_received_email, resume.pk))
 
             return redirect('core:careers_thanks', slug=job.slug)
         else:
@@ -1616,14 +1660,20 @@ def job_description_draft_status(request, token):
     return JsonResponse(state)
 
 
+def _mark_seen(resume):
+    """Opening a candidate's page or their CV marks it reviewed; HR can still
+    set it back to Not seen by hand."""
+    if resume.seen_status != 'seen':
+        resume.seen_status = 'seen'
+        # Only this column, as in resume_seen_update.
+        resume.save(update_fields=['seen_status', 'updated_at'])
+
+
 @login_required
 @require_POST
 def resume_seen_update(request, uuid):
-    """Mark a CV reviewed, or back to not reviewed. Set by hand by HR.
-
-    Deliberately not driven by opening the page: clicking through a list is not
-    reading a CV, and a queue that marked itself would tell HR nothing.
-    """
+    """Mark a CV reviewed, or back to not reviewed. Also sent by the table's
+    View CV button, which opens the CV without leaving the list."""
     resume = get_object_or_404(Resume, uuid=uuid)
     new_status = request.POST.get('seen_status', '').strip()
     valid = {c[0] for c in Resume.SEEN_STATUS_CHOICES}

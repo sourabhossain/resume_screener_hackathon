@@ -72,9 +72,14 @@ def _interviews(resume):
 def ranked_rows(job):
     """Every scored candidate for the job, best first; equal scores share a rank."""
     resumes = list(Resume.objects.filter(job=job, screening_status='completed', final_score__isnull=False)
+                   .defer('raw_text', 'reasoning', 'verification_results', 'extracted_links')
                    .prefetch_related('interviews__evaluations').order_by('-final_score', 'candidate_name'))
     rows = []
-    for resume in resumes:
+    for index, resume in enumerate(resumes):
+        # Sorted best first, so a candidate's rank is the place of the first
+        # one with the same score.
+        if not index or resume.final_score != resumes[index - 1].final_score:
+            rank = index + 1
         summary = resume.screening_summary or {}
         years = resume.experience_years
         interview, highlight = _interviews(resume)
@@ -83,7 +88,7 @@ def ranked_rows(job):
             'highlight': highlight,
             'values': [
                 job.title,
-                1 + sum(1 for other in resumes if other.final_score > resume.final_score),
+                rank,
                 resume.candidate_name,
                 round(resume.final_score, 1),
                 summary.get('verdict') or VERDICTS.get(resume.recommendation, '—'),
@@ -110,7 +115,7 @@ def _put(cell, value):
 
 def build_workbook(job) -> bytes:
     rows = ranked_rows(job)
-    unscored = Resume.objects.filter(job=job).exclude(pk__in=[r['resume'].pk for r in rows]).count()
+    unscored = Resume.objects.filter(job=job).count() - len(rows)
     wb = Workbook()
     ws = wb.active
     ws.title = 'Master Ranking'
@@ -141,17 +146,21 @@ def build_workbook(job) -> bytes:
         ws.column_dimensions[get_column_letter(col)].width = width
     ws.row_dimensions[3].height = 32
 
+    # One style object per kind, not per cell: a thousand-row sheet spent most
+    # of its time building identical fonts and alignments.
+    fonts = {bold: Font(name='Arial', size=10, bold=bold) for bold in (False, True)}
+    aligns = {side: Alignment(horizontal=side, vertical='center', wrap_text=True) for side in ('left', 'center')}
+    fills = {key: _fill(color) for key, color in {**ROW_FILLS, None: WHITE}.items()}
+    column_styles = [(fonts[title in ('Role', 'Candidate Name')], aligns['left' if title in LEFT_ALIGNED else 'center'])
+                     for title, _ in COLUMNS]
     for index, row in enumerate(rows, start=4):
-        fill = _fill(ROW_FILLS.get(row['resume'].recommendation, WHITE))
+        fill = fills.get(row['resume'].recommendation, fills[None])
         for col, value in enumerate(row['values'], start=1):
             cell = ws.cell(row=index, column=col)
             _put(cell, value)
-            title = COLUMNS[col - 1][0]
-            cell.font = Font(name='Arial', size=10, bold=title in ('Role', 'Candidate Name'))
+            cell.font, cell.alignment = column_styles[col - 1]
             cell.fill = fill
             cell.border = BORDER
-            cell.alignment = Alignment(horizontal='left' if title in LEFT_ALIGNED else 'center',
-                                       vertical='center', wrap_text=True)
         ws.cell(row=index, column=4).number_format = '0.0'
         if row['highlight']:
             ws.cell(row=index, column=3).fill = _fill(row['highlight'])

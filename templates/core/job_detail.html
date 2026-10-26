@@ -184,7 +184,7 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 class="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">Applicant pipeline</h2>
-                    <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{{ queue_count }} in queue · sorted by decision, then score</p>
+                    {% include 'core/partials/pipeline_queue_summary.html' %}
                 </div>
             {% if job.status == 'active' %}
             {% if pipeline_stats.total %}
@@ -225,7 +225,7 @@
                         document.getElementById('pipeline-suggestions').innerHTML = '';
                     }
                  }">
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <div class="relative w-full max-w-md">
                         <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"></path>
@@ -240,7 +240,7 @@
                                hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
                                hx-target="#pipeline-tbody"
                                hx-swap="innerHTML"
-                               hx-include="#pipeline-status-filter, #pipeline-seen-filter"
+                               hx-include="#pipeline-status-filter, #pipeline-seen-filter, #pipeline-sort"
                                @input="hasValue = $event.target.value.length > 0"
                                @blur="setTimeout(() => { document.getElementById('pipeline-suggestions').innerHTML = ''; }, 200)"
                                class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-primary-500 dark:focus:bg-zinc-900">
@@ -266,7 +266,7 @@
                                hx-trigger="change"
                                hx-target="#pipeline-tbody"
                                hx-swap="innerHTML"
-                               hx-include="#pipeline-search-input, #pipeline-seen-filter">
+                               hx-include="#pipeline-search-input, #pipeline-seen-filter, #pipeline-sort">
                         <button type="button"
                                 x-on:click="toggle($event.currentTarget)"
                                 :aria-expanded="open"
@@ -320,6 +320,59 @@
                             {% endfor %}
                         </div>
                     </div>
+                    <div class="relative shrink-0"
+                         x-data="{ open: false, value: '{{ sort|escapejs }}', mx: 0, my: 0, up: false,
+                                   labels: { {% for opt in sort_options %}'{{ opt.value|escapejs }}': '{{ opt.label|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %} },
+                                   toggle(btn) { if (this.open) { this.open = false; return; } const r = btn.getBoundingClientRect(); this.up = window.innerHeight - r.bottom < 230 && r.top > 230; this.mx = Math.max(8, Math.min(r.right - 224, window.innerWidth - 232)); this.my = this.up ? r.top - 6 : r.bottom + 6; this.open = true; },
+                                   pick(v) { this.open = false; if (this.value === v) return; this.value = v; const f = this.$refs.field; f.value = v; htmx.trigger(f, 'change'); } }"
+                         x-on:keydown.escape.window="open = false"
+                         x-on:scroll.window="open = false">
+                        <input type="hidden"
+                               id="pipeline-sort"
+                               name="sort"
+                               value="{{ sort }}"
+                               x-ref="field"
+                               hx-get="{% url 'core:pipeline_search' job.slug %}"
+                               hx-trigger="change"
+                               hx-target="#pipeline-tbody"
+                               hx-swap="innerHTML"
+                               hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-seen-filter">
+                        <button type="button"
+                                x-on:click="toggle($event.currentTarget)"
+                                :aria-expanded="open"
+                                aria-haspopup="listbox"
+                                aria-label="Sort candidates"
+                                class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white py-2.5 pl-3 pr-3 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus:border-primary-500">
+                            <svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                            </svg>
+                            <span class="whitespace-nowrap" x-text="labels[value]">{% for opt in sort_options %}{% if opt.value == sort %}{{ opt.label }}{% endif %}{% endfor %}</span>
+                            <svg class="h-4 w-4 text-zinc-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open" x-cloak
+                             x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                             x-on:click.outside="open = false"
+                             :style="`top:${my}px; left:${mx}px;${up ? ' transform: translateY(-100%);' : ''}`"
+                             class="fixed z-50 w-56 rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-white/10"
+                             role="listbox" style="display: none;">
+                            <p class="status-picker__group-label">Sort by</p>
+                            {% for opt in sort_options %}
+                            <button type="button" role="option" :aria-selected="value === '{{ opt.value }}'"
+                                    x-on:click="pick('{{ opt.value }}')"
+                                    class="status-picker__option" :class="value === '{{ opt.value }}' ? 'status-picker__option--active status-picker__option--zinc' : ''">
+                                <span class="status-picker__option-body">
+                                    <span class="status-picker__option-label">{{ opt.label }}</span>
+                                </span>
+                                <span class="status-picker__check" :class="{ 'status-picker__check--visible': value === '{{ opt.value }}' }" aria-hidden="true">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                </span>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
                 <div hx-get="{% url 'core:pipeline_suggestions' job.slug %}"
                      hx-trigger="input changed delay:200ms from:#pipeline-search-input, focusin delay:100ms from:#pipeline-search-input"
@@ -340,7 +393,7 @@
                        hx-trigger="change"
                        hx-target="#pipeline-tbody"
                        hx-swap="innerHTML"
-                       hx-include="#pipeline-search-input, #pipeline-status-filter">
+                       hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-sort">
                 <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Reviewed</span>
                 <button type="button" x-on:click="pick('all')"
                         :class="value === 'all' ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900' : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'"
@@ -366,7 +419,7 @@
         {% if pipeline_stats.total %}
         <div class="relative overflow-x-auto">
             <table class="resp-table w-full text-left md:min-w-[68rem]">
-                <caption class="sr-only">Applicant pipeline, sorted by decision then score. Updates live as you search.</caption>
+                <caption class="sr-only">Applicant pipeline, {{ sort_note }}. Updates live as you search.</caption>
                 <thead class="border-b border-zinc-100 bg-zinc-50/95 dark:border-zinc-800 dark:bg-zinc-900/95">
                     <tr>
                         <th scope="col" class="w-12 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">#</th>

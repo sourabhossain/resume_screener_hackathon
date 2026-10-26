@@ -49,13 +49,32 @@ def test_hr_can_put_it_back(authenticated_client, sample_resume):
 
 
 @pytest.mark.django_db
-def test_merely_opening_the_cv_changes_nothing(authenticated_client, sample_resume):
-    """The whole point of a manual status: reading the page is not reviewing."""
-    authenticated_client.get(
-        reverse('core:resume_detail', kwargs={'uuid': sample_resume.uuid}))
+def test_opening_the_candidate_marks_the_cv_seen_and_hr_can_set_it_back(authenticated_client, sample_resume):
+    authenticated_client.get(reverse('core:resume_detail', kwargs={'uuid': sample_resume.uuid}))
+    sample_resume.refresh_from_db()
+    assert sample_resume.seen_status == 'seen'
 
+    authenticated_client.post(reverse('core:resume_seen_update', kwargs={'uuid': sample_resume.uuid}),
+                              {'seen_status': 'unseen'}, HTTP_HX_REQUEST='true')
     sample_resume.refresh_from_db()
     assert sample_resume.seen_status == 'unseen'
+
+
+@pytest.mark.django_db
+def test_view_cv_in_the_table_marks_seen_only_while_unseen(authenticated_client, sample_resume):
+    from django.core.files.base import ContentFile
+    sample_resume.file.save('cv.pdf', ContentFile(b'%PDF-1.4 test'), save=False)
+    sample_resume.screening_status = 'completed'
+    sample_resume.save()
+    url = reverse('core:job_detail', kwargs={'slug': sample_resume.job.slug})
+    seen_post = reverse('core:resume_seen_update', kwargs={'uuid': sample_resume.uuid})
+
+    html = authenticated_client.get(url, {'recruiter_status': 'all'}).content.decode()
+    assert f'hx-post="{seen_post}"' in html and '"seen_status": "seen"' in html
+
+    type(sample_resume).objects.filter(pk=sample_resume.pk).update(seen_status='seen')
+    html = authenticated_client.get(url, {'recruiter_status': 'all'}).content.decode()
+    assert '"seen_status": "seen"' not in html
 
 
 @pytest.mark.django_db

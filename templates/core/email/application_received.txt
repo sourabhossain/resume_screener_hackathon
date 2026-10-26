@@ -1,0 +1,12 @@
+{% autoescape off %}Dear {{ candidate_name }},
+
+Thank you for applying for the {{ job_title }} position at SSL Wireless. We have received your application and CV.
+
+Our team will review your application carefully. If your profile matches what we are looking for, we will contact you about the next steps.
+
+There is no need to reply to this email.
+
+Kind regards,
+SSL Wireless HR
+jobs@sslwireless.com
+{% endautoescape %}

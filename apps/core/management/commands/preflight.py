@@ -24,6 +24,7 @@ REQUIRED_TASKS = (
     'apps.core.tasks.release_stale_screenings',
     'apps.core.tasks.clear_expired_sessions',
     'apps.core.tasks.send_rejection_email',
+    'apps.core.tasks.send_application_received_email',
     'apps.employee_form.tasks.send_employee_form_invite',
     'apps.reference_checks.tasks.send_reference_check_request',
     'apps.sei_assessment.tasks.send_assessment_invite',

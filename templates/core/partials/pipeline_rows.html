@@ -15,7 +15,7 @@
         <button type="button"
                 hx-get="{% url 'core:pipeline_search' job.slug %}"
                 hx-vals='{"offset": "{{ next_offset }}"}'
-                hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-seen-filter"
+                hx-include="#pipeline-search-input, #pipeline-status-filter, #pipeline-seen-filter, #pipeline-sort"
                 hx-trigger="click, intersect once"
                 hx-target="closest tr"
                 hx-swap="outerHTML"
@@ -26,4 +26,7 @@
         </button>
     </td>
 </tr>
+{% endif %}
+{% if oob_summary and not offset %}
+<template>{% include 'core/partials/pipeline_queue_summary.html' with oob=True %}</template>
 {% endif %}
