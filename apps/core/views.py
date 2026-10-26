@@ -135,6 +135,16 @@ def _apply_seen_filter(resume_qs, value):
     return resume_qs
 
 
+def _seen_counts(resume_qs):
+    """Not seen / Seen for the rows the status filter and search leave, so the
+    two chips always add up to the table's queue."""
+    counts = resume_qs.order_by().aggregate(
+        unseen_count=Count('id', filter=Q(seen_status='unseen')),
+        seen_count=Count('id', filter=Q(seen_status='seen')),
+    )
+    return counts
+
+
 def _pipeline_stats(resume_qs):
     # order_by() clears any inherited ordering so it doesn't leak into the
     # implicit GROUP BY; conditional Counts give exact per-decision totals.
@@ -250,15 +260,11 @@ def job_detail(request, slug):
     job = get_object_or_404(Job, slug=slug)
     resumes = _ordered_active_resumes_queryset(job.resumes).prefetch_related('interviews__evaluations')
 
-    # Every count on this page describes the whole pipeline, so all of them are
-    # taken before any filter narrows the rows below: the template hides the
-    # table when pipeline_stats.total is zero, and a search matching nobody
-    # must say "No candidates match", not "No applicants yet".
+    # The stat cards describe the whole pipeline, so they are taken before any
+    # filter narrows the rows below: the template hides the table when
+    # pipeline_stats.total is zero, and a search matching nobody must say
+    # "No candidates match", not "No applicants yet".
     pipeline_stats = _pipeline_stats(resumes)
-    seen_counts = resumes.order_by().aggregate(
-        unseen=Count('id', filter=Q(seen_status='unseen')),
-        seen=Count('id', filter=Q(seen_status='seen')),
-    )
 
     search_q = request.GET.get('q', '').strip()
     if search_q:
@@ -271,6 +277,7 @@ def job_detail(request, slug):
     status_filter = _recruiter_status_filter(request)
     if status_filter != 'all':
         resumes = resumes.filter(recruiter_status=status_filter)
+    seen_counts = _seen_counts(resumes)
     seen_filter = _seen_filter(request)
     resumes = _apply_seen_filter(resumes, seen_filter)
     sort = _pipeline_sort(request)
@@ -302,8 +309,7 @@ def job_detail(request, slug):
             'search_q': search_q,
             'recruiter_status_filter': status_filter,
             'seen_filter': seen_filter,
-            'unseen_count': seen_counts['unseen'],
-            'seen_count': seen_counts['seen'],
+            **seen_counts,
             'recruiter_status_options': [
                 {'value': value, 'label': label, 'tone': Resume.RECRUITER_STATUS_TONES.get(value, 'zinc')}
                 for value, label in Resume.RECRUITER_STATUS_CHOICES
@@ -360,6 +366,7 @@ def pipeline_search(request, job_slug):
     status_filter = _recruiter_status_filter(request)
     if status_filter != 'all':
         resumes = resumes.filter(recruiter_status=status_filter)
+    seen_counts = _seen_counts(resumes)
     seen_filter = _seen_filter(request)
     resumes = _apply_seen_filter(resumes, seen_filter)
     sort = _pipeline_sort(request)
@@ -368,7 +375,8 @@ def pipeline_search(request, job_slug):
         'resumes': resumes,
         **_pipeline_page(resumes, request),
         **_sort_context(sort),
-        # A fresh first page also refreshes the count and sort note above the table.
+        **seen_counts,
+        # A fresh first page also refreshes the counts and sort note above the table.
         'oob_summary': True,
         'search_q': search_q,
         'recruiter_status_filter': status_filter,

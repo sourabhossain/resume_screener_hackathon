@@ -42,4 +42,6 @@
 {% endif %}
 {% if oob_summary and not offset %}
 <template>{% include 'core/partials/pipeline_queue_summary.html' with oob=True %}</template>
+<template>{% include 'core/partials/pipeline_seen_count.html' with kind='unseen' count=unseen_count oob=True %}</template>
+<template>{% include 'core/partials/pipeline_seen_count.html' with kind='seen' count=seen_count oob=True %}</template>
 {% endif %}

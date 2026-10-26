@@ -409,13 +409,13 @@
                         class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition">
                     <span class="inline-block h-1.5 w-1.5 rounded-full bg-primary-500"></span>
                     Not seen
-                    <span class="tabular-nums" style="opacity: .7;">{{ unseen_count }}</span>
+                    {% include 'core/partials/pipeline_seen_count.html' with kind='unseen' count=unseen_count %}
                 </button>
                 <button type="button" x-on:click="pick('seen')"
                         :class="value === 'seen' ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900' : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'"
                         class="rounded-full border px-3 py-1 text-xs font-semibold transition">
                     Seen
-                    <span class="tabular-nums" style="opacity: .7;">{{ seen_count }}</span>
+                    {% include 'core/partials/pipeline_seen_count.html' with kind='seen' count=seen_count %}
                 </button>
             </div>
         </div>

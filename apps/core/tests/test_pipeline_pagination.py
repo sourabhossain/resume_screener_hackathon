@@ -154,3 +154,40 @@ def test_the_next_page_keeps_the_sort(authenticated_client, crowded_job):
     rest += _more(authenticated_client, crowded_job, 100, recruiter_status='all', sort='newest')
     ids = _row_ids(first) + _row_ids(rest)
     assert ids == sorted(Resume.objects.values_list('pk', flat=True), reverse=True)
+
+
+@pytest.fixture
+def mixed(sample_job):
+    rows = [('new', 'unseen')] * 5 + [('new', 'seen')] * 2 + [('shortlisted', 'unseen')] * 3 + [('shortlisted', 'seen')] * 4
+    for i, (status, seen) in enumerate(rows):
+        Resume.objects.create(job=sample_job, candidate_name=f'Mixed {i}', final_score=60, screening_status='completed',
+                              recruiter_status=status, seen_status=seen)
+    return sample_job
+
+
+def _chip(html, kind):
+    return int(html.split(f'id="pipeline-{kind}-count"', 1)[1].split('>', 1)[1].split('<', 1)[0])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('status,unseen,seen', [('new', 5, 2), ('shortlisted', 3, 4), ('all', 8, 6)])
+def test_the_seen_chips_count_the_rows_the_status_filter_shows(authenticated_client, mixed, status, unseen, seen):
+    html = _first_page(authenticated_client, mixed, recruiter_status=status)
+    assert (_chip(html, 'unseen'), _chip(html, 'seen')) == (unseen, seen)
+    assert f'{unseen + seen} in queue' in html
+
+
+@pytest.mark.django_db
+def test_the_chips_keep_counting_the_whole_status_while_a_seen_filter_is_on(authenticated_client, mixed):
+    html = _first_page(authenticated_client, mixed, recruiter_status='new', seen='unseen')
+    assert (_chip(html, 'unseen'), _chip(html, 'seen')) == (5, 2) and len(_row_ids(html)) == 5
+
+
+@pytest.mark.django_db
+def test_changing_the_filter_refreshes_the_chips_with_the_rows(authenticated_client, mixed):
+    fresh = _more(authenticated_client, mixed, 0, recruiter_status='shortlisted')
+    assert '<template><span id="pipeline-unseen-count" hx-swap-oob="true"' in fresh
+    assert (_chip(fresh, 'unseen'), _chip(fresh, 'seen')) == (3, 4)
+    searched = _more(authenticated_client, mixed, 0, recruiter_status='all', q='Mixed 1')
+    assert _chip(searched, 'unseen') + _chip(searched, 'seen') == len(_row_ids(searched))
+    assert 'pipeline-unseen-count' not in _more(authenticated_client, mixed, 50, recruiter_status='all')

@@ -308,14 +308,16 @@ def test_a_search_that_matches_nobody_still_knows_the_job_has_applicants(
 
 
 @pytest.mark.django_db
-def test_the_seen_chips_ignore_the_search_too(authenticated_client, mixed_pipeline):
+def test_the_seen_chips_count_what_the_search_leaves(authenticated_client, mixed_pipeline):
+    """Not seen + Seen always add up to the rows the status filter and search
+    leave in the table; only the seen filter itself leaves them alone."""
     job, seen, unseen = mixed_pipeline
     url = reverse('core:job_detail', kwargs={'slug': job.slug})
 
     context = authenticated_client.get(
         url, {'recruiter_status': 'all', 'q': 'Already'}).context
 
-    assert context['unseen_count'] == 1
+    assert context['unseen_count'] == 0
     assert context['seen_count'] == 1
 
 
