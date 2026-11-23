@@ -87,7 +87,7 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         fields = [
             'title', 'description', 'status',
             'employment_type', 'location_type', 'location',
-            'posted_date', 'closing_date',
+            'posted_date', 'closing_date', 'assessment_window_hours',
         ]
         widgets = {
             'title': forms.TextInput(attrs={
@@ -118,6 +118,11 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             'location': 'Location',
             'posted_date': 'Posted Date',
             'closing_date': 'Application Deadline',
+            'assessment_window_hours': 'Time to complete',
+        }
+        help_texts = {
+            'assessment_window_hours': 'Counted from the moment the link is sent. After that the link '
+                                       'closes; a part already started keeps its own timer.',
         }
 
     def __init__(self, *args, **kwargs):
@@ -139,6 +144,7 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         if self.instance and self.instance.pk:
             self.fields['assessments'].initial = sei_instruments.clean_keys(
                 self.instance.assessments)
+        self.fields['assessment_window_hours'].required = False
 
     @property
     def assessment_options(self):
@@ -152,6 +158,10 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
         """Store them in the registry's order, so two jobs with the same set
         email their candidates in the same sequence."""
         return sei_instruments.clean_keys(self.cleaned_data.get('assessments'))
+
+    def clean_assessment_window_hours(self):
+        """Left out of a post, the job keeps the window it had."""
+        return self.cleaned_data.get('assessment_window_hours') or self.instance.assessment_window_hours
 
     def clean(self):
         data = super().clean()

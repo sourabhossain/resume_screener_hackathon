@@ -118,6 +118,18 @@ class Job(SoftDeleteModel):
     assessments = models.JSONField(
         default=list, blank=True,
         help_text="Assessments emailed to a candidate when they are shortlisted")
+
+    # How long the candidate has, from the moment the link is sent, to finish
+    # every part. A part already running when it closes keeps its own timer.
+    ASSESSMENT_WINDOW_CHOICES = [
+        (24, '24 hours'),
+        (48, '2 days'),
+        (72, '3 days'),
+        (168, '7 days'),
+    ]
+    assessment_window_hours = models.PositiveSmallIntegerField(
+        choices=ASSESSMENT_WINDOW_CHOICES, default=168,
+        help_text="Hours a candidate has to finish the assessments once the link is sent")
     
     class Meta:
         db_table = 'job_description'

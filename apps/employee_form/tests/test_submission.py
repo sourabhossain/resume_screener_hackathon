@@ -1,5 +1,6 @@
 """Fills the form end to end, the way a candidate actually would."""
 import re
+from datetime import date, timedelta
 
 import pytest
 from django.core import mail
@@ -113,8 +114,8 @@ STEP_DATA = {
         'availability_status': 'serving_notice',
         'notice_period': '2 months',
         'remaining_notice_period': '30 days',
-        'last_working_day': '2026-10-30',
-        'earliest_joining_date': '2026-11-01',
+        'last_working_day': (date.today() + timedelta(days=30)).isoformat(),
+        'earliest_joining_date': (date.today() + timedelta(days=32)).isoformat(),
         'declaration_agreement': 'agree',
         # Drawn on the canvas rather than uploaded, so the full submission
         # exercises the data: URL path end to end.

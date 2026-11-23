@@ -122,6 +122,18 @@
                         {{ form.assessments.errors.0 }}
                     </p>
                     {% endif %}
+                    <div class="mt-4" style="max-width:20rem">
+                        <label for="id_assessment_window_hours" class="block mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            {{ form.assessment_window_hours.label }}
+                        </label>
+                        {% include 'core/partials/choice_field.html' with field=form.assessment_window_hours %}
+                    </div>
+                    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ form.assessment_window_hours.help_text }}</p>
+                    {% if form.assessment_window_hours.errors %}
+                    <p class="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400">
+                        {{ form.assessment_window_hours.errors.0 }}
+                    </p>
+                    {% endif %}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">

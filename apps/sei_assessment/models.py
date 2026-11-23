@@ -17,7 +17,8 @@ INVALID_LABEL = 'Invalid - Insufficient Responses'
 class AssessmentInvitation(models.Model):
     """One link and one code covering every assessment the job asks for."""
 
-    TOKEN_VALIDITY_DAYS = 7
+    # Used when the job leaves it unset; the job's own choice wins.
+    DEFAULT_VALIDITY_HOURS = 168
     OTP_VALIDITY_MINUTES = 15
     OTP_MAX_ATTEMPTS = 5
     OTP_DIGITS = 6
@@ -59,8 +60,7 @@ class AssessmentInvitation(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.token_expires_at:
-            self.token_expires_at = timezone.now() + timedelta(
-                days=self.TOKEN_VALIDITY_DAYS)
+            self.renew()
         super().save(*args, **kwargs)
 
     @property
@@ -105,9 +105,14 @@ class AssessmentInvitation(models.Model):
     def is_expired(self) -> bool:
         return bool(self.token_expires_at and timezone.now() > self.token_expires_at)
 
+    @property
+    def validity(self) -> timedelta:
+        """How long the link stays open once sent: the job's choice."""
+        hours = self.resume.job.assessment_window_hours or self.DEFAULT_VALIDITY_HOURS
+        return timedelta(hours=hours)
+
     def renew(self):
-        self.token_expires_at = timezone.now() + timedelta(
-            days=self.TOKEN_VALIDITY_DAYS)
+        self.token_expires_at = timezone.now() + self.validity
 
     # ── one-time code ────────────────────────────────────────────────────
     def issue_otp(self) -> str:

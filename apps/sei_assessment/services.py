@@ -86,7 +86,6 @@ def send_invite(invitation, *, otp: str) -> None:
         'assessment_url': assessment_url(invitation),
         'otp': otp,
         'otp_minutes': AssessmentInvitation.OTP_VALIDITY_MINUTES,
-        'link_days': AssessmentInvitation.TOKEN_VALIDITY_DAYS,
         'deadline': invitation.token_expires_at,
         'parts': parts,
         'part_count': len(parts),
@@ -206,9 +205,10 @@ def issue_invite(resume, *, user=None, resend=False):
             raise InviteError('The assessment link was sent a moment ago. Wait a minute '
                               'before sending it again.')
 
-        # An explicit resend is a fresh start: the candidate gets the full
-        # window again, not whatever was left of the old one.
-        if resend or invitation.is_expired:
+        # The window runs from the first send, and an explicit resend is a
+        # fresh start: the candidate gets the full window again, not whatever
+        # was left of the old one.
+        if resend or invitation.is_expired or invitation.invited_at is None:
             invitation.renew()
         invitation.invited_by = user
         invitation.save(update_fields=['token_expires_at', 'invited_by', 'updated_at'])
