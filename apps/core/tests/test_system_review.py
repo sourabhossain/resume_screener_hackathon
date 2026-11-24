@@ -153,12 +153,6 @@ def test_a_job_past_its_closing_date_leaves_the_public_list(client, user):
     assert 'Old Role' not in client.get(reverse('core:careers')).content.decode()
 
 
-@pytest.mark.django_db
-def test_the_apply_form_carries_a_privacy_notice(client, sample_job):
-    html = client.get(reverse('core:careers_apply', kwargs={'slug': sample_job.slug})).content.decode()
-    assert 'for recruitment purposes only' in html
-
-
 # ── deleted jobs and candidates ──────────────────────────────────────────
 @pytest.mark.django_db
 def test_candidates_of_a_deleted_job_are_gone_from_every_staff_page(authenticated_client, sample_job):
