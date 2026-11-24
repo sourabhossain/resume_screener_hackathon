@@ -198,7 +198,33 @@
     .dash-pills span { display: block; font-size: .75rem; font-weight: 500; color: var(--ink-2); padding: .35rem .7rem; border-radius: .5rem; cursor: pointer; }
     .dash-pills input:checked + span { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
     .dash-pills input:focus-visible + span { outline: 2px solid var(--s1); outline-offset: 1px; }
-    .dash-select { font-size: .8125rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .45rem 2rem .45rem .7rem; max-width: 16rem; }
+    .dash-jobpick { position: relative; }
+    .dash-jobpick__trigger { display: inline-flex; align-items: center; gap: .55rem; min-width: 15rem; max-width: 22rem; height: 2.4rem; padding: 0 .75rem; font-size: .8125rem; font-weight: 500; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: .7rem; box-shadow: 0 1px 2px rgba(0,0,0,.04); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    .dash-jobpick__trigger:hover { border-color: var(--axis); }
+    .dash-jobpick__trigger:focus-visible, .dash-jobpick__trigger[aria-expanded="true"] { outline: none; border-color: var(--s1); box-shadow: 0 0 0 3px var(--s1-wash); }
+    .dash-jobpick__icon { width: 1rem; height: 1rem; flex-shrink: 0; color: var(--ink-3); }
+    .dash-jobpick__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+    .dash-jobpick__chev { width: .9rem; height: .9rem; flex-shrink: 0; color: var(--ink-3); transition: transform .15s; }
+    .dash-jobpick__trigger[aria-expanded="true"] .dash-jobpick__chev { transform: rotate(180deg); }
+    .dash-jobpick__dot { width: .5rem; height: .5rem; border-radius: 999px; flex-shrink: 0; background: var(--axis); }
+    .dash-jobpick__dot--active { background: var(--good); }
+    .dash-jobpick__dot--draft { background: var(--warning); }
+    .dash-jobpick__dot--closed { background: var(--ink-3); }
+    .dash-jobpick__menu { position: absolute; z-index: 40; top: calc(100% + .4rem); left: 0; width: min(22rem, calc(100vw - 2rem)); background: var(--card); border: 1px solid var(--line); border-radius: .9rem; box-shadow: 0 12px 32px -8px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.06); overflow: hidden; }
+    .dash-jobpick__search { display: flex; align-items: center; gap: .5rem; padding: .6rem .75rem; border-bottom: 1px solid var(--line); }
+    .dash-jobpick__search input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: .8125rem; color: var(--ink); outline: none; box-shadow: none; padding: .15rem 0; }
+    .dash-jobpick__search input::placeholder { color: var(--ink-3); }
+    .dash-jobpick__list { max-height: 19rem; overflow-y: auto; padding: .35rem; }
+    .dash-jobpick__group { padding: .55rem .6rem .25rem; font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+    .dash-jobpick__opt { display: flex; align-items: center; gap: .6rem; width: 100%; padding: .5rem .6rem; border-radius: .55rem; font-size: .8125rem; color: var(--ink); text-align: left; cursor: pointer; }
+    .dash-jobpick__opt:hover, .dash-jobpick__opt.is-active { background: var(--wash); }
+    .dash-jobpick__opt[aria-selected="true"] { font-weight: 600; }
+    .dash-jobpick__opt-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash-jobpick__opt-meta { font-size: .6875rem; color: var(--ink-3); }
+    .dash-jobpick__check { width: .95rem; height: .95rem; flex-shrink: 0; color: var(--s1); visibility: hidden; }
+    .dash-jobpick__opt[aria-selected="true"] .dash-jobpick__check { visibility: visible; }
+    .dash-jobpick__empty { padding: 1rem .75rem; font-size: .8125rem; color: var(--ink-3); text-align: center; }
+    @media (max-width: 640px) { .dash-jobpick, .dash-jobpick__trigger { width: 100%; max-width: none; } }
     .sr-only-dash { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 
@@ -227,13 +253,57 @@
             </label>
             {% endfor %}
         </div>
-        <label class="sr-only-dash" for="dash-job">Job</label>
-        <select id="dash-job" name="job" class="dash-select">
-            <option value="">All jobs</option>
-            {% for option in job_options %}
-            <option value="{{ option.slug }}" {% if job and job.pk == option.pk %}selected{% endif %}>{{ option.title }}</option>
-            {% endfor %}
-        </select>
+        <div class="dash-jobpick" x-data="dashJob('{{ job.slug|default:''|escapejs }}', '{% if job %}{{ job.title|escapejs }}{% else %}All jobs{% endif %}', '{{ job.status|default:''|escapejs }}')"
+             @keydown.escape.window="close(true)" @click.outside="close(false)">
+            <input type="hidden" name="job" value="{{ job.slug|default:'' }}" x-ref="field">
+            <button type="button" id="dash-job" class="dash-jobpick__trigger" @click="toggle()" @keydown.down.prevent="show()"
+                    aria-haspopup="listbox" :aria-expanded="open.toString()" aria-expanded="false" aria-label="Filter by job">
+                <svg class="dash-jobpick__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <span class="dash-jobpick__label" x-text="label">{% if job %}{{ job.title }}{% else %}All jobs{% endif %}</span>
+                <span class="dash-jobpick__dot" :class="status ? 'dash-jobpick__dot--' + status : ''" x-show="status"{% if not job %} style="display:none"{% endif %} aria-hidden="true"></span>
+                <svg class="dash-jobpick__chev" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="dash-jobpick__menu" x-show="open" x-cloak
+                 x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                <div class="dash-jobpick__search">
+                    <svg class="dash-jobpick__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"/></svg>
+                    <input type="text" x-ref="q" x-model="q" placeholder="Search jobs" autocomplete="off" aria-label="Search jobs"
+                           @change.stop @input="highlight(0)" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="pickActive()">
+                </div>
+                <div class="dash-jobpick__list" role="listbox" aria-label="Jobs" x-ref="list">
+                <button type="button" role="option" class="dash-jobpick__opt" data-value="" data-title="All jobs" data-status=""
+                        :aria-selected="value === ''" x-show="matches('all jobs')" @click="pick($el)">
+                    <span class="dash-jobpick__dot" aria-hidden="true"></span>
+                    <span class="dash-jobpick__opt-title">All jobs</span>
+                    <span class="dash-jobpick__opt-meta">{{ job_options|length }}</span>
+                    <svg class="dash-jobpick__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </button>
+                {% for option in job_options %}{% if option.status == 'active' %}{% ifchanged option.status %}<p class="dash-jobpick__group" x-show="!q">Active</p>{% endifchanged %}
+                <button type="button" role="option" class="dash-jobpick__opt" data-value="{{ option.slug }}" data-title="{{ option.title }}" data-status="active"
+                        :aria-selected="value === '{{ option.slug|escapejs }}'" x-show="matches('{{ option.title|lower|escapejs }}')" @click="pick($el)">
+                    <span class="dash-jobpick__dot dash-jobpick__dot--active" aria-hidden="true"></span>
+                    <span class="dash-jobpick__opt-title">{{ option.title }}</span>
+                    <svg class="dash-jobpick__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </button>{% endif %}{% endfor %}
+                {% for option in job_options %}{% if option.status == 'draft' %}{% ifchanged option.status %}<p class="dash-jobpick__group" x-show="!q">Draft</p>{% endifchanged %}
+                <button type="button" role="option" class="dash-jobpick__opt" data-value="{{ option.slug }}" data-title="{{ option.title }}" data-status="draft"
+                        :aria-selected="value === '{{ option.slug|escapejs }}'" x-show="matches('{{ option.title|lower|escapejs }}')" @click="pick($el)">
+                    <span class="dash-jobpick__dot dash-jobpick__dot--draft" aria-hidden="true"></span>
+                    <span class="dash-jobpick__opt-title">{{ option.title }}</span>
+                    <svg class="dash-jobpick__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </button>{% endif %}{% endfor %}
+                {% for option in job_options %}{% if option.status == 'closed' %}{% ifchanged option.status %}<p class="dash-jobpick__group" x-show="!q">Closed</p>{% endifchanged %}
+                <button type="button" role="option" class="dash-jobpick__opt" data-value="{{ option.slug }}" data-title="{{ option.title }}" data-status="closed"
+                        :aria-selected="value === '{{ option.slug|escapejs }}'" x-show="matches('{{ option.title|lower|escapejs }}')" @click="pick($el)">
+                    <span class="dash-jobpick__dot dash-jobpick__dot--closed" aria-hidden="true"></span>
+                    <span class="dash-jobpick__opt-title">{{ option.title }}</span>
+                    <svg class="dash-jobpick__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </button>{% endif %}{% endfor %}
+                <p class="dash-jobpick__empty" x-show="none" x-cloak>No job matches “<span x-text="q"></span>”</p>
+                </div>
+            </div>
+        </div>
         <noscript><button type="submit" class="dash-toggle">Apply</button></noscript>
     </form>
 

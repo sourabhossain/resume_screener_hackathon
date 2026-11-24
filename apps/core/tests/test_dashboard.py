@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 import pytest
 from django.urls import reverse
+from django.utils.html import escapejs
 from django.utils import timezone
 
 from apps.core import dashboard
@@ -129,7 +130,7 @@ def test_the_dashboard_renders_with_filters(authenticated_client, sample_job):
     body = response.content.decode()
     assert 'Recruitment funnel' in body
     assert 'Applications over time' in body
-    assert f'value="{sample_job.slug}" selected' in body
+    assert f'<input type="hidden" name="job" value="{sample_job.slug}"' in body
 
 
 @pytest.mark.django_db
@@ -194,7 +195,9 @@ def test_a_draft_job_can_be_filtered_and_shows_as_selected(authenticated_client,
     response = authenticated_client.get(reverse('core:dashboard'), {'job': draft.slug})
 
     assert response.context['job'] == draft
-    assert f'value="{draft.slug}" selected' in response.content.decode()
+    body = response.content.decode()
+    assert f'<input type="hidden" name="job" value="{draft.slug}"' in body
+    assert f"x-data=\"dashJob('{escapejs(draft.slug)}', 'Draft role', 'draft')\"" in body
 
 
 @pytest.mark.django_db
@@ -247,3 +250,22 @@ def test_attention_counts_skip_deleted_jobs(sample_job):
     labels = {i['label'] for i in dashboard.attention_items(hr_view=True)}
 
     assert 'Invites failed to send' not in labels
+
+
+@pytest.mark.django_db
+def test_the_job_filter_lists_every_job_under_its_status(authenticated_client, sample_job, user):
+    Job.objects.create(title='Zeta Closed Role', status='closed', owner=user)
+    Job.objects.create(title='Alpha Draft Role', status='draft', owner=user)
+    html = authenticated_client.get(reverse('core:dashboard')).content.decode()
+    assert 'x-data="dashJob(\'\', \'All jobs\', \'\')"' in html and '<input type="hidden" name="job" value=""' in html
+    groups = [html.index(f'<p class="dash-jobpick__group" x-show="!q">{label}</p>') for label in ('Active', 'Draft', 'Closed')]
+    assert groups == sorted(groups)
+    assert html.index('data-title="Alpha Draft Role"') > groups[1] and html.index('data-title="Zeta Closed Role"') > groups[2]
+    assert '<select id="dash-job"' not in html
+
+
+@pytest.mark.django_db
+def test_the_job_filter_keeps_the_chosen_job_across_reloads(authenticated_client, sample_job):
+    html = authenticated_client.get(reverse('core:dashboard'), {'job': sample_job.slug}).content.decode()
+    assert f'<input type="hidden" name="job" value="{sample_job.slug}"' in html
+    assert f'<span class="dash-jobpick__label" x-text="label">{sample_job.title}</span>' in html

@@ -172,4 +172,68 @@ document.addEventListener('alpine:init', () => {
             return this.value !== this.initial;
         },
     }));
+
+    // The dashboard's job filter (core/dashboard.html). Picking a job writes the
+    // hidden field and fires the change the form's hx-trigger listens for.
+    Alpine.data('dashJob', (value = '', label = 'All jobs', status = '') => ({
+        open: false,
+        value,
+        label,
+        status,
+        q: '',
+        none: false,
+
+        visible() {
+            return Array.from(this.$refs.list.querySelectorAll('[role=option]'))
+                .filter((el) => el.style.display !== 'none');
+        },
+        matches(title) {
+            return !this.q || title.includes(this.q.trim().toLowerCase());
+        },
+        highlight(i) {
+            this.$nextTick(() => {
+                const items = this.visible();
+                this.none = !items.length;
+                items.forEach((el, n) => el.classList.toggle('is-active', n === i));
+                if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
+            });
+        },
+        move(step) {
+            const items = this.visible();
+            if (!items.length) return;
+            const at = items.findIndex((el) => el.classList.contains('is-active'));
+            this.highlight((at + step + items.length) % items.length);
+        },
+        pickActive() {
+            const el = this.visible().find((item) => item.classList.contains('is-active'));
+            if (el) this.pick(el);
+        },
+        show() {
+            this.open = true;
+            this.q = '';
+            this.$nextTick(() => {
+                const items = this.visible();
+                this.highlight(Math.max(0, items.findIndex((el) => el.dataset.value === this.value)));
+                this.$refs.q.focus();
+            });
+        },
+        toggle() {
+            if (this.open) this.close(true); else this.show();
+        },
+        close(refocus) {
+            if (!this.open) return;
+            this.open = false;
+            if (refocus) this.$nextTick(() => this.$root.querySelector('.dash-jobpick__trigger').focus());
+        },
+        pick(el) {
+            const changed = el.dataset.value !== this.value;
+            this.value = el.dataset.value;
+            this.label = el.dataset.title;
+            this.status = el.dataset.status;
+            this.close(true);
+            if (!changed) return;
+            this.$refs.field.value = this.value;
+            this.$refs.field.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+    }));
 });
