@@ -3,6 +3,8 @@ module.exports = {
   content: ['./templates/**/*.html', './static/js/**/*.js', './apps/**/*.py'],
   // Runtime-assembled picker tone classes — safelist so they survive purge.
   safelist: [
+    // Added from JS (status-picker.js); the select picker cannot work without it.
+    'select-picker__native',
     {
       pattern: /^status-picker__(dot|badge|trigger)--(zinc|sky|cyan|indigo|violet|emerald|rose|amber)$/,
       variants: ['dark'],

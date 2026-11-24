@@ -169,6 +169,13 @@ class LinkCrawler:
                     # of a redirect chain, so the hops are fetched here one at
                     # a time and each Location is checked before it is followed.
                     async def _ssrf_guard(route, request):
+                        try:
+                            await _follow(route, request)
+                        except Exception as exc:  # DNS, TLS, timeout: fail fast like continue_() did
+                            logger.info('Playwright request failed: %s — %s', request.url, exc)
+                            await route.abort('failed')
+
+                    async def _follow(route, request):
                         target = request.url
                         for _ in range(MAX_REDIRECTS + 1):
                             safe, reason = is_safe_public_http_url(target)

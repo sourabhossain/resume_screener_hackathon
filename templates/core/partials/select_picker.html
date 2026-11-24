@@ -17,7 +17,7 @@
     </div>
     <div class="select-picker__list" role="listbox" :aria-label="ariaLabel" x-ref="list" :id="uid + '-list'" :aria-activedescendant="activeId"
          tabindex="-1" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="pickActive()">
-        <template x-for="(opt, i) in shown()" :key="opt.value">
+        <template x-for="(opt, i) in shown()" :key="opt.value || '__blank'">
             <button type="button" role="option" class="select-picker__option" tabindex="-1" :id="optionId(i)"
                     :class="{ 'is-active': i === active }" :aria-selected="(opt.value === value).toString()"
                     @mouseenter="active = i" @click="pick(opt.value)">

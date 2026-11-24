@@ -60,13 +60,14 @@ def parse_fragment(role: str) -> Dict[str, str]:
     return {name: '\n'.join(lines).strip() for name, lines in sections.items()}
 
 
-_DELIMITER = re.compile(r'<<\s*(?:BEGIN|END)_(?:RESUME|JOB)\s*>>', re.IGNORECASE)
+_DELIMITER = re.compile(r'<<\s*(?:BEGIN|END)_[A-Z_]+\s*>>', re.IGNORECASE)
 
 
 def _as_data(text: str) -> str:
     """Untrusted text with our fences taken out.
 
-    A CV that types <<END_RESUME>> could otherwise close the data block and
+    A CV that types <<END_RESUME>> (or any of our <<...>> fences, such as the
+    profile's) could otherwise close the data block and
     write its own instructions after it, and a [[SENTINEL]] in it would be
     filled in by a later replacement.
     """

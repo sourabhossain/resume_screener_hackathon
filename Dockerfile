@@ -7,7 +7,12 @@ COPY package.json package-lock.json* ./
 RUN npm ci || npm install
 COPY tailwind.config.js ./
 COPY static/src ./static/src
+# Everything tailwind.config.js `content` scans: classes that appear only in
+# JS (e.g. added with classList) or in Python form widgets are purged otherwise,
+# and the production stylesheet silently differs from the committed one.
 COPY templates ./templates
+COPY static/js ./static/js
+COPY apps ./apps
 RUN npx tailwindcss -i ./static/src/input.css -o ./static/css/app.css --minify
 
 # ── Stage 2: Python application (web, screening, beat) ───────────────────

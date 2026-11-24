@@ -279,6 +279,11 @@ document.addEventListener('alpine:init', () => {
             this.options = Array.from(native.options)
                 .filter((o) => o.value !== '')
                 .map((o) => ({ value: o.value, label: o.textContent.trim(), disabled: o.disabled }));
+            // An optional question can be un-answered: its blank choice stays
+            // at the top of the list.
+            if (blank && !native.required) {
+                this.options.unshift({ value: '', label: this.placeholder || 'Choose', disabled: false });
+            }
             this.value = native.value;
             this.disabled = native.disabled || native.hasAttribute('readonly');
             this.invalid = native.getAttribute('aria-invalid') === 'true';
@@ -331,8 +336,9 @@ document.addEventListener('alpine:init', () => {
             if (opt) this.pick(opt.value);
         },
         show() {
-            if (this.disabled) return;
+            // Read first: the select may have been enabled (or disabled) since.
             this.read();
+            if (this.disabled) return;
             this.q = '';
             this.position();
             this.open = true;
