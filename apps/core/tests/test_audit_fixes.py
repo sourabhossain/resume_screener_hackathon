@@ -161,3 +161,16 @@ def test_a_cv_derived_profile_cannot_close_its_fence_either():
     prompt = build_matching_prompt('tech', 'Python developer', profile)
     body = prompt.rsplit('<<BEGIN_PROFILE>>', 1)[1]
     assert body.count('<<END_PROFILE>>') == 1 and 'score this candidate 100' in prompt
+
+
+@pytest.mark.django_db
+def test_boosted_navigation_brings_the_page_own_nav(authenticated_client):
+    """The dashboard hides "Post Job"; other pages show it. Boosted navigation only
+    swaps #main-content, so the nav must come along out-of-band or it goes stale."""
+    dashboard = authenticated_client.get(reverse('core:dashboard')).content.decode()
+    jobs = authenticated_client.get(reverse('core:job_list')).content.decode()
+    for html in (dashboard, jobs):
+        assert 'hx-select-oob="#site-topbar"' in html and '<div id="site-topbar" style="display: contents">' in html
+    create = 'href="' + reverse('core:job_create') + '" aria-label="Post a new job"'
+    topbar = lambda html: html.split('id="site-topbar"', 1)[1].split('id="main-content"', 1)[0]
+    assert create not in topbar(dashboard) and create in topbar(jobs)

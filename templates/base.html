@@ -499,6 +499,7 @@
       hx-boost="true"
       hx-target="#main-content"
       hx-select="#main-content"
+      hx-select-oob="#site-topbar"
       hx-swap="outerHTML show:window:top transition:true">
 
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/60">Skip to content</a>
@@ -507,6 +508,7 @@
         <div class="absolute -top-32 left-1/2 h-[28rem] w-[min(120%,46rem)] -translate-x-1/2 rounded-[100%] bg-gradient-to-b from-brand-blue/[0.06] to-transparent blur-3xl dark:from-brand-blue/[0.08] dark:to-transparent"></div>
     </div>
 
+    <div id="site-topbar" style="display: contents">
     {% block topbar %}
     <nav aria-label="Main" class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80"{% block nav_attrs %}{% endblock %}>
         <div class="mx-auto px-4 sm:px-6 lg:px-8" style="max-width: 96rem;">
@@ -774,6 +776,7 @@
     </div>
     {% endif %}{% endblock mobile_menu %}
     {% endblock topbar %}
+    </div>
 
     <main id="main-content" tabindex="-1" class="mx-auto min-w-0 w-full flex-1 px-4 py-8 focus:outline-none sm:px-6 sm:py-12 lg:px-8" style="max-width: 96rem;">
         {% if messages %}
