@@ -236,4 +236,119 @@ document.addEventListener('alpine:init', () => {
             this.$refs.field.dispatchEvent(new Event('change', { bubbles: true }));
         },
     }));
+
+    // Dresses up the native <select> inside it (core/partials/select_picker.html).
+    // The select stays in the form as the posted value, so form logic, htmx
+    // triggers and validation keep reading it; a pick writes it and fires change.
+    Alpine.data('selectPicker', () => ({
+        open: false,
+        value: '',
+        placeholder: 'Choose',
+        options: [],
+        q: '',
+        active: 0,
+        disabled: false,
+        invalid: false,
+        ariaLabel: '',
+        place: '',
+
+        init() {
+            const native = this.native();
+            if (!native) return;
+            this.read();
+            const label = native.id && document.querySelector('label[for="' + native.id + '"]');
+            this.ariaLabel = label ? label.textContent.replace(/\s+/g, ' ').replace(/\*/g, '').trim() : (native.getAttribute('aria-label') || '');
+            native.classList.add('select-picker__native');
+            native.tabIndex = -1;
+            native.setAttribute('aria-hidden', 'true');
+            // A click on the field's <label> focuses the hidden select.
+            native.addEventListener('focus', () => this.$refs.trigger.focus());
+            native.addEventListener('change', () => { this.value = native.value; });
+        },
+        native() {
+            return this.$root.querySelector('select');
+        },
+        read() {
+            const native = this.native();
+            const blank = Array.from(native.options).find((o) => o.value === '');
+            this.placeholder = blank ? blank.textContent.trim() : '';
+            this.options = Array.from(native.options)
+                .filter((o) => o.value !== '')
+                .map((o) => ({ value: o.value, label: o.textContent.trim(), disabled: o.disabled }));
+            this.value = native.value;
+            this.disabled = native.disabled || native.hasAttribute('readonly');
+            this.invalid = native.getAttribute('aria-invalid') === 'true';
+        },
+        get searchable() {
+            return this.options.length > 8;
+        },
+        shown() {
+            const q = this.q.trim().toLowerCase();
+            return this.options.filter((o) => !o.disabled && (!q || o.label.toLowerCase().includes(q)));
+        },
+        labelFor(value) {
+            const opt = this.options.find((o) => o.value === value);
+            return opt ? opt.label : (this.placeholder || 'Choose');
+        },
+        // Below the trigger, or above it when the room below is short.
+        position() {
+            const r = this.$refs.trigger.getBoundingClientRect();
+            const below = window.innerHeight - r.bottom;
+            const up = below < 260 && r.top > below;
+            const room = Math.max(140, (up ? r.top : below) - (this.searchable ? 72 : 24));
+            const width = Math.min(Math.max(r.width, 224), window.innerWidth - 16);
+            const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+            this.place = 'left:' + left + 'px;width:' + width + 'px;--sp-room:' + room + 'px;'
+                + (up ? 'bottom:' + (window.innerHeight - r.top + 6) + 'px;' : 'top:' + (r.bottom + 6) + 'px;');
+        },
+        move(step) {
+            const n = this.shown().length;
+            if (!n) return;
+            this.active = (this.active + step + n) % n;
+            this.$nextTick(() => {
+                const list = this.$refs.list;
+                const el = list.querySelectorAll('[role=option]')[this.active];
+                if (!el) return;
+                // Scrolls the list only: scrollIntoView would move the page too.
+                if (el.offsetTop < list.scrollTop) list.scrollTop = el.offsetTop;
+                else if (el.offsetTop + el.offsetHeight > list.scrollTop + list.clientHeight) {
+                    list.scrollTop = el.offsetTop + el.offsetHeight - list.clientHeight;
+                }
+            });
+        },
+        pickActive() {
+            const opt = this.shown()[this.active];
+            if (opt) this.pick(opt.value);
+        },
+        show() {
+            if (this.disabled) return;
+            this.read();
+            this.q = '';
+            this.position();
+            this.open = true;
+            this.active = Math.max(0, this.shown().findIndex((o) => o.value === this.value));
+            this.$nextTick(() => {
+                (this.searchable ? this.$refs.q : this.$refs.list).focus({ preventScroll: true });
+                this.move(0);
+            });
+        },
+        toggle() {
+            if (this.open) this.close(true); else this.show();
+        },
+        close(refocus) {
+            if (!this.open) return;
+            this.open = false;
+            if (refocus) this.$nextTick(() => this.$refs.trigger.focus());
+        },
+        pick(value) {
+            const native = this.native();
+            this.close(true);
+            if (value === native.value) return;
+            native.value = value;
+            this.value = value;
+            this.invalid = false;
+            native.dispatchEvent(new Event('input', { bubbles: true }));
+            native.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+    }));
 });

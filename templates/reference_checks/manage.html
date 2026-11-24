@@ -164,7 +164,7 @@
                     </div>
                     <div>
                         <label for="kind_{{ row.source_key }}" class="block text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300">Which form to send</label>
-                        <div class="mt-2">
+                        <div class="mt-2 select-picker" x-data="selectPicker()" @keydown.escape.stop="close(true)" @click.outside="close(false)">
                             <select name="kind" id="kind_{{ row.source_key }}"
                                     {% if not row.permitted or not can_send %}disabled{% endif %}
                                     class="form-input">
@@ -172,6 +172,7 @@
                                 <option value="{{ value }}" {% if row.selected_kind == value %}selected{% endif %}>{{ label }}</option>
                                 {% endfor %}
                             </select>
+                            {% include 'core/partials/select_picker.html' %}
                         </div>
                     </div>
                 </div>

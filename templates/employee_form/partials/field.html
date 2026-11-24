@@ -141,6 +141,12 @@
         </p>
         {% endif %}
 
+        {% elif question.type == 'select' %}
+        <div class="select-picker" x-data="selectPicker()" @keydown.escape.stop="close(true)" @click.outside="close(false)">
+            {{ field }}
+            {% include 'core/partials/select_picker.html' %}
+        </div>
+
         {% else %}
         {{ field }}
         {% endif %}
