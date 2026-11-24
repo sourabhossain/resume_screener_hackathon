@@ -91,21 +91,31 @@ def interview_create(request, resume_uuid):
                 phase_label = dict(Interview.PHASE_CHOICES).get(prior_phase, f'Phase {prior_phase}')
                 form.add_error('phase', f'{phase_label} must be scheduled before this phase.')
             else:
+                interview = None
                 with transaction.atomic():
-                    interview = form.save(commit=False)
-                    interview.resume = resume
-                    interview.save()
-                    evaluations = [_evaluation_for(interview, user) for user in form.cleaned_data['evaluators']]
-                    for ev in evaluations:
-                        ev.save()
-                    _queue_invites(interview, evaluations, candidate=interview.notify_candidate)
-                from apps.core.status import advance
-                advance(resume, 'interviewing', reason='Interview scheduled', user=request.user)
-                sent_to = f'{len(evaluations)} evaluator{"s" if len(evaluations) != 1 else ""}'
-                if interview.notify_candidate:
-                    sent_to += ' and the candidate'
-                messages.success(request, f'Interview scheduled. Invitations are on their way to {sent_to}.')
-                return redirect('interviews:detail', pk=interview.pk)
+                    # Checked again under a lock on the candidate: a second
+                    # click read the same phases before the first one saved.
+                    Resume.objects.select_for_update().filter(pk=resume.pk).first()
+                    if not Interview.objects.filter(resume=resume, is_deleted=False, phase=phase).exclude(
+                            status=Interview.CANCELLED).exists():
+                        interview = form.save(commit=False)
+                        interview.resume = resume
+                        interview.save()
+                        evaluations = [_evaluation_for(interview, user) for user in form.cleaned_data['evaluators']]
+                        for ev in evaluations:
+                            ev.save()
+                        _queue_invites(interview, evaluations, candidate=interview.notify_candidate)
+                if interview is None:
+                    form.add_error('phase', f'{dict(Interview.PHASE_CHOICES)[phase]} is already scheduled for '
+                                            'this candidate. Open it from the candidate page instead.')
+                else:
+                    from apps.core.status import advance
+                    advance(resume, 'interviewing', reason='Interview scheduled', user=request.user)
+                    sent_to = f'{len(evaluations)} evaluator{"s" if len(evaluations) != 1 else ""}'
+                    if interview.notify_candidate:
+                        sent_to += ' and the candidate'
+                    messages.success(request, f'Interview scheduled. Invitations are on their way to {sent_to}.')
+                    return redirect('interviews:detail', pk=interview.pk)
         if form.errors:
             form_errors_to_messages(request, form)
 
@@ -122,7 +132,7 @@ def interview_create(request, resume_uuid):
             panels.append({'label': f'Last panel for this job ({other.resume.candidate_name.title()})', 'ids': ids})
             break
     staff = [{'id': u.pk, 'name': staff_label(u), 'email': u.email} for u in staff_evaluators()]
-    chosen = [int(pk) for pk in (form['evaluators'].value() or []) if str(pk).isdigit()]
+    chosen = [int(pk) for pk in (form['evaluators'].value() or []) if str(pk).isdecimal()]
     return render(request, 'interviews/create.html', {
         'form': form, 'resume': resume, 'staff': staff, 'panels': panels, 'chosen': chosen,
     })
@@ -215,7 +225,7 @@ def interview_delivery(request, pk):
     return render(request, 'interviews/partials/delivery_update.html', {
         'interview': interview,
         'evaluations': interview.evaluations.select_related('evaluator'),
-        'polls': int(polls) if polls.isdigit() else 0,
+        'polls': int(polls) if polls.isdecimal() else 0,
     })
 
 
@@ -473,14 +483,18 @@ def rank_report(request, job_slug):
     job = get_object_or_404(Job, slug=job_slug)
     phase_filter = request.GET.get('phase', '')
 
+    # EXISTS rather than a join on evaluations plus DISTINCT, which made MySQL
+    # compare every interview and CV column (CV text included) row by row.
+    from django.db.models import Exists, OuterRef
+    from apps.core.views import HEAVY_RESUME_FIELDS
+    submitted = InterviewEvaluation.objects.filter(interview=OuterRef('pk'), is_submitted=True)
     interviews_qs = (
         Interview.objects
-        .filter(resume__job=job, resume__is_deleted=False, is_deleted=False,
-                evaluations__is_submitted=True)
+        .filter(Exists(submitted), resume__job=job, resume__is_deleted=False, is_deleted=False)
         .exclude(status=Interview.CANCELLED)
-        .prefetch_related('evaluations', 'resume')
         .select_related('resume')
-        .distinct()
+        .defer(*[f'resume__{f}' for f in HEAVY_RESUME_FIELDS])
+        .prefetch_related('evaluations')
     )
     if phase_filter:
         interviews_qs = interviews_qs.filter(phase=phase_filter)

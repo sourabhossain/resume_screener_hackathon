@@ -10,7 +10,7 @@
         --card: #ffffff;
         --ink: #18181b;
         --ink-2: #52525b;
-        --ink-3: #71717a;
+        --ink-3: #686871;
         --line: #e4e4e7;
         --grid: #ececef;
         --axis: #d4d4d8;
@@ -384,7 +384,7 @@
                     <div class="dash-stage">
                         <span class="dash-stage-label">{{ stage.label }}</span>
                         <div class="dash-bar-track">
-                            <div class="dash-bar" style="width: {{ stage.width|floatformat:2 }}%" tabindex="0"
+                            <div role="img" class="dash-bar" style="width: {{ stage.width|floatformat:2 }}%" tabindex="0"
                                  data-tip-value="{{ stage.count }} candidate{{ stage.count|pluralize }}"
                                  data-tip-label="{{ stage.label }} · {{ stage.share|floatformat:'-1' }}% of applications" aria-label="{{ stage.count }} candidate{{ stage.count|pluralize }}, {{ stage.label }} · {{ stage.share|floatformat:'-1' }}% of applications"></div>
                             <span class="dash-bar-value">{{ stage.count }}<span>{{ stage.share|floatformat:"-1" }}%</span></span>
@@ -438,7 +438,7 @@
                         <text class="end-label" x="{{ trend.last.x }}" y="{{ trend.last.y }}" dx="-8" dy="-10" text-anchor="end">{{ trend.last.value }}</text>
                         {% endif %}
                         {% for p in trend.points %}
-                        <g class="hit" tabindex="0" data-tip-value="{{ p.value }} candidate{{ p.value|pluralize }}" data-tip-label="{{ p.label }}" aria-label="{{ p.value }} candidate{{ p.value|pluralize }}, {{ p.label }}">
+                        <g role="img" class="hit" tabindex="0" data-tip-value="{{ p.value }} candidate{{ p.value|pluralize }}" data-tip-label="{{ p.label }}" aria-label="{{ p.value }} candidate{{ p.value|pluralize }}, {{ p.label }}">
                             <rect x="{{ p.hit_x }}" y="0" width="{{ p.hit_w }}" height="{{ trend.base_y }}"/>
                             <line class="cross" x1="{{ p.x }}" x2="{{ p.x }}" y1="{{ trend.top_y }}" y2="{{ trend.base_y }}"/>
                             <circle class="hdot" cx="{{ p.x }}" cy="{{ p.y }}" r="4"/>
@@ -470,7 +470,7 @@
                         {% for bar in scores.bars %}
                         <div class="dash-hist-col">
                             {% if bar.is_peak %}<span class="dash-hist-peak">{{ bar.count }}</span>{% endif %}
-                            <div class="dash-hist-bar" style="height: {{ bar.height|floatformat:2 }}%" tabindex="0"
+                            <div role="img" class="dash-hist-bar" style="height: {{ bar.height|floatformat:2 }}%" tabindex="0"
                                  data-tip-value="{{ bar.count }} resume{{ bar.count|pluralize }}" data-tip-label="Score {{ bar.label }}" aria-label="{{ bar.count }} resume{{ bar.count|pluralize }}, Score {{ bar.label }}"></div>
                         </div>
                         {% endfor %}
@@ -504,7 +504,7 @@
                 {% if tiers.total %}
                 <div class="dash-stack">
                     {% for seg in tiers.segments %}{% if seg.count %}
-                    <div style="width: {{ seg.width|floatformat:2 }}%; background: var(--tier-{{ seg.key }})" tabindex="0"
+                    <div role="img" style="width: {{ seg.width|floatformat:2 }}%; background: var(--tier-{{ seg.key }})" tabindex="0"
                          data-tip-value="{{ seg.count }} candidate{{ seg.count|pluralize }}" data-tip-label="{{ seg.label }} tier · {{ seg.share|floatformat:'-1' }}%" aria-label="{{ seg.count }} candidate{{ seg.count|pluralize }}, {{ seg.label }} tier · {{ seg.share|floatformat:'-1' }}%"></div>
                     {% endif %}{% endfor %}
                 </div>
@@ -570,7 +570,7 @@
                 <p class="dash-card-sub" style="margin: 1rem 0 .5rem">Panel verdicts &middot; {{ interviews.evaluations_submitted }} submitted</p>
                 <div class="dash-stack">
                     {% for v in interviews.verdicts %}{% if v.count %}
-                    <div style="width: {{ v.width|floatformat:2 }}%; background: var(--{% if v.key == 'yes' %}good{% elif v.key == 'maybe' %}warning{% else %}critical{% endif %})" tabindex="0"
+                    <div role="img" style="width: {{ v.width|floatformat:2 }}%; background: var(--{% if v.key == 'yes' %}good{% elif v.key == 'maybe' %}warning{% else %}critical{% endif %})" tabindex="0"
                          data-tip-value="{{ v.count }}" data-tip-label="{{ v.label }} · {{ v.share|floatformat:'-1' }}%" aria-label="{{ v.count }}, {{ v.label }} · {{ v.share|floatformat:'-1' }}%"></div>
                     {% endif %}{% endfor %}
                 </div>
@@ -602,7 +602,7 @@
                 {% if bgv.rated %}
                 <div class="dash-stack">
                     {% for r in bgv.risk %}{% if r.count %}
-                    <div style="width: {{ r.width|floatformat:2 }}%; background: var(--{% if r.key == 'green' %}good{% elif r.key == 'amber' %}warning{% elif r.key == 'red' %}serious{% else %}critical{% endif %})" tabindex="0"
+                    <div role="img" style="width: {{ r.width|floatformat:2 }}%; background: var(--{% if r.key == 'green' %}good{% elif r.key == 'amber' %}warning{% elif r.key == 'red' %}serious{% else %}critical{% endif %})" tabindex="0"
                          data-tip-value="{{ r.count }}" data-tip-label="{{ r.label }} — {{ r.detail }}" aria-label="{{ r.count }}, {{ r.label }} — {{ r.detail }}"></div>
                     {% endif %}{% endfor %}
                 </div>
@@ -643,7 +643,7 @@
                     <a class="dash-job" href="{% url 'core:job_detail' row.job.slug %}">
                         <span class="dash-job-name" title="{{ row.job.title }}">{{ row.job.title }}</span>
                         <span class="dash-bar-track">
-                            <span class="dash-bar" style="display:block;width: {{ row.width|floatformat:2 }}%"
+                            <span role="img" class="dash-bar" style="display:block;width: {{ row.width|floatformat:2 }}%"
                                   data-tip-value="{{ row.count }} candidate{{ row.count|pluralize }}"
                                   data-tip-label="{{ row.job.title }} · {{ row.hired }} onboarded" aria-label="{{ row.count }} candidate{{ row.count|pluralize }}, {{ row.job.title }} · {{ row.hired }} onboarded"></span>
                             <span class="dash-bar-value">{{ row.count }}</span>

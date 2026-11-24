@@ -1042,3 +1042,21 @@ html.app-skeleton[data-skeleton="dashboard"] #page-skeleton [data-variant="dashb
         transition-duration: 0.001ms !important;
     }
 }
+
+/* Contrast floor (WCAG AA, 4.5:1 for body text). The faintest greys are used
+   for secondary text across many templates; on white, zinc-300/400 fall to
+   1.5-2.6:1, and in dark mode zinc-500/600 to 2.3-3.7:1. Rather than restyle
+   every template, those shades read one step stronger wherever they are text.
+   Surfaces that stay dark in light mode carry data-dark-surface and keep their
+   own colours. Icons are left alone (decorative), and the selectors keep the utilities'
+   own weight (the dark ones one class heavier, as Tailwind emits its dark:
+   variants after this), so hover: and dark:hover: colours still win. */
+.text-zinc-300:where(html:not(.dark) *):where(:not(svg, svg *, [data-dark-surface] *)),
+.text-zinc-400:where(html:not(.dark) *):where(:not(svg, svg *, [data-dark-surface] *)) {
+    color: #71717a;
+}
+.dark\:text-zinc-500.dark\:text-zinc-500:is(.dark *):where(:not(svg)),
+.dark\:text-zinc-600.dark\:text-zinc-600:is(.dark *):where(:not(svg)),
+.dark\:text-zinc-700.dark\:text-zinc-700:is(.dark *):where(:not(svg)) {
+    color: #a1a1aa;
+}

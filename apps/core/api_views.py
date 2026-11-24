@@ -103,10 +103,13 @@ class ResumeViewSet(viewsets.ModelViewSet):
         from apps.core.utils import compute_file_hash
 
         upload = serializer.validated_data.get('file')
+        job = serializer.validated_data['job']
+        # The same rule as the Add resume page: only an active job takes CVs.
+        if job.status != 'active':
+            raise ValidationError({'job': [f'This job is {job.get_status_display().lower()}, so it is not taking resumes.']})
         extra = {}
         if upload:
             file_hash = compute_file_hash(upload)
-            job = serializer.validated_data['job']
             if Resume.objects.filter(job=job, file_hash=file_hash).exists():
                 raise ValidationError({'file': ['This resume file has already been submitted for this job.']})
             extra = {'file_hash': file_hash, 'file_name': upload.name[:255],
@@ -118,7 +121,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
         queryset = Resume.objects.select_related('job')
         job_id = self.request.query_params.get('job', None)
         if job_id:
-            if not str(job_id).isdigit():
+            if not str(job_id).isdecimal():
                 return queryset.none()
             queryset = queryset.filter(job_id=job_id)
         tier = self.request.query_params.get('tier', None)
@@ -127,8 +130,31 @@ class ResumeViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-final_score', '-created_at')
     
     def perform_update(self, serializer):
-        before = serializer.instance.email
-        resume = serializer.save()
+        import os
+        from rest_framework.exceptions import ValidationError
+        from apps.core.utils import compute_file_hash
+
+        instance = serializer.instance
+        job = serializer.validated_data.get('job')
+        # Its scores and forms belong to the job it applied for.
+        if job is not None and job.pk != instance.job_id:
+            raise ValidationError({'job': ['A resume cannot be moved to another job.']})
+        upload = serializer.validated_data.get('file')
+        extra = {}
+        if upload:
+            # A new CV is a new document, as on the Edit page: the old text and
+            # hash go, and screening reads the file now attached.
+            file_hash = compute_file_hash(upload)
+            if Resume.objects.filter(job=instance.job, file_hash=file_hash).exclude(pk=instance.pk).exists():
+                raise ValidationError({'file': ['This resume file has already been submitted for this job.']})
+            extra = {'file_hash': file_hash, 'file_name': upload.name[:255], 'raw_text': '',
+                     'file_type': os.path.splitext(upload.name)[1].lstrip('.').lower(),
+                     'screening_status': 'processing'}
+        before = instance.email
+        resume = serializer.save(**extra)
+        if upload:
+            from apps.core.services.screening_queue import queue_screening
+            queue_screening(resume.id)
         if (resume.email or '') != (before or ''):
             from apps.core.utils import revoke_candidate_links
             revoke_candidate_links(resume)

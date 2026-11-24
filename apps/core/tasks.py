@@ -2,6 +2,7 @@ import logging
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from django.db import transaction
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ def screen_resume_task(self, resume_id: int):
         if retries_left > 0:
             # Keep as pending so UI shows it queued, not failed, while retrying
             try:
-                Resume.objects.filter(id=resume_id).update(screening_status='pending')
+                Resume.objects.filter(id=resume_id).update(screening_status='pending', updated_at=timezone.now())
             except Exception as update_err:
                 logger.warning(f"Could not reset status to pending for resume {resume_id}: {update_err}")
         else:

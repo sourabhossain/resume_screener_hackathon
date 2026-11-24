@@ -321,8 +321,8 @@ def send_request(check, *, otp: str) -> None:
     if 'smtp' not in settings.EMAIL_BACKEND:
         logger.warning(
             'reference_checks.not_delivered check=%s backend=%s — written to this '
-            "process's output, not sent to %s",
-            check.pk, settings.EMAIL_BACKEND, recipient,
+            "process's output, not sent to the recipient",
+            check.pk, settings.EMAIL_BACKEND,
         )
     logger.info('reference_checks.sent check=%s kind=%s attempt=%s',
                 check.pk, check.kind, check.invite_count + 1)

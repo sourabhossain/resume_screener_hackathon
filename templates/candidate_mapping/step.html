@@ -48,7 +48,7 @@
     </div>
 
     <div class="mb-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         <p class="text-sm leading-relaxed text-amber-900 dark:text-amber-300">
             Confidential — HR use only. Completed by the assessor, not the candidate.
             Sections save one at a time, so you can leave and come back.
@@ -65,7 +65,7 @@
     </div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" hx-boost="false"
+    <form method="post" enctype="multipart/form-data" hx-boost="false" data-unsaved-guard
           x-data="{ submitting: false }" @submit="submitting = true">
         {% csrf_token %}
 

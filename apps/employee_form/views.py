@@ -3,6 +3,7 @@ from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -294,89 +295,98 @@ def step(request, token, step_key):
 
     confirm_end = False
     if request.method == 'POST':
-        step_form = StepForm(
-            request.POST, request.FILES,
-            step_key=step_key, already_uploaded=uploaded_keys,
-            initial={**prefill, **answers}, context=answers,
-            own_emails=(form.resume.email, answers.get('personal_email')),
-        )
-        valid = step_form.is_valid()
+        with transaction.atomic():
+            # Re-read under a lock: another tab may have submitted the form, or
+            # HR may have re-issued the link, since this request loaded it. Its
+            # answers are the ones to build on, and a submitted form is final.
+            locked = EmployeeForm.objects.select_for_update().get(pk=form.pk)
+            if locked.is_submitted or locked.token != form.token or not locked.otp_verified_at:
+                return redirect('employee_form:entry', token=token)
+            form = locked
+            answers = form.answers or {}
+            step_form = StepForm(
+                request.POST, request.FILES,
+                step_key=step_key, already_uploaded=uploaded_keys,
+                initial={**prefill, **answers}, context=answers,
+                own_emails=(form.resume.email, answers.get('personal_email')),
+            )
+            valid = step_form.is_valid()
 
-        # Store uploads that passed validation even when the step as a whole did
-        # not. A browser cannot repopulate a file input, so without this a single
-        # mistyped year on Section B (three required certificates) would make the
-        # candidate re-attach every document.
-        for question_key, uploads in step_form.uploads():
-            if step_form.errors.get(question_key):
-                continue
-            # Replacing an answer replaces its documents, so a corrected
-            # upload does not leave the old file attached to the question.
-            form.files.filter(question_key=question_key).delete()
-            for upload in uploads:
-                EmployeeFormFile.objects.create(
-                    form=form,
-                    question_key=question_key,
-                    file=upload,
-                    original_name=upload.name[:255],
-                    size_bytes=getattr(upload, 'size', 0) or 0,
-                )
-
-        if valid:
-            # Changing department re-routes the page to a different role section.
-            # Whatever was typed into the previous one is dropped, so a Finance
-            # candidate's answers never linger on a submission that now says
-            # Engineering.
-            for key in _stale_branch_keys(step_key, answers, step_form.cleaned_data):
-                answers.pop(key, None)
-
-            answers = {**answers, **step_form.storable_answers()}
-            form.answers = answers
-
-            # A document whose question is now hidden goes with it.
-            for question_key in step_form.gated_off_file_keys():
-                for upload in form.files.filter(question_key=question_key):
-                    upload.delete()
-
-            next_key = schema.next_step_key(step_key, answers)
-            if next_key is None:
-                incomplete = form.first_incomplete_step()
-                if incomplete:
-                    form.current_step = incomplete
-                    form.save(update_fields=STEP_SAVE_FIELDS)
-                    messages.error(request, 'Some required answers are still missing. '
-                                            'Please complete this section first.')
-                    return redirect('employee_form:step', token=token, step_key=incomplete)
-                ends_early = form.consent_declined or form.declaration_declined
-                if ends_early and request.POST.get('confirm_end') != '1':
-                    # Declining consent or the declaration ends the form for
-                    # good and deletes the later answers. One click on "No"
-                    # must not do that unannounced: the answer is saved and
-                    # the candidate is asked to confirm.
-                    form.current_step = step_key
-                    form.save(update_fields=STEP_SAVE_FIELDS)
-                    confirm_end = True
-                else:
-                    if form.consent_declined:
-                        form.drop_answers_beyond(form.path)
-                    form.drop_hidden_files()
-                    form.is_submitted = True
-                    form.submitted_at = timezone.now()
-                    form.current_step = step_key
-                    form.save(update_fields=STEP_SAVE_FIELDS)
-                    logger.info(
-                        'employee_form.submitted form=%s resume=%s', form.pk, form.resume_id
+            # Store uploads that passed validation even when the step as a whole did
+            # not. A browser cannot repopulate a file input, so without this a single
+            # mistyped year on Section B (three required certificates) would make the
+            # candidate re-attach every document.
+            for question_key, uploads in step_form.uploads():
+                if step_form.errors.get(question_key):
+                    continue
+                # Replacing an answer replaces its documents, so a corrected
+                # upload does not leave the old file attached to the question.
+                form.files.filter(question_key=question_key).delete()
+                for upload in uploads:
+                    EmployeeFormFile.objects.create(
+                        form=form,
+                        question_key=question_key,
+                        file=upload,
+                        original_name=upload.name[:255],
+                        size_bytes=getattr(upload, 'size', 0) or 0,
                     )
-                    from apps.core.status import advance
-                    advance(form.resume, 'info_received', reason=(
-                        'Information form submitted (consent declined)'
-                        if form.consent_declined else 'Information form submitted'))
-                    return redirect('employee_form:done', token=token)
-            else:
-                form.current_step = next_key
-                form.save(update_fields=STEP_SAVE_FIELDS)
-                return redirect('employee_form:step', token=token, step_key=next_key)
-        if not confirm_end:
-            form_errors_to_messages(request, step_form)
+
+            if valid:
+                # Changing department re-routes the page to a different role section.
+                # Whatever was typed into the previous one is dropped, so a Finance
+                # candidate's answers never linger on a submission that now says
+                # Engineering.
+                for key in _stale_branch_keys(step_key, answers, step_form.cleaned_data):
+                    answers.pop(key, None)
+
+                answers = {**answers, **step_form.storable_answers()}
+                form.answers = answers
+
+                # A document whose question is now hidden goes with it.
+                for question_key in step_form.gated_off_file_keys():
+                    for upload in form.files.filter(question_key=question_key):
+                        upload.delete()
+
+                next_key = schema.next_step_key(step_key, answers)
+                if next_key is None:
+                    incomplete = form.first_incomplete_step()
+                    if incomplete:
+                        form.current_step = incomplete
+                        form.save(update_fields=STEP_SAVE_FIELDS)
+                        messages.error(request, 'Some required answers are still missing. '
+                                                'Please complete this section first.')
+                        return redirect('employee_form:step', token=token, step_key=incomplete)
+                    ends_early = form.consent_declined or form.declaration_declined
+                    if ends_early and request.POST.get('confirm_end') != '1':
+                        # Declining consent or the declaration ends the form for
+                        # good and deletes the later answers. One click on "No"
+                        # must not do that unannounced: the answer is saved and
+                        # the candidate is asked to confirm.
+                        form.current_step = step_key
+                        form.save(update_fields=STEP_SAVE_FIELDS)
+                        confirm_end = True
+                    else:
+                        if form.consent_declined:
+                            form.drop_answers_beyond(form.path)
+                        form.drop_hidden_files()
+                        form.is_submitted = True
+                        form.submitted_at = timezone.now()
+                        form.current_step = step_key
+                        form.save(update_fields=STEP_SAVE_FIELDS)
+                        logger.info(
+                            'employee_form.submitted form=%s resume=%s', form.pk, form.resume_id
+                        )
+                        from apps.core.status import advance
+                        advance(form.resume, 'info_received', reason=(
+                            'Information form submitted (consent declined)'
+                            if form.consent_declined else 'Information form submitted'))
+                        return redirect('employee_form:done', token=token)
+                else:
+                    form.current_step = next_key
+                    form.save(update_fields=STEP_SAVE_FIELDS)
+                    return redirect('employee_form:step', token=token, step_key=next_key)
+            if not confirm_end:
+                form_errors_to_messages(request, step_form)
     else:
         step_form = StepForm(
             step_key=step_key, already_uploaded=uploaded_keys,

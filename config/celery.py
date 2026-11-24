@@ -64,7 +64,9 @@ app.conf.beat_schedule = {
     # 10:00 Dhaka: the day before each interview, its panel and candidate.
     'interview-reminders-daily': {
         'task': 'apps.interviews.tasks.send_interview_reminders',
-        'schedule': crontab(hour=10, minute=0),
+        # Twice: each reminder is claimed once, so the 16:00 run only retries
+        # the ones whose email failed in the morning.
+        'schedule': crontab(hour='10,16', minute=0),
     },
     'clear-expired-sessions-daily': {
         'task': 'apps.core.tasks.clear_expired_sessions',

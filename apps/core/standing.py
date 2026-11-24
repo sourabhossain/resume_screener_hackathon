@@ -33,21 +33,28 @@ def score_standing(resume):
     """None until the candidate is scored; otherwise the card's numbers and drawing."""
     if resume.final_score is None or resume.screening_status != 'completed':
         return None
-    scores = list(_scored(job_id=resume.job_id).values_list('final_score', flat=True))
-    if len(scores) < MIN_POOL:
-        return {'enough': False, 'pool': len(scores), 'needed': MIN_POOL}
+    # Counted in the database: a 10,000-CV job would otherwise send every
+    # score to Python on each candidate page and status change.
+    from django.db.models import Count, Max, Q
+    pool_qs = _scored(job_id=resume.job_id).order_by()
+    score = resume.final_score
+    counts = pool_qs.aggregate(pool=Count('id'), lower=Count('id', filter=Q(final_score__lt=score)),
+                               higher=Count('id', filter=Q(final_score__gt=score)), top=Max('final_score'))
+    pool = counts['pool']
+    if pool < MIN_POOL:
+        return {'enough': False, 'pool': pool, 'needed': MIN_POOL}
 
-    percentile = _percentile(resume.final_score, scores)
-    lower = sum(1 for s in scores if s < resume.final_score)
-    position = sum(1 for s in scores if s > resume.final_score) + 1
-    top = max(scores)
-    top_percentile = _percentile(top, scores)
+    lower = counts['lower']
+    percentile = _from_counts(lower, pool)
+    position = counts['higher'] + 1
+    top = counts['top']
+    top_percentile = _from_counts(pool_qs.filter(final_score__lt=top).count(), pool)
     band = min(4, percentile // 20)
     curve = ' '.join(f'{"M" if p == 0 else "L"}{p * 5},{_curve_y(p):.1f}' for p in range(0, 101, 2))
     return {
         'enough': True,
-        'pool': len(scores),
-        'others': len(scores) - 1,
+        'pool': pool,
+        'others': pool - 1,
         'lower': lower,
         'position': position,
         'percentile': percentile,

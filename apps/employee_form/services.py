@@ -70,8 +70,8 @@ def send_invite(form, *, otp: str) -> None:
     if 'smtp' not in backend:
         logger.warning(
             'employee_form.invite_not_delivered form=%s backend=%s — the email '
-            'was written to this process\'s output, not sent to %s',
-            form.pk, backend, recipient,
+            'was written to this process\'s output, not sent to the candidate',
+            form.pk, backend,
         )
 
 

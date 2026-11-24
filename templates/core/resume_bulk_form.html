@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="mb-6">
-    <nav class="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+    <nav aria-label="Breadcrumb" class="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:job_list' %}" class="transition hover:text-primary-600 dark:hover:text-primary-400">Jobs</a>
         <svg class="mx-2 h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -36,6 +36,8 @@
             multiple
             accept=".pdf,.docx"
             x-ref="fileInput"
+            tabindex="-1"
+            aria-label="Choose resume files"
             class="sr-only"
             @change="addFiles($event.target.files)"
         >
@@ -43,7 +45,9 @@
         <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">
 
             <div
-                class="m-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors sm:m-6 sm:py-14"
+                role="button" tabindex="0" aria-label="Choose resume files (PDF or DOCX)"
+                @keydown.enter.prevent="$refs.fileInput.click()" @keydown.space.prevent="$refs.fileInput.click()"
+                class="m-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#284699] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 sm:m-6 sm:py-14"
                 :class="dragOver ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-zinc-300 bg-zinc-50 hover:border-primary-400 hover:bg-primary-50/40 dark:border-zinc-700 dark:bg-zinc-800/40 dark:hover:border-primary-600'"
                 @dragenter.prevent="dragOver = true"
                 @dragleave.prevent="dragOver = false"

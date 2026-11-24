@@ -62,6 +62,10 @@ def send_candidate_invite(interview_id: int) -> str:
         Interview.objects.filter(pk=interview.pk).update(
             candidate_email_error='Not sent: the interview is no longer scheduled.')
         return 'closed'
+    if interview.resume.recruiter_status in ('rejected', 'withdrawn'):
+        Interview.objects.filter(pk=interview.pk).update(
+            candidate_email_error=f'Not sent: the candidate is {interview.resume.get_recruiter_status_display()}.')
+        return 'closed'
     if not (interview.resume.email or '').strip():
         Interview.objects.filter(pk=interview.pk).update(
             candidate_email_error='The candidate has no email address on file.')
@@ -186,7 +190,9 @@ def send_interview_reminders():
             send_evaluator_email(ev, reminder=True)
             reminded['evaluators'] += 1
         except Exception as exc:
-            InterviewEvaluation.objects.filter(pk=ev.pk).update(invite_error=f'Reminder failed: {exc}'[:500])
+            # The claim is given back so the afternoon run tries again.
+            InterviewEvaluation.objects.filter(pk=ev.pk).update(
+                invite_error=f'Reminder failed: {exc}'[:500], reminded_at=None)
             logger.exception('interview.evaluator_reminder_failed evaluation=%s', ev.pk)
 
     interviews = Interview.objects.select_related('resume', 'resume__job').filter(
@@ -203,7 +209,8 @@ def send_interview_reminders():
             send_candidate_email(interview, reminder=True)
             reminded['candidates'] += 1
         except Exception as exc:
-            Interview.objects.filter(pk=interview.pk).update(candidate_email_error=f'Reminder failed: {exc}'[:500])
+            Interview.objects.filter(pk=interview.pk).update(
+                candidate_email_error=f'Reminder failed: {exc}'[:500], candidate_reminded_at=None)
             logger.exception('interview.candidate_reminder_failed interview=%s', interview.pk)
 
     if any(reminded.values()):

@@ -164,17 +164,28 @@ class LinkCrawler:
                         user_agent=cls.HEADERS['User-Agent']
                     )
 
-                    # SSRF-check every request, not just navigations.
+                    # SSRF-check every request, and every redirect hop of it:
+                    # Playwright calls a route handler only for the first URL
+                    # of a redirect chain, so the hops are fetched here one at
+                    # a time and each Location is checked before it is followed.
                     async def _ssrf_guard(route, request):
-                        safe, reason = is_safe_public_http_url(request.url)
-                        if not safe:
-                            logger.info(
-                                'Blocked Playwright request (SSRF guard): %s — %s',
-                                request.url, reason,
-                            )
-                            await route.abort('blockedbyclient')
-                            return
-                        await route.continue_()
+                        target = request.url
+                        for _ in range(MAX_REDIRECTS + 1):
+                            safe, reason = is_safe_public_http_url(target)
+                            if not safe:
+                                logger.info(
+                                    'Blocked Playwright request (SSRF guard): %s — %s',
+                                    target, reason,
+                                )
+                                await route.abort('blockedbyclient')
+                                return
+                            response = await route.fetch(url=target, max_redirects=0)
+                            location = response.headers.get('location')
+                            if not (300 <= response.status < 400 and location):
+                                await route.fulfill(response=response)
+                                return
+                            target = urljoin(target, location)
+                        await route.abort('blockedbyclient')
 
                     await page.route('**/*', _ssrf_guard)
 

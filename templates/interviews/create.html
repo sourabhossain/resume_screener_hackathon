@@ -14,7 +14,7 @@
         use(ids) { this.chosen = [...ids]; },
         shows(text) { return !this.q.trim() || text.toLowerCase().includes(this.q.trim().toLowerCase()); }
      }">
-    <nav class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
+    <nav aria-label="Breadcrumb" class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:resume_detail' resume.uuid %}" class="transition hover:text-primary-600">{{ resume.candidate_name|title }}</a>
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         <span class="font-medium text-zinc-900 dark:text-white">Schedule Interview</span>
@@ -57,8 +57,8 @@
             <div class="mt-4 inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800" role="radiogroup" aria-label="Interview format">
                 {% for value, label in form.fields.mode.choices %}
                 <label class="cursor-pointer">
-                    <input type="radio" name="mode" value="{{ value }}" class="sr-only" x-model="mode"{% if form.mode.value == value or not form.mode.value and value == 'in_person' %} checked{% endif %}>
-                    <span class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition"
+                    <input type="radio" name="mode" value="{{ value }}" class="peer sr-only" x-model="mode"{% if form.mode.value == value or not form.mode.value and value == 'in_person' %} checked{% endif %}>
+                    <span class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition peer-focus-visible:ring-2 peer-focus-visible:ring-[#284699] peer-focus-visible:ring-offset-1"
                           :class="mode === '{{ value }}' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'">
                         {% if value == 'online' %}
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
@@ -76,7 +76,7 @@
                 </label>
                 <input type="text" name="location" id="{{ form.location.id_for_label }}" value="{{ form.location.value|default:'' }}" maxlength="500"
                        :placeholder="mode === 'online' ? 'Meet, Teams or Zoom link' : 'e.g. Conference Room 3, Gulshan 1'"
-                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#284699]/25 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
                 {% for e in form.location.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
             </div>
         </section>
@@ -106,7 +106,7 @@
             <div class="relative mt-4">
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <input type="search" x-model="q" placeholder="Search staff by name or email" aria-label="Search staff"
-                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-9 pr-4 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#284699]/25 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
             </div>
             <div class="mt-3 max-h-72 divide-y divide-zinc-100 overflow-y-auto rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">
                 {% for person in staff %}
@@ -136,7 +136,7 @@
                 <input type="checkbox" name="notify_candidate" value="on"{% if form.notify_candidate.value %} checked{% endif %}
                        class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600 dark:bg-zinc-900">
                 <span class="text-sm text-zinc-700 dark:text-zinc-300">
-                    Email the interview time and place to <span class="font-semibold">{{ resume.email }}</span>
+                    Email the interview time and place to <span class="break-all font-semibold">{{ resume.email }}</span>
                     <span class="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">With a calendar invitation, and a reminder the day before. Internal notes are never included.</span>
                 </span>
             </label>

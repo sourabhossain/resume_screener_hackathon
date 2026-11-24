@@ -113,8 +113,8 @@ def send_invite(invitation, *, otp: str) -> None:
     if 'smtp' not in settings.EMAIL_BACKEND:
         logger.warning(
             'sei.not_delivered invitation=%s backend=%s — written to this '
-            "process's output, not sent to %s",
-            invitation.pk, settings.EMAIL_BACKEND, recipient)
+            "process's output, not sent to the candidate",
+            invitation.pk, settings.EMAIL_BACKEND)
     logger.info('sei.sent invitation=%s parts=%s attempt=%s',
                 invitation.pk, [s.instrument for s in pending],
                 invitation.invite_count)
@@ -169,7 +169,10 @@ def issue_invite(resume, *, user=None, resend=False):
             if any(s.has_started for s in unfinished):
                 raise InviteError(
                     f'{resume.candidate_name} has already started the assessments.')
-            if invitation.invited_at:
+            # Already emailed and still open: nothing to send. A closed link
+            # (the candidate was rejected, or it lapsed) is sent again below.
+            if invitation.invited_at and not invitation.is_expired:
+                invitation.queued = False
                 return invitation
 
         running = invitation.running_sitting()
@@ -221,6 +224,7 @@ def issue_invite(resume, *, user=None, resend=False):
                           'background queue is unavailable. Try again in a minute.')
     logger.info('sei.queued invitation=%s resume=%s instruments=%s',
                 invitation.pk, resume.pk, keys)
+    invitation.queued = True
     return invitation
 
 

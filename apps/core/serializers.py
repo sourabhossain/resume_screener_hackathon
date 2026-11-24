@@ -95,5 +95,14 @@ class JobDetailSerializer(serializers.ModelSerializer):
             'resume_count', 'resumes',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'file_name', 'file_type', 'created_at', 'updated_at']
+        # The job form has no file: an upload here would skip every check the
+        # upload pages make.
+        read_only_fields = ['id', 'file', 'file_name', 'file_type', 'created_at', 'updated_at']
+
+    def validate_title(self, value):
+        from .form_utils import clean_label_text
+        try:
+            return clean_label_text(value, required=True)
+        except dj_forms.ValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
 

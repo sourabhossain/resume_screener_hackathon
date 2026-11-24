@@ -26,8 +26,8 @@
             {% csrf_token %}
             <label for="id_code" class="ap-h2" style="display: block">Verification code
                 <input type="text" name="code" id="id_code" class="ap-code"
-                       inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
-                       maxlength="{{ invitation.OTP_DIGITS }}" required
+                       inputmode="numeric" autocomplete="one-time-code"
+                       maxlength="12" required
                        {% if error or invitation.otp_is_locked %}aria-invalid="true" aria-describedby="ap-code-error"{% endif %}>
             </label>
             <button type="submit" class="ap-btn is-block" {% if invitation.otp_is_locked %}disabled{% endif %}>Continue</button>

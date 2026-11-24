@@ -105,6 +105,15 @@ def is_safe_public_http_url(url: str, *, resolve_dns: bool = True) -> tuple[bool
     if not host:
         return False, 'missing host'
 
+    # Profile links live on the standard ports; any other port turns the
+    # crawler into a scanner whose open/closed answers come back in the results.
+    try:
+        port = parsed.port
+    except ValueError:
+        return False, 'invalid port'
+    if port not in (None, 80, 443):
+        return False, 'only ports 80 and 443 allowed'
+
     hl = host.lower().strip('.')
     if hl in _METADATA_AND_LOCAL_HOSTS:
         return False, 'blocked hostname'

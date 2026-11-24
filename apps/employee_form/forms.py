@@ -254,8 +254,10 @@ def build_field(question):
             **common, max_length=254, widget=forms.EmailInput(attrs=styled),
         )
     if qtype == schema.PHONE:
+        # A phone keypad on mobile, and the browser's saved number on offer.
         return forms.CharField(
-            **common, max_length=32, widget=forms.TextInput(attrs=styled),
+            **common, max_length=32,
+            widget=forms.TextInput(attrs={**styled, 'type': 'tel', 'inputmode': 'tel', 'autocomplete': 'tel'}),
         )
     if qtype == schema.DATE:
         # The picker itself stops a date on the wrong side of today; the server
@@ -561,7 +563,8 @@ class OtpForm(AriaInvalidMixin, forms.Form):
 
     code = forms.CharField(
         label='Verification code',
-        max_length=EmployeeForm.OTP_DIGITS,
+        # Room for a space or two ("622 992"); ascii_digits strips them.
+        max_length=12,
         widget=forms.TextInput(attrs={
             'inputmode': 'numeric',
             'autocomplete': 'one-time-code',
@@ -570,8 +573,9 @@ class OtpForm(AriaInvalidMixin, forms.Form):
     )
 
     def clean_code(self):
-        code = (self.cleaned_data['code'] or '').strip()
-        if not code.isdigit():
+        from apps.core.utils import ascii_digits
+        code = ascii_digits(self.cleaned_data['code'])
+        if not (code.isascii() and code.isdigit()):
             raise forms.ValidationError(
                 f'Enter the {EmployeeForm.OTP_DIGITS}-digit code from your email.'
             )

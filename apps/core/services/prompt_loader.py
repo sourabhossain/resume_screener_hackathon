@@ -13,6 +13,7 @@ str.format) so the literal JSON braces in the schema examples cannot break
 composition. Fragments are split into named sections by "@@ SECTION" headers.
 """
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
@@ -59,6 +60,20 @@ def parse_fragment(role: str) -> Dict[str, str]:
     return {name: '\n'.join(lines).strip() for name, lines in sections.items()}
 
 
+_DELIMITER = re.compile(r'<<\s*(?:BEGIN|END)_(?:RESUME|JOB)\s*>>', re.IGNORECASE)
+
+
+def _as_data(text: str) -> str:
+    """Untrusted text with our fences taken out.
+
+    A CV that types <<END_RESUME>> could otherwise close the data block and
+    write its own instructions after it, and a [[SENTINEL]] in it would be
+    filled in by a later replacement.
+    """
+    text = _DELIMITER.sub('', text or '')
+    return text.replace('[[', '[ [').replace(']]', '] ]')
+
+
 def _inject(template: str, replacements: Dict[str, str]) -> str:
     for sentinel, value in replacements.items():
         template = template.replace(f"[[{sentinel}]]", value)
@@ -72,7 +87,7 @@ def build_extraction_prompt(role: str, resume_text: str) -> str:
     return _inject(base, {
         'ROLE_TITLE': frag.get('ROLE_TITLE', ''),
         'ROLE_SKILL_TAXONOMY': frag.get('ROLE_SKILL_TAXONOMY', ''),
-        'RESUME_TEXT': resume_text,
+        'RESUME_TEXT': _as_data(resume_text),
     })
 
 
@@ -85,7 +100,7 @@ def build_matching_prompt(role: str, job_description: str, profile: Dict[str, An
         'ROLE_TITLE': frag.get('ROLE_TITLE', ''),
         'ROLE_MATCH_CRITERIA': frag.get('ROLE_MATCH_CRITERIA', ''),
         'JOB_DESCRIPTION': job_description,
-        'PROFILE_JSON': json.dumps(profile, ensure_ascii=False, indent=2),
+        'PROFILE_JSON': _as_data(json.dumps(profile, ensure_ascii=False, indent=2)),
     })
 
 

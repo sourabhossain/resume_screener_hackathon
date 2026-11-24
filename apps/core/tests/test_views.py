@@ -420,6 +420,10 @@ class TestResumeViews:
         """Test re-screening a resume queues the screening task."""
         from unittest.mock import patch
 
+        # A scored CV; a 'pending' one is waiting for a Celery retry and is not re-claimed.
+        sample_resume.screening_status = 'completed'
+        sample_resume.save(update_fields=['screening_status'])
+
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
             response = authenticated_client.post(
                 reverse('core:resume_rescreen', kwargs={'uuid': sample_resume.uuid})
@@ -432,6 +436,10 @@ class TestResumeViews:
         """An HTMX rescreen swaps the status region in place (200, no 302 redirect)
         so it doesn't push a duplicate browser-history entry."""
         from unittest.mock import patch
+
+        # A scored CV; a 'pending' one is waiting for a Celery retry and is not re-claimed.
+        sample_resume.screening_status = 'completed'
+        sample_resume.save(update_fields=['screening_status'])
 
         with patch('apps.core.tasks.screen_resume_task.delay') as mock_delay:
             response = authenticated_client.post(

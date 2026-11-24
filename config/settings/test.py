@@ -41,3 +41,12 @@ PASSWORD_HASHERS = [
 # Run Celery tasks synchronously in tests (no broker needed)
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+
+# Tests log to the console only: the base config writes a dated file under
+# logs/, which a test run would fill with fixture names and example addresses.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'root': {'handlers': ['console'], 'level': 'WARNING'},
+}

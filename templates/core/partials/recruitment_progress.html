@@ -30,13 +30,13 @@
                     <input type="hidden" name="item" value="{{ item.key }}">
                     <button type="submit" role="checkbox" aria-checked="{% if item.done %}true{% else %}false{% endif %}"
                             {% if resume.recruiter_status == 'hired' and item.done %}disabled{% endif %}
-                            class="flex w-full items-center gap-3 rounded-xl border border-zinc-200 px-3 py-2.5 text-left text-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                            class="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-zinc-200 px-3 py-2.5 text-left text-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                         <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border {% if item.done %}bg-emerald-500 text-white" style="border-color:#10b981{% else %}border-zinc-300 dark:border-zinc-600{% endif %}" aria-hidden="true">
                             {% if item.done %}<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>{% endif %}
                         </span>
                         <span class="min-w-0 flex-1 {% if item.done %}text-zinc-500 dark:text-zinc-400{% else %}font-medium text-zinc-800 dark:text-zinc-100{% endif %}">{{ item.label }}</span>
                         {% if item.done %}
-                        <span class="shrink-0 text-xs text-zinc-400">{{ item.by_name }}{% if item.at %} · {{ item.at|date:"j M Y, g:i A" }}{% endif %}</span>
+                        <span class="ml-8 text-xs text-zinc-500 dark:text-zinc-400 sm:ml-0 sm:shrink-0">{{ item.by_name }}{% if item.at %} · {{ item.at|date:"j M Y, g:i A" }}{% endif %}</span>
                         {% endif %}
                     </button>
                 </form>
@@ -74,6 +74,7 @@
                 <button type="submit" class="btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white" {% if not resume.email %}disabled{% endif %}>
                     Send rejection email
                 </button>
+                {% if not resume.email %}<p class="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">Add the candidate's email address (Edit) to send this.</p>{% endif %}
             </form>
             {% endif %}
         </div>

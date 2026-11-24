@@ -30,6 +30,33 @@ class DocumentExtractor:
 
     SUPPORTED_EXTENSIONS = {'.pdf', '.docx'}
 
+    # A .docx is a zip and python-docx inflates every part into memory, so a
+    # few megabytes of zeros can stand for gigabytes. The zip's directory gives
+    # the sizes without inflating anything, and zipfile never reads past them.
+    DOCX_MAX_UNPACKED = 60 * 1024 * 1024
+    DOCX_MAX_PART = 30 * 1024 * 1024
+    DOCX_MAX_PARTS = 1000
+    DOCX_MAX_RATIO = 200
+
+    @classmethod
+    def docx_archive_is_safe(cls, source) -> bool:
+        """Whether a .docx (a path or a seekable file) is small enough to open."""
+        import zipfile
+        try:
+            with zipfile.ZipFile(source) as archive:
+                parts = archive.infolist()
+        except (zipfile.BadZipFile, OSError, ValueError, EOFError):
+            return False
+        finally:
+            if hasattr(source, 'seek'):
+                source.seek(0)
+        unpacked = sum(p.file_size for p in parts)
+        packed = sum(p.compress_size for p in parts) or 1
+        return (len(parts) <= cls.DOCX_MAX_PARTS
+                and unpacked <= cls.DOCX_MAX_UNPACKED
+                and all(p.file_size <= cls.DOCX_MAX_PART for p in parts)
+                and unpacked / packed <= cls.DOCX_MAX_RATIO)
+
     @classmethod
     def extract(cls, file_path: str) -> str:
         """
@@ -116,6 +143,8 @@ class DocumentExtractor:
                 return cls.is_readable(text)
             if extension == 'docx':
                 import io
+                if not cls.docx_archive_is_safe(io.BytesIO(data)):
+                    return True
                 document = docx.Document(io.BytesIO(data))
                 text = ''.join(p.text for p in document.paragraphs)
                 text += ''.join(cell.text for table in document.tables for row in table.rows for cell in row.cells)
@@ -221,6 +250,8 @@ class DocumentExtractor:
     @staticmethod
     def _extract_from_docx(file_path: str) -> str:
         """Extract text from DOCX file."""
+        if not DocumentExtractor.docx_archive_is_safe(file_path):
+            raise ValueError('The Word file unpacks to more than the screening limit.')
         doc = docx.Document(file_path)
         text_parts = []
         

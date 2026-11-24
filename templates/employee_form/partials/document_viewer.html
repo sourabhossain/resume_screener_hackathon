@@ -1,9 +1,9 @@
 <div x-show="viewerOpen"
      x-cloak
-     @keydown.window.escape="closeViewer()"
-     @keydown.window.arrow-left.prevent="prevDoc()"
-     @keydown.window.arrow-right.prevent="nextDoc()"
-     class="fixed inset-0 z-50 flex flex-col bg-zinc-950/95 backdrop-blur-sm print:hidden"
+     @keydown.window.escape="viewerOpen && closeViewer()"
+     @keydown.window.arrow-left="viewerOpen && ($event.preventDefault(), prevDoc())"
+     @keydown.window.arrow-right="viewerOpen && ($event.preventDefault(), nextDoc())"
+     class="fixed inset-0 z-50 flex flex-col bg-zinc-950/95 backdrop-blur-sm print:hidden" data-dark-surface
      role="dialog"
      aria-modal="true"
      aria-label="Document viewer">

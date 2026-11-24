@@ -42,6 +42,10 @@ class ContentSecurityPolicyMiddleware:
         "img-src 'self' data:; "
         "connect-src 'self'; "
         "object-src 'none'; "
+        # An injected <base> or <form action> cannot redirect links, scripts
+        # or a submitted form (with its CSRF token) to another site.
+        "base-uri 'none'; "
+        "form-action 'self'; "
         "frame-ancestors 'none';"
     )
 

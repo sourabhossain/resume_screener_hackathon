@@ -251,10 +251,12 @@ document.addEventListener('alpine:init', () => {
         invalid: false,
         ariaLabel: '',
         place: '',
+        uid: '',
 
         init() {
             const native = this.native();
             if (!native) return;
+            this.uid = 'sp-' + Math.random().toString(36).slice(2, 9);
             this.read();
             const label = native.id && document.querySelector('label[for="' + native.id + '"]');
             this.ariaLabel = label ? label.textContent.replace(/\s+/g, ' ').replace(/\*/g, '').trim() : (native.getAttribute('aria-label') || '');
@@ -264,6 +266,8 @@ document.addEventListener('alpine:init', () => {
             // A click on the field's <label> focuses the hidden select.
             native.addEventListener('focus', () => this.$refs.trigger.focus());
             native.addEventListener('change', () => { this.value = native.value; });
+            // The browser's required check fires on the hidden select; show it on the trigger.
+            native.addEventListener('invalid', () => { this.invalid = true; });
         },
         native() {
             return this.$root.querySelector('select');
@@ -278,6 +282,12 @@ document.addEventListener('alpine:init', () => {
             this.value = native.value;
             this.disabled = native.disabled || native.hasAttribute('readonly');
             this.invalid = native.getAttribute('aria-invalid') === 'true';
+        },
+        optionId(i) {
+            return this.uid + '-opt-' + i;
+        },
+        get activeId() {
+            return this.open && this.shown().length ? this.optionId(this.active) : null;
         },
         get searchable() {
             return this.options.length > 8;
@@ -352,3 +362,37 @@ document.addEventListener('alpine:init', () => {
         },
     }));
 });
+
+/* Unsaved answers. A form marked data-unsaved-guard asks before a link (or
+ * closing the tab) throws away what was typed into it. Caught in the capture
+ * phase so it runs before hx-boost navigates. */
+(function () {
+    if (window.__unsavedGuardBound) return;
+    window.__unsavedGuardBound = true;
+    const MESSAGE = 'You have unsaved changes in this section. Leave without saving them?';
+    const dirtyForm = () => document.querySelector('form[data-unsaved-guard][data-dirty]');
+    const markDirty = (e) => {
+        if (!e.target.name) return;
+        const form = e.target.closest && e.target.closest('form[data-unsaved-guard]');
+        if (form) form.setAttribute('data-dirty', '');
+    };
+    document.addEventListener('input', markDirty, true);
+    document.addEventListener('change', markDirty, true);
+    document.addEventListener('submit', (e) => {
+        if (e.target.matches && e.target.matches('form[data-unsaved-guard]')) e.target.removeAttribute('data-dirty');
+    }, true);
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest && e.target.closest('a[href]');
+        const form = dirtyForm();
+        if (!link || !form || link.target === '_blank' || link.hasAttribute('download')) return;
+        if (window.confirm(MESSAGE)) {
+            form.removeAttribute('data-dirty');
+        } else {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+    window.addEventListener('beforeunload', (e) => {
+        if (dirtyForm()) { e.preventDefault(); e.returnValue = ''; }
+    });
+})();

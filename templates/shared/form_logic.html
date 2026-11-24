@@ -89,9 +89,16 @@
         });
     }
 
-    document.addEventListener('change', apply);
-    document.addEventListener('input', apply);
-    document.addEventListener('htmx:afterSwap', apply);
+    // One set of document listeners for the whole visit: these pages are
+    // reached by boosted navigation, which re-runs this script, and each run
+    // would otherwise add listeners still holding an earlier page's rules.
+    window.__formLogicApply = function () { if (rulesEl.isConnected) apply(); };
+    if (!window.__formLogicBound) {
+        window.__formLogicBound = true;
+        ['change', 'input', 'htmx:afterSwap'].forEach(function (name) {
+            document.addEventListener(name, function () { window.__formLogicApply(); });
+        });
+    }
     apply();
 })();
 </script>

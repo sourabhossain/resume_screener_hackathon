@@ -36,6 +36,11 @@ def send_assessment_invite(invitation_id: int) -> str:
     if invitation.resume.is_deleted or invitation.resume.job.is_deleted:
         logger.info('sei.skipped invitation=%s (candidate deleted)', invitation_id)
         return 'deleted'
+    # Rejected (or withdrawn) between the click and this task: the link was
+    # closed then, and an email pointing at it must not follow.
+    if invitation.resume.recruiter_status in ('rejected', 'withdrawn') or invitation.is_expired:
+        logger.info('sei.skipped invitation=%s (candidate out of the process)', invitation_id)
+        return 'closed'
 
     otp = issue_fresh_code(invitation)
     invitation.invited_at = timezone.now()

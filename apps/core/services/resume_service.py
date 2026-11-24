@@ -186,10 +186,20 @@ class ResumeService:
             # blank — i.e. neither typed by the user in the form nor recovered by
             # the earlier regex extraction (_fill_contact_info). This prevents AI
             # output from overwriting recruiter- or candidate-provided values.
+            # The model's output is checked like typed input: a malformed email
+            # would receive the invitations, and two numbers in one string
+            # overflow the column and fail the whole screening.
             if not resume.email and result.get('candidate_email'):
-                resume.email = result['candidate_email']
+                from django.core.exceptions import ValidationError
+                from django.core.validators import validate_email
+                candidate_email = str(result['candidate_email']).strip()[:254]
+                try:
+                    validate_email(candidate_email)
+                    resume.email = candidate_email
+                except ValidationError:
+                    pass
             if not resume.phone and result.get('candidate_phone'):
-                resume.phone = result['candidate_phone']
+                resume.phone = str(result['candidate_phone']).strip()[:20]
             resume.skills = result.get('skills', [])
             resume.education = result.get('education', [])
             resume.certifications = result.get('certifications', [])
@@ -218,8 +228,10 @@ class ResumeService:
     @classmethod
     def process_resume(cls, resume) -> Dict[str, Any]:
         try:
+            # updated_at is the stale-screening sweep's clock: it must count
+            # from now, when the work starts, not from when the CV was queued.
             resume.screening_status = 'processing'
-            resume.save(update_fields=['screening_status'])
+            resume.save(update_fields=['screening_status', 'updated_at'])
 
             raw_text = cls.extract_text(resume)
             cls._fill_contact_info(resume, raw_text)

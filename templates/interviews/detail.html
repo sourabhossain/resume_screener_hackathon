@@ -4,7 +4,7 @@
 {% block content %}
 <div class="mx-auto space-y-6">
 
-    <nav class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+    <nav aria-label="Breadcrumb" class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:resume_detail' interview.resume.uuid %}" class="hover:text-primary-600 transition">{{ interview.resume.candidate_name|title }}</a>
         <svg class="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         <span class="font-medium text-zinc-900 dark:text-white">{{ interview.get_phase_display }}</span>
@@ -173,7 +173,7 @@
                     {% if ev.total_score is not None %}
                     <span class="text-sm font-black tabular-nums text-zinc-800 dark:text-zinc-100">
                         {{ ev.total_score }}<span class="text-xs font-normal text-zinc-400">/100</span>
-                        <span class="ml-0.5 text-xs font-semibold text-zinc-500">({{ ev.percentage }}%)</span>
+                        <span class="ml-0.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">({{ ev.percentage }}%)</span>
                     </span>
                     {% endif %}
                     {% if ev.impression_label %}
@@ -253,8 +253,9 @@
                           data-confirm-text="This evaluator will be removed from the interview."
                           data-confirm-button="Remove">
                         {% csrf_token %}
-                        <button type="submit" class="rounded-lg p-1.5 text-zinc-300 transition hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        <button type="submit" aria-label="Remove {{ ev.display_name }} from this interview" title="Remove evaluator"
+                                class="rounded-lg p-2 text-zinc-500 transition hover:bg-rose-50 hover:text-rose-600 dark:text-zinc-400 dark:hover:bg-rose-950/30 dark:hover:text-rose-400">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </form>
                 </div>

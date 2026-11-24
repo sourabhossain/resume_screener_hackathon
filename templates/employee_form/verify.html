@@ -51,11 +51,11 @@
                            id="{{ otp_form.code.id_for_label }}"
                            inputmode="numeric"
                            autocomplete="one-time-code"
-                           maxlength="{{ form_obj.OTP_DIGITS }}"
+                           maxlength="12"
                            placeholder="000000"
                            autofocus
                            {% if form_obj.otp_is_locked %}disabled{% endif %}
-                           class="w-full rounded-xl border border-zinc-300 bg-white px-4 py-4 text-center text-3xl font-bold tracking-[0.35em] text-zinc-900 placeholder-zinc-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white dark:placeholder-zinc-700 dark:disabled:bg-zinc-900">
+                           class="w-full rounded-xl border border-zinc-300 bg-white px-4 py-4 text-center text-3xl font-bold tracking-[0.35em] text-zinc-900 placeholder-zinc-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-[#284699]/25 disabled:cursor-not-allowed disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white dark:placeholder-zinc-700 dark:disabled:bg-zinc-900">
                     {% if not form_obj.otp_is_locked and not form_obj.otp_is_expired and form_obj.otp_attempts %}
                     <p class="mt-2 text-center text-xs font-medium text-amber-600 dark:text-amber-400">
                         {{ form_obj.otp_attempts_left }} attempt{{ form_obj.otp_attempts_left|pluralize }} left

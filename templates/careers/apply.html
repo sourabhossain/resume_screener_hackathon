@@ -173,8 +173,8 @@
             </div>
 
             <div>
-                <label class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Resume file <span class="text-red-500">*</span></label>
-                {% include 'core/partials/file_dropzone.html' %}
+                <p id="id_file_label" class="mb-1.5 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">Resume file <span class="text-red-500">*</span></p>
+                {% include 'core/partials/file_dropzone.html' with invalid=form.file.errors %}
             </div>
 
             <p class="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">

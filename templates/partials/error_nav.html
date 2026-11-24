@@ -1,4 +1,4 @@
-<nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
+<nav aria-label="Main" class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80">
     <div class="mx-auto flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8" style="max-width: 96rem;">
         {% url 'core:careers' as brand_home_url %}
         {% include 'partials/brand_logo.html' with href=brand_home_url variant='nav' show_product=True class='group shrink-0' %}

@@ -1,7 +1,7 @@
 <button type="button" x-ref="trigger" x-cloak class="form-input select-picker__trigger"
         @click="toggle()" @keydown.down.prevent="show()" @keydown.up.prevent="show()"
         :disabled="disabled" aria-haspopup="listbox" :aria-expanded="open.toString()"
-        :aria-label="ariaLabel" :aria-invalid="invalid ? 'true' : null">
+        :aria-label="ariaLabel" :aria-invalid="invalid ? 'true' : null" :aria-controls="uid + '-list'">
     <span class="select-picker__label" :class="{ 'select-picker__label--empty': !value }" x-text="labelFor(value)"></span>
     <svg class="select-picker__chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
 </button>
@@ -12,12 +12,13 @@
     <div class="select-picker__search" x-show="searchable">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"/></svg>
         <input type="text" x-ref="q" x-model="q" placeholder="Search" autocomplete="off" aria-label="Search options"
+               role="combobox" aria-expanded="true" :aria-controls="uid + '-list'" :aria-activedescendant="activeId"
                @change.stop @input.stop="active = 0" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="pickActive()">
     </div>
-    <div class="select-picker__list" role="listbox" :aria-label="ariaLabel" x-ref="list"
+    <div class="select-picker__list" role="listbox" :aria-label="ariaLabel" x-ref="list" :id="uid + '-list'" :aria-activedescendant="activeId"
          tabindex="-1" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="pickActive()">
         <template x-for="(opt, i) in shown()" :key="opt.value">
-            <button type="button" role="option" class="select-picker__option" tabindex="-1"
+            <button type="button" role="option" class="select-picker__option" tabindex="-1" :id="optionId(i)"
                     :class="{ 'is-active': i === active }" :aria-selected="(opt.value === value).toString()"
                     @mouseenter="active = i" @click="pick(opt.value)">
                 <span class="select-picker__option-label" x-text="opt.label"></span>

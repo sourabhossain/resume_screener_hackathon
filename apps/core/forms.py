@@ -4,7 +4,8 @@ from django import forms
 
 from apps.sei_assessment import instruments as sei_instruments
 
-from .form_utils import AriaInvalidMixin, clean_label_text, clean_person_text, clean_phone_text
+from .form_utils import (AriaInvalidMixin, clean_applicant_name, clean_label_text, clean_person_text,
+                         clean_phone_text)
 from .models import Job, Resume
 
 
@@ -46,7 +47,13 @@ class FileValidationMixin:
             raise forms.ValidationError(
                 f'File content does not match {ext.upper()} format. Please upload a valid file.'
             )
-        
+
+        if ext == 'docx':
+            from apps.core.services.document_extractor import DocumentExtractor
+            if not DocumentExtractor.docx_archive_is_safe(file):
+                raise forms.ValidationError(
+                    'This Word file could not be opened. Please save it again or upload it as a PDF.')
+
         return file
 
 
@@ -145,6 +152,14 @@ class JobForm(AriaInvalidMixin, forms.ModelForm):
             self.fields['assessments'].initial = sei_instruments.clean_keys(
                 self.instance.assessments)
         self.fields['assessment_window_hours'].required = False
+
+    def is_valid(self):
+        valid = super().is_valid()
+        # The template shows these two errors under their fields.
+        for name in ('title', 'description'):
+            if self.errors.get(name):
+                self.fields[name].widget.attrs['aria-describedby'] = f'id_{name}_error'
+        return valid
 
     @property
     def assessment_options(self):
@@ -253,7 +268,7 @@ class ResumeForm(AriaInvalidMixin, FileValidationMixin, FileSaveMixin, forms.Mod
         return upload
 
     def clean_candidate_name(self):
-        return clean_person_text(self.cleaned_data.get('candidate_name'), required=True)
+        return clean_applicant_name(self.cleaned_data.get('candidate_name'), required=True)
 
     def clean(self):
         data = super().clean()

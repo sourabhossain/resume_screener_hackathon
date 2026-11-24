@@ -22,6 +22,7 @@
         return {
             open: false,
             busy: false,
+            returnFocus: null,
             cur: null,
             url: '',
             download: '',
@@ -64,8 +65,24 @@
                 this.total = (summary && parseInt(summary.textContent, 10)) || list.length;
                 this.hasPrev = i > 0;
                 this.hasNext = i + 1 < list.length || !!document.querySelector('#pipeline-more button');
+                if (!this.open) {
+                    // A dialog: focus moves into it, the page behind stops
+                    // scrolling, and close() puts both back.
+                    this.returnFocus = document.activeElement;
+                    document.documentElement.style.overflow = 'hidden';
+                    this.$nextTick(() => this.$refs.panel && this.$refs.panel.focus({ preventScroll: true }));
+                }
                 this.open = true;
                 this.markSeen(btn);
+            },
+
+            close() {
+                if (!this.open) return;
+                this.open = false;
+                document.documentElement.style.overflow = '';
+                const back = this.returnFocus;
+                this.returnFocus = null;
+                if (back && back.isConnected) back.focus({ preventScroll: true });
             },
 
             markSeen(btn) {
@@ -239,4 +256,11 @@ document.addEventListener('htmx:afterSettle', function () {
     document.querySelectorAll('#pipeline-tbody tr[id^="resume-row-"]').forEach(function (tr) {
         if (seenIds[tr.id]) tr.remove(); else seenIds[tr.id] = true;
     });
+});
+// A boosted navigation while the viewer is open must not leave the next page
+// unable to scroll.
+document.addEventListener('htmx:afterSettle', function (e) {
+    if (e.detail && e.detail.target && e.detail.target.id === 'main-content') {
+        document.documentElement.style.overflow = '';
+    }
 });

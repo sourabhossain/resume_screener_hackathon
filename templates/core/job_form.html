@@ -45,6 +45,7 @@
                         Job Title <span class="text-red-500">*</span>
                     </label>
                     {{ form.title }}
+                    {% if form.title.errors %}<p id="id_title_error" class="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400">{{ form.title.errors.0 }}</p>{% endif %}
                 </div>
 
 
@@ -81,7 +82,9 @@
                             </template>
                         </p>
                     </div>
-                    {% if not form.description.errors %}
+                    {% if form.description.errors %}
+                    <p id="id_description_error" class="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400">{{ form.description.errors.0 }}</p>
+                    {% else %}
                     <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
                         Include requirements, responsibilities, and qualifications.
                         Rough notes in the box are used as the brief.

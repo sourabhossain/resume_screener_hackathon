@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
-from django.db.models import Case, Count, IntegerField, Prefetch, Q, Value, When
+from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.utils import timezone
@@ -47,8 +47,15 @@ def _validate_user_name_fields(request) -> bool:
     return ok
 
 
+# Large columns no list row shows: the CV text alone is several KB a row, and
+# loading it for a 50-row page of a 10,000-CV job is most of the query's time.
+# Anything a row template reads must not be in here, or each row costs a query.
+HEAVY_RESUME_FIELDS = ('raw_text', 'screening_summary', 'reasoning', 'certifications', 'achievements',
+                       'matched_skills', 'missing_skills', 'extracted_links')
+
+
 def _ordered_active_resumes_queryset(resume_qs):
-    return resume_qs.filter(is_deleted=False).annotate(
+    return resume_qs.filter(is_deleted=False).defer(*HEAVY_RESUME_FIELDS).annotate(
         decision_rank=Case(
             When(recommendation='interview', then=Value(3)),
             When(recommendation='talent_pool', then=Value(2)),
@@ -189,7 +196,9 @@ def dashboard(request):
         resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
     ).order_by('-created_at')[:5]
     context['recent_resumes'] = Resume.objects.filter(
-        job__is_deleted=False).select_related('job').order_by('-created_at')[:5]
+        job__is_deleted=False).select_related('job').only(
+        'uuid', 'candidate_name', 'final_score', 'recommendation', 'tier', 'created_at',
+        'job__title', 'job__slug').order_by('-created_at')[:5]
     return render(request, 'core/dashboard.html', context)
 
 
@@ -197,18 +206,9 @@ def dashboard(request):
 def job_list(request):
     from django.core.paginator import Paginator
 
-    # Only what the three preview initials need: the full rows carry the CV's
-    # extracted text, and a busy job has hundreds of them.
-    resume_prefetch = Prefetch(
-        'resumes',
-        queryset=_ordered_active_resumes_queryset(Resume.all_objects.all()).only(
-            'id', 'job_id', 'candidate_name', 'recommendation', 'final_score',
-            'created_at', 'is_deleted'),
-    )
-
     jobs = Job.objects.annotate(
         resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
-    ).prefetch_related(resume_prefetch)
+    )
 
     search_query = request.GET.get('q', '').strip()
     if search_query:
@@ -217,20 +217,35 @@ def job_list(request):
             Q(description__icontains=search_query)
         )
 
+    # Only known values reach the template, which puts this one in an Alpine
+    # expression: anything else is treated as "all".
     status_filter = request.GET.get('status', 'active').strip()
     if status_filter in ['active', 'draft', 'closed']:
         jobs = jobs.filter(status=status_filter)
+    else:
+        status_filter = 'all'
 
     jobs = jobs.order_by('-created_at')
 
     paginator = Paginator(jobs, 10)
     page_obj = paginator.get_page(request.GET.get('page', 1))
 
-    for job in page_obj.object_list:
-        job.preview_initials = [
-            candidate_initial(r.candidate_name)
-            for r in list(job.resumes.all())[:3]
-        ]
+    # The three preview initials per job, in pipeline order, from one query
+    # that numbers each job's candidates and keeps the first three: loading
+    # every CV of a 10,000-CV job to show three letters is what this replaces.
+    from django.db.models import Window
+    from django.db.models.functions import RowNumber
+    page_jobs = list(page_obj.object_list)
+    firsts = (_ordered_active_resumes_queryset(Resume.objects.filter(job__in=page_jobs))
+              .annotate(position=Window(RowNumber(), partition_by=[F('job_id')], order_by=[
+                  F('decision_rank').desc(), F('final_score').desc(), F('created_at').desc(), F('pk').desc()]))
+              .filter(position__lte=3).order_by('job_id', 'position')
+              .values_list('job_id', 'candidate_name'))
+    initials = {}
+    for job_id, name in firsts:
+        initials.setdefault(job_id, []).append(candidate_initial(name))
+    for job in page_jobs:
+        job.preview_initials = initials.get(job.pk, [])
 
     context = {
         'jobs': page_obj,
@@ -353,6 +368,12 @@ def job_edit(request, slug):
 def job_delete(request, slug):
     job = get_object_or_404(Job, slug=slug)
     if request.method == 'POST':
+        # Its candidates leave the process too: scheduled interviews are
+        # cancelled (the panel is told) and open links are closed.
+        from apps.core.status import _close_open_steps
+        from apps.interviews.models import Interview
+        for resume in Resume.objects.filter(job=job, interviews__status=Interview.SCHEDULED).distinct():
+            _close_open_steps(resume)
         job.soft_delete()
         messages.success(request, f'Job "{job.title}" deleted successfully!')
         return redirect('core:job_list')
@@ -691,7 +712,15 @@ def resume_edit(request, uuid):
                     instance.tier, instance.recommendation = 'mid', 'talent_pool'
                 else:
                     instance.tier, instance.recommendation = 'low', 'reject'
-            instance.save()
+            # Only what this edit changed: a status move or a screening result
+            # that landed while the page was open must not be written back over.
+            update_fields = {f for f in form.changed_data if f in form._meta.fields and f != 'file'} | {'updated_at'}
+            if new_file:
+                update_fields |= {'file', 'file_name', 'file_type', 'file_hash', 'raw_text', 'screening_status'}
+            if changed:
+                update_fields |= {'score_manually_edited', 'score_edited_at', 'score_edited_by',
+                                  'tier', 'recommendation'}
+            instance.save(update_fields=sorted(update_fields))
             if 'email' in form.changed_data:
                 from apps.core.utils import revoke_candidate_links
                 if revoke_candidate_links(instance):
@@ -717,6 +746,10 @@ def resume_delete(request, uuid):
     resume = get_object_or_404(Resume, uuid=uuid)
     job_slug = resume.job.slug
     if request.method == 'POST':
+        # A deleted candidate's interviews would otherwise stay in everyone's
+        # calendar, and their reminders are skipped without a word.
+        from apps.core.status import _close_open_steps
+        _close_open_steps(resume)
         resume.soft_delete()
         messages.success(request, f'Resume for "{resume.candidate_name}" deleted successfully!')
         return redirect('core:job_detail', slug=job_slug)
@@ -800,8 +833,8 @@ def pipeline_poll(request, job_slug):
     ranks = {}
     for pair in request.GET.get('ids', '').split(',')[:PIPELINE_PAGE_SIZE * 4]:
         pk, _, rank = pair.partition(':')
-        if pk.isdigit():
-            ranks[int(pk)] = int(rank) if rank.isdigit() else None
+        if pk.isdecimal():
+            ranks[int(pk)] = int(rank) if rank.isdecimal() else None
     resumes = (Resume.objects.filter(job=job, pk__in=ranks).select_related('job')
                .prefetch_related('interviews__evaluations'))
     return render(request, 'core/partials/pipeline_poll.html', {
@@ -822,7 +855,7 @@ def resume_row_fragment(request, uuid):
     # A polled row keeps its rank badge. A filtered table numbers its own rows
     # and sends that rank back; otherwise it is recomputed over the whole job.
     shown = request.GET.get('rank', '')
-    if shown.isdigit():
+    if shown.isdecimal():
         rank = int(shown)
     else:
         ordered_ids = list(ordered.values_list('id', flat=True))
@@ -922,7 +955,7 @@ def resume_rescreen(request, uuid):
     if request.method != 'POST':
         return redirect('core:resume_detail', uuid=uuid)
 
-    from apps.core.services.screening_queue import queue_screening, stale_filter
+    from apps.core.services.screening_queue import STALE_AFTER, queue_screening, stale_filter
 
     # When the button is clicked via HTMX (the app is hx-boosted) we swap the
     # status region in place and DON'T redirect. A redirect back to this same
@@ -937,9 +970,11 @@ def resume_rescreen(request, uuid):
     # Atomic update prevents duplicate tasks from concurrent clicks. A row left
     # 'processing' long after its task should have ended can be claimed too, or
     # a lost task would lock the candidate out of screening for good.
+    # A 'pending' row is waiting for a Celery retry and is only claimed once
+    # that retry is long overdue, or the button would screen it twice.
     updated = Resume.objects.filter(
         Q(screening_status__in=['completed', 'failed', 'needs_review']) | stale_filter()
-        | Q(screening_status='pending'),
+        | Q(screening_status='pending', updated_at__lt=timezone.now() - STALE_AFTER),
         uuid=uuid,
     ).update(screening_status='processing', updated_at=timezone.now())
 
@@ -1054,52 +1089,57 @@ def careers_apply(request, slug):
             uploaded_file = request.FILES.get('file')
             file_hash = compute_file_hash(uploaded_file) if uploaded_file else ''
 
-            # Block duplicate submissions: same email, phone, or file already on record for this job.
-            if email and Resume.objects.filter(job=job, email__iexact=email, is_deleted=False).exists():
-                messages.error(request, 'An application with this email address already exists for this position.')
-                return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
-
-            if phone:
-                # Normalize DB values the same way before comparing so formatting differences don't bypass the check.
-                from django.db.models import F, Value as V
-                from django.db.models.functions import Replace
-                existing_phone = (
-                    Resume.objects.filter(job=job, is_deleted=False)
-                    .annotate(
-                        phone_normalized=Replace(
-                            Replace(
-                                Replace(
-                                    Replace(F('phone'), V(' '), V('')),
-                                    V('-'), V(''),
-                                ),
-                                V('('), V(''),
-                            ),
-                            V(')'), V(''),
-                        )
-                    )
-                    .filter(phone_normalized=phone)
-                    .exists()
-                )
-                if existing_phone:
-                    messages.error(request, 'An application with this phone number already exists for this position.')
+            # The checks and the insert hold a lock on the job: a double-clicked
+            # Submit would otherwise pass the checks twice and create two
+            # candidates, two screenings and two thank-you emails.
+            from django.db import transaction
+            with transaction.atomic():
+                Job.objects.select_for_update().filter(pk=job.pk).first()
+                # Block duplicate submissions: same email, phone, or file already on record for this job.
+                if email and Resume.objects.filter(job=job, email__iexact=email, is_deleted=False).exists():
+                    messages.error(request, 'An application with this email address already exists for this position.')
                     return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
 
-            if file_hash and Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
-                messages.error(request, 'This resume has already been submitted for this position.')
-                return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
+                if phone:
+                    # Normalize DB values the same way before comparing so formatting differences don't bypass the check.
+                    from django.db.models import F, Value as V
+                    from django.db.models.functions import Replace
+                    existing_phone = (
+                        Resume.objects.filter(job=job, is_deleted=False)
+                        .annotate(
+                            phone_normalized=Replace(
+                                Replace(
+                                    Replace(
+                                        Replace(F('phone'), V(' '), V('')),
+                                        V('-'), V(''),
+                                    ),
+                                    V('('), V(''),
+                                ),
+                                V(')'), V(''),
+                            )
+                        )
+                        .filter(phone_normalized=phone)
+                        .exists()
+                    )
+                    if existing_phone:
+                        messages.error(request, 'An application with this phone number already exists for this position.')
+                        return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
 
-            resume = form.save(commit=False)
-            resume.job = job
-            resume.file_hash = file_hash
-            resume.screening_status = 'processing'
-            resume.save()
+                if file_hash and Resume.objects.filter(job=job, file_hash=file_hash, is_deleted=False).exists():
+                    messages.error(request, 'This resume has already been submitted for this position.')
+                    return render(request, 'careers/apply.html', {'job': job, 'form': form, 'applications_open': True})
+
+                resume = form.save(commit=False)
+                resume.job = job
+                resume.file_hash = file_hash
+                resume.screening_status = 'processing'
+                resume.save()
 
             from apps.core.services.screening_queue import queue_screening
             queue_screening(resume.id)
 
             # After the commit, so the worker finds the row. A broker outage
             # loses only the courtesy email, never the application.
-            from django.db import transaction
             from apps.core.tasks import send_application_received_email
             from apps.core.utils import queue_task
             transaction.on_commit(lambda: queue_task(send_application_received_email, resume.pk))
@@ -1322,6 +1362,7 @@ def talent_pool(request):
         Resume.objects
         .filter(recommendation='talent_pool', is_deleted=False)
         .select_related('job')
+        .defer(*HEAVY_RESUME_FIELDS)
         .order_by('-final_score', '-created_at')
     )
     search_q = request.GET.get('q', '').strip()
@@ -1336,7 +1377,7 @@ def talent_pool(request):
         'resumes': page_obj,
         'page_obj': page_obj,
         'search_q': search_q,
-        'total': resumes_qs.count(),
+        'total': page_obj.paginator.count,
     })
 
 
@@ -1346,6 +1387,7 @@ def _failed_resumes_queryset():
         Resume.objects
         .filter(screening_status='failed', is_deleted=False, job__is_deleted=False)
         .select_related('job')
+        .defer(*[f for f in HEAVY_RESUME_FIELDS if f != 'reasoning'])
         .order_by('-created_at')
     )
 
@@ -1356,6 +1398,7 @@ def _needs_review_resumes_queryset():
         Resume.objects
         .filter(screening_status='needs_review', is_deleted=False, job__is_deleted=False)
         .select_related('job')
+        .defer(*[f for f in HEAVY_RESUME_FIELDS if f != 'reasoning'])
         .order_by('-created_at')
     )
 
@@ -1375,7 +1418,7 @@ def needs_review_list(request):
     return render(request, 'core/needs_review.html', {
         'page_obj': page_obj,
         'search_q': search_q,
-        'total': resumes_qs.count(),
+        'total': page_obj.paginator.count,
     })
 
 
@@ -1394,7 +1437,7 @@ def screening_failed_list(request):
     return render(request, 'core/screening_failed.html', {
         'page_obj': page_obj,
         'search_q': search_q,
-        'total': resumes_qs.count(),
+        'total': page_obj.paginator.count,
     })
 
 
@@ -1451,10 +1494,15 @@ def job_export_csv(request, slug):
     import csv
 
     job = get_object_or_404(Job, slug=slug)
+    # Only the exported columns, streamed in chunks: 10,000 full rows (CV text
+    # included) cached in memory for the length of the download is what this avoids.
     resumes = (
         Resume.objects
         .filter(job=job, is_deleted=False)
-        .select_related('job')
+        .only('candidate_name', 'email', 'phone', 'tier', 'recommendation', 'recruiter_status',
+              'final_score', 'skills_score', 'experience_score', 'education_score',
+              'certification_score', 'achievement_score', 'experience_years', 'verification_score',
+              'screening_status', 'score_manually_edited', 'created_at')
         .order_by('-final_score', '-created_at')
     )
 
@@ -1474,7 +1522,7 @@ def job_export_csv(request, slug):
             'Manually Edited', 'Applied On',
         ]
         yield header
-        for r in resumes:
+        for r in resumes.iterator(chunk_size=2000):
             yield [
                 cell(r.candidate_name),
                 cell(r.email),
@@ -1552,6 +1600,7 @@ def download_resumes_zip(request, slug):
         .filter(job=job, is_deleted=False)
         .exclude(file='')
         .exclude(file__isnull=True)
+        .only('file', 'file_name', 'candidate_name', 'final_score', 'tier', 'recommendation')
         .order_by('-final_score')
     )
 
@@ -1637,6 +1686,14 @@ class ToastLoginView(auth_views.LoginView):
 
     template_name = 'auth/login.html'
     redirect_authenticated_user = True
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Unticked "Remember me": the session ends with the browser. Either way
+        # the server drops it after SESSION_COOKIE_AGE.
+        if not self.request.POST.get('remember'):
+            self.request.session.set_expiry(0)
+        return response
 
     def form_invalid(self, form):
         form_errors_to_messages(self.request, form)

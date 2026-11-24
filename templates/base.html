@@ -15,9 +15,9 @@
     {% endblock %}
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=23">
-    <script src="{% static 'js/status-picker.js' %}?v=10"></script>
-    <script src="{% static 'js/cv-viewer.js' %}?v=8"></script>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=25">
+    <script src="{% static 'js/status-picker.js' %}?v=12"></script>
+    <script src="{% static 'js/cv-viewer.js' %}?v=9"></script>
     <script>try { localStorage.removeItem('htmx-history-cache'); } catch (e) {}</script>
     <script src="{% static 'js/vendor/htmx-2.0.3.min.js' %}"
             integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" defer></script>
@@ -508,7 +508,7 @@
     </div>
 
     {% block topbar %}
-    <nav class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80"{% block nav_attrs %}{% endblock %}>
+    <nav aria-label="Main" class="glass sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800/80"{% block nav_attrs %}{% endblock %}>
         <div class="mx-auto px-4 sm:px-6 lg:px-8" style="max-width: 96rem;">
             <div class="flex min-h-[4.25rem] items-center justify-between gap-3 py-3">
                 <div class="flex min-w-0 items-center gap-6 lg:gap-10">
@@ -610,8 +610,8 @@
 
                     {% block nav_action %}
                     {% if user.is_authenticated %}
-                    <a href="{% url 'core:job_create' %}" class="btn-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white sm:px-5">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <a href="{% url 'core:job_create' %}" aria-label="Post a new job" class="btn-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white sm:px-5">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         <span class="hidden sm:inline">Post Job</span>
@@ -645,7 +645,7 @@
              x-transition:leave="transition ease-in duration-200"
              x-transition:leave-start="translate-x-0"
              x-transition:leave-end="-translate-x-full"
-             class="fixed bottom-0 left-0 top-0 z-50 w-80 max-w-[85vw] overflow-y-auto border-r border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:hidden">
+             class="fixed bottom-0 left-0 top-0 z-50 flex w-80 max-w-[85vw] flex-col overflow-y-auto border-r border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:hidden">
 
             <div class="border-b border-zinc-200 p-6 dark:border-zinc-800">
                 <div class="flex items-center justify-between">
@@ -655,8 +655,8 @@
                     {% url 'core:careers' as brand_home_url %}
                     {% endif %}
                     {% include 'partials/brand_logo.html' with href=brand_home_url variant='nav' show_product=True %}
-                    <button type="button" @click="mobileMenuOpen = false" class="rounded-lg p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                        <svg class="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button type="button" @click="mobileMenuOpen = false" aria-label="Close menu" class="rounded-lg p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                        <svg class="h-6 w-6 text-zinc-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </button>
@@ -666,8 +666,8 @@
             <div class="p-4">
                 <form method="get" action="{% if user.is_authenticated %}{% url 'core:job_list' %}{% else %}{% url 'core:careers' %}{% endif %}" @submit="mobileMenuOpen = false">
                     <div class="relative">
-                        <input type="text" name="q" placeholder="Search jobs..."
-                               class="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500">
+                        <input type="search" name="q" placeholder="Search jobs..." aria-label="Search jobs"
+                               class="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-[#284699]/25 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500">
                         <svg class="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
@@ -750,7 +750,7 @@
             {% endif %}
             {% endblock mobile_recruiter_nav %}
 
-            <div class="absolute bottom-0 left-0 right-0 border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="sticky bottom-0 mt-auto border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div class="flex items-center justify-between">
                     <span class="text-sm text-zinc-500 dark:text-zinc-400">Theme</span>
                     <button type="button" @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); applyThemeColor(darkMode)"

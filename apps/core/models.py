@@ -85,7 +85,9 @@ class Job(SoftDeleteModel):
     # job `restore` action is the one place that checks it.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        # Deleting a staff account must never take the jobs and every
+        # candidate, form and upload under them with it.
+        on_delete=models.SET_NULL,
         related_name='jobs',
         null=True,
         blank=True,
@@ -329,6 +331,14 @@ class Resume(SoftDeleteModel):
             models.Index(fields=['screening_status'], name='resume_status_idx'),
             models.Index(fields=['job', 'seen_status'],
                          name='resume_job_seen_idx'),
+            # The pipeline's status tabs and its newest/oldest/name sorts, so a
+            # page of a 10,000-CV job is read from the index, not file-sorted.
+            models.Index(fields=['job', 'is_deleted', 'recruiter_status'], name='resume_job_rstatus_idx'),
+            models.Index(fields=['job', 'is_deleted', 'created_at'], name='resume_job_created_idx'),
+            models.Index(fields=['job', 'is_deleted', 'candidate_name'], name='resume_job_name_idx'),
+            # The dashboard's date ranges and the stale link-check sweep.
+            models.Index(fields=['created_at'], name='resume_created_idx'),
+            models.Index(fields=['verification_status', 'updated_at'], name='resume_verif_updated_idx'),
         ]
         constraints = [
             # The same file cannot be submitted twice for one job. MySQL does not

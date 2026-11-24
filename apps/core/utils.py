@@ -49,6 +49,17 @@ def queue_task(task, *args) -> bool:
         return False
 
 
+def ascii_digits(raw) -> str:
+    """A code as typed, in ASCII digits without spaces.
+
+    A Bangla phone keyboard types ৬২২৯৯২ for 622992, and people often add a
+    space in the middle; both must read as the code that was sent.
+    """
+    import unicodedata
+    return ''.join(str(unicodedata.decimal(ch)) if ch.isdecimal() else ch
+                   for ch in str(raw or '') if not ch.isspace())
+
+
 def check_counted_otp(obj, raw: str) -> bool:
     """Check a one-time code against `obj`, spending one attempt atomically.
 
@@ -67,7 +78,7 @@ def check_counted_otp(obj, raw: str) -> bool:
     if not rows.update(otp_attempts=F('otp_attempts') + 1, updated_at=timezone.now()):
         obj.refresh_from_db(fields=['otp_attempts', 'otp_hash'])
         return False
-    if check_password(raw, obj.otp_hash):
+    if check_password(ascii_digits(raw), obj.otp_hash):
         obj.otp_verified_at = timezone.now()
         obj.otp_attempts = 0
         obj.save(update_fields=['otp_verified_at', 'otp_attempts', 'updated_at'])

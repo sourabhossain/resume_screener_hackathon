@@ -37,6 +37,11 @@ class JobAdmin(admin.ModelAdmin):
             _resume_count=Count('resumes', filter=Q(resumes__is_deleted=False))
         )
     
+    def has_delete_permission(self, request, obj=None):
+        # A real delete takes every candidate, form and upload with it; the app's
+        # Delete is a soft delete, and is_deleted above restores.
+        return False
+
     def resume_count(self, obj):
         return obj._resume_count
     resume_count.short_description = 'Resumes'
@@ -58,6 +63,9 @@ class ResumeAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Deleted resumes included, so the is_deleted filter can find and restore them."""
         return Resume.all_objects.select_related('job')
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     fieldsets = (
         ('Candidate Info', {

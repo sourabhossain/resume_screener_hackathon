@@ -5,7 +5,7 @@
 {% block content %}
 <div class="mx-auto max-w-xl px-1 sm:px-0">
 
-    <nav class="mb-8 flex items-center gap-2 text-sm">
+    <nav aria-label="Breadcrumb" class="mb-8 flex items-center gap-2 text-sm">
         <a href="{% url 'core:user_list' %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-zinc-600 shadow-soft ring-1 ring-zinc-200/90 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:bg-zinc-900 dark:text-zinc-400 dark:shadow-soft-dark dark:ring-zinc-700 dark:hover:bg-primary-950/40 dark:hover:text-primary-300 dark:hover:ring-primary-800">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Users
@@ -22,7 +22,7 @@
                 </div>
                 <div class="min-w-0">
                     <h1 class="truncate text-lg font-semibold text-zinc-900 dark:text-white">{{ target.get_full_name|default:target.username }}</h1>
-                    <p class="text-sm text-zinc-500">Joined {{ target.date_joined|date:"M j, Y" }}{% if target.last_login %} &middot; last signed in {{ target.last_login|timesince }} ago{% endif %}</p>
+                    <p class="text-sm text-zinc-500 dark:text-zinc-400">Joined {{ target.date_joined|date:"M j, Y" }}{% if target.last_login %} &middot; last signed in {{ target.last_login|timesince }} ago{% endif %}</p>
                 </div>
             </div>
         </div>

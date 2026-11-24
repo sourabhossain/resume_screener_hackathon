@@ -79,7 +79,7 @@
     </div>
     {% endif %}
 
-    <form method="post" hx-boost="false" data-rc-form x-data="{ submitting: false }" @submit="submitting = true">
+    <form method="post" hx-boost="false" data-unsaved-guard data-rc-form x-data="{ submitting: false }" @submit="submitting = true">
         {% csrf_token %}
 
         <fieldset data-logic-group class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-soft dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-soft-dark">

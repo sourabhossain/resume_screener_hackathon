@@ -7,6 +7,7 @@ status sends (the assessment link, the information form) goes out once.
 import logging
 
 from django.db import transaction
+from django.utils import timezone
 
 from .models import Resume, StatusChange
 
@@ -111,17 +112,22 @@ def _send_assessments(resume, user):
     if not instruments.clean_keys(resume.job.assessments):
         return [('info', f'{resume.job.title} does not ask for an assessment, so nothing was sent.')]
     try:
-        issue_invite(resume, user=user)
+        invitation = issue_invite(resume, user=user)
     except InviteError as exc:
         logger.warning('sei.invite_skipped resume=%s reason=%s', resume.pk, exc)
         return [('error', f'Assessment not sent: {exc}')]
+    if not getattr(invitation, 'queued', True):
+        until = timezone.localtime(invitation.token_expires_at).strftime('%-d %b, %-I:%M %p')
+        return [('info', f'The assessment link was already sent and works until {until}; it was not sent again.')]
     return [('success', f'Assessment link sent to {resume.email}.')]
 
 
 def _send_information_form(resume, user):
     from apps.employee_form.services import InviteError, issue_invite
     existing = getattr(resume, 'employee_form', None)
-    already = bool(getattr(existing, 'invited_at', None))
+    # Emailed and still open. A link closed when the candidate was rejected is
+    # sent again (with a fresh window) if they come back.
+    already = bool(getattr(existing, 'invited_at', None)) and not existing.is_expired
     try:
         # A form row whose first email never left (queue down at the time) is
         # sent now; one already emailed is left alone.

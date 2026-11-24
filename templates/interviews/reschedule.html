@@ -3,7 +3,7 @@
 {% block content %}
 <div class="mx-auto max-w-3xl"
      x-data="{ mode: '{{ form.mode.value|default:'in_person'|escapejs }}', busy: false }">
-    <nav class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
+    <nav aria-label="Breadcrumb" class="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-zinc-500 dark:text-zinc-400">
         <a href="{% url 'core:resume_detail' interview.resume.uuid %}" class="transition hover:text-primary-600">{{ interview.resume.candidate_name|title }}</a>
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         <a href="{% url 'interviews:detail' interview.pk %}" class="transition hover:text-primary-600">{{ interview.get_phase_display }}</a>
@@ -47,8 +47,8 @@
             <div class="mt-4 inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800" role="radiogroup" aria-label="Interview format">
                 {% for value, label in form.fields.mode.choices %}
                 <label class="cursor-pointer">
-                    <input type="radio" name="mode" value="{{ value }}" class="sr-only" x-model="mode"{% if form.mode.value == value %} checked{% endif %}>
-                    <span class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition"
+                    <input type="radio" name="mode" value="{{ value }}" class="peer sr-only" x-model="mode"{% if form.mode.value == value %} checked{% endif %}>
+                    <span class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition peer-focus-visible:ring-2 peer-focus-visible:ring-[#284699] peer-focus-visible:ring-offset-1"
                           :class="mode === '{{ value }}' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'">{{ label }}</span>
                 </label>
                 {% endfor %}
@@ -59,7 +59,7 @@
                 </label>
                 <input type="text" name="location" id="{{ form.location.id_for_label }}" value="{{ form.location.value|default:'' }}" maxlength="500"
                        :placeholder="mode === 'online' ? 'Meet, Teams or Zoom link' : 'e.g. Conference Room 3, Gulshan 1'"
-                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                       class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#284699]/25 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
                 {% for e in form.location.errors %}<p class="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{{ e }}</p>{% endfor %}
             </div>
         </section>

@@ -24,8 +24,9 @@ module.exports = {
         },
         // Brand "ink" — a warm near-black scale (replaces the generic indigo).
         primary: {
-          50: '#fafaf9',
-          100: '#f5f5f4',
+          // One step off white, so a primary-50 chip or tint reads on a white card.
+          50: '#f4f3f1',
+          100: '#efedeb',
           200: '#e7e5e4',
           300: '#d6d3d1',
           400: '#a8a29e',

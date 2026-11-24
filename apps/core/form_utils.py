@@ -1,4 +1,5 @@
 """Shared form validation helpers and toast-based error surfacing."""
+import re
 import unicodedata
 
 from django import forms
@@ -86,6 +87,27 @@ def clean_person_text(value, *, required=False):
             'Use letters, numbers, spaces and . - \' : , ( ) only.'
         ),
     )
+
+
+_NAME_LINK = re.compile(
+    r'(https?:|www\.|\b[\w-]+\.(?:com|net|org|info|biz|io|co|me|app|xyz|site|online|link|top|shop|bd)\b)',
+    re.IGNORECASE)
+_NAME_NUMBER = re.compile(r'\d{6,}')
+
+
+def clean_applicant_name(value, *, required=False):
+    """A name typed on the public apply form.
+
+    It is echoed in the thank-you email SSL Wireless sends to whatever address
+    was typed, so it must stay a name: a web address or a phone number in it
+    would let anyone send company-signed mail with their own text in it.
+    """
+    name = clean_person_text(value, required=required)
+    if len(name) > 120:
+        raise forms.ValidationError('Please enter a shorter name (120 characters at most).')
+    if _NAME_LINK.search(name) or _NAME_NUMBER.search(name):
+        raise forms.ValidationError('Please enter your name only, without web addresses or phone numbers.')
+    return name
 
 
 def clean_label_text(value, *, required=False):
