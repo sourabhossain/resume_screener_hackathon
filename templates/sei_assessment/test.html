@@ -15,7 +15,7 @@
 {% block portal %}
 {{ state|json_script:"ap-state" }}
 
-<div class="ap-mark" aria-hidden="true">{% for _ in "123456789012" %}<span>{{ watermark }}</span>{% endfor %}</div>
+<div class="ap-watermark" aria-hidden="true">{% for _ in "123456789012" %}<span>{{ watermark }}</span>{% endfor %}</div>
 
 <div class="ap-gate" x-show="gate" x-cloak role="alertdialog" aria-modal="true" aria-labelledby="ap-gate-title" aria-describedby="ap-gate-text">
     <div class="ap-gate-card">
@@ -181,7 +181,14 @@
                 };
                 window.addEventListener('keydown', this.onKey);
                 this.watch();
-                if (this.fsWanted && !document.fullscreenElement) { this.gate = 'start'; }
+                // While a gate is up nothing behind it can be reached, by
+                // keyboard or screen reader; its button takes the focus.
+                const gated = (gate) => {
+                    document.querySelectorAll('.ap-body, .ap-foot').forEach((el) => { el.inert = !!gate; });
+                    if (gate) { this.$nextTick(() => { const button = document.querySelector('.ap-gate button'); if (button) { button.focus(); } }); }
+                };
+                this.$watch('gate', gated);
+                if (this.fsWanted && !document.fullscreenElement) { this.gate = 'start'; gated('start'); }
             },
 
             // What the page can see of the candidate leaving it or lifting the
@@ -279,6 +286,7 @@
                 this.locked = true;
                 this.gate = 'locked';
                 clearInterval(this.flusher);
+                clearInterval(this.tick);
             },
 
             // Alpine calls this when the page is swapped away: no timer, save or
@@ -493,8 +501,11 @@
                 const pending = Object.assign({}, this.inflightBatch, this.unsent);
                 const events = this.events;
                 if (Object.keys(pending).length || events.length) {
+                    // Kept if the parting save does not get through, so the
+                    // next save (or the submit) still carries them.
                     this.events = [];
-                    this.post(pending, {events: events}, true).catch(() => {});
+                    const keep = () => { this.events = events.concat(this.events); };
+                    this.post(pending, {events: events}, true).then((r) => { if (!r.ok && r.status !== 409) { keep(); } }).catch(keep);
                 }
             },
 
@@ -526,6 +537,7 @@
                     }
                     throw new Error('submit failed');
                 } catch (err) {
+                    this.events = events.concat(this.events);
                     this.done = false;
                     this.busy = false;
                     this.retryAt = Date.now() + 3000;

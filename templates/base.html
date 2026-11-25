@@ -34,6 +34,18 @@
     </script>
     {% endif %}
     <script>
+        // The nav comes along only with a boosted page change (hx-select-oob on
+        // <body>). Every htmx request inherits that attribute, so a poller whose
+        // session ran out -- answered with the login page -- would otherwise
+        // swap the recruiter's nav for the login page's.
+        document.addEventListener('htmx:beforeSwap', function (evt) {
+            window.__navSwapAllowed = !!(evt.detail && evt.detail.boosted);
+        });
+        document.addEventListener('htmx:oobBeforeSwap', function (evt) {
+            if (evt.detail && evt.detail.target && evt.detail.target.id === 'site-topbar' && !window.__navSwapAllowed) {
+                evt.detail.shouldSwap = false;
+            }
+        });
         document.addEventListener('htmx:afterSettle', function (evt) {
             if (typeof Alpine !== 'undefined') {
                 const main = document.getElementById('main-content');

@@ -342,7 +342,7 @@ def test(request, token):
         locked = SEIAssessment.objects.select_for_update().get(pk=assessment.pk)
         previous = (locked.integrity or {}).get('client')
         if previous:
-            integrity.record(locked, [{'type': 'reopened'}])
+            integrity.record(locked, [{'type': 'reopened'}], from_page=False)
         locked.integrity = {**(locked.integrity or {}), 'client': client}
         locked.save(update_fields=['integrity', 'updated_at'])
 
@@ -444,13 +444,16 @@ def save(request, token, instrument=None, part=None):
     client = incoming.get('client') if isinstance(incoming.get('client'), str) else ''
     with transaction.atomic():
         locked = SEIAssessment.objects.select_for_update().get(pk=assessment.pk)
-        active = (locked.integrity or {}).get('client')
-        if client and active and client != active and not locked.is_submitted:
-            # Opened again elsewhere since this page loaded: that window answers
-            # now. Its events still count; its answers are not written over.
-            if events:
-                integrity.record(locked, events)
-                locked.save(update_fields=['integrity', 'updated_at'])
+        active = (locked.integrity or {}).get('client') if isinstance(locked.integrity, dict) else None
+        # A request with no client id is a page from before this check; it still saves.
+        if client and active and client != active and not locked.is_submitted and not locked.past_grace:
+            # Opened again elsewhere (or reloaded) since this page loaded: that
+            # window answers now. This one's events count, and its last answers
+            # fill only questions the new window has not answered -- a reload's
+            # parting save often lands just after the new page claimed the part.
+            locked.answers = {**cleaned, **(locked.answers or {})}
+            integrity.record(locked, events)
+            locked.save(update_fields=['answers', 'integrity', 'updated_at'])
             return JsonResponse({'status': 'superseded'}, status=409)
         if locked.is_submitted or locked.past_grace:
             closed = locked

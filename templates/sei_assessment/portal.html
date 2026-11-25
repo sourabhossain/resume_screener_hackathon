@@ -55,7 +55,7 @@
             if (event.persisted) { window.location.reload(); }
         });
         (function () {
-            var nav = document.querySelector('body > nav');
+            var nav = document.querySelector('#site-topbar > nav');
             if (!nav) { return; }
             var place = function () {
                 document.getElementById('ap').style.setProperty('--ap-nav', nav.offsetHeight + 'px');

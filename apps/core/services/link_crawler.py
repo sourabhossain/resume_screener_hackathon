@@ -173,7 +173,10 @@ class LinkCrawler:
                             await _follow(route, request)
                         except Exception as exc:  # DNS, TLS, timeout: fail fast like continue_() did
                             logger.info('Playwright request failed: %s — %s', request.url, exc)
-                            await route.abort('failed')
+                            try:
+                                await route.abort('failed')
+                            except Exception:  # already handled (the page is closing)
+                                pass
 
                     async def _follow(route, request):
                         target = request.url

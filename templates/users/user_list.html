@@ -33,8 +33,8 @@
             </thead>
             <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {% for u in users %}
-                <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40">
-                    <td class="px-5 py-4 {% if not u.is_active %}opacity-60{% endif %}">
+                <tr class="group transition-colors hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40{% if not u.is_active %} bg-zinc-50/70 dark:bg-zinc-900/60{% endif %}">
+                    <td class="px-5 py-4">
                         <div class="flex items-center gap-3">
                             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white
                                         {% if u.is_superuser %}gradient-bg{% elif u.is_staff %}bg-violet-500{% else %}bg-zinc-400 dark:bg-zinc-600{% endif %}">
@@ -48,10 +48,10 @@
                             </div>
                         </div>
                     </td>
-                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 sm:table-cell {% if not u.is_active %}opacity-60{% endif %}">
+                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 sm:table-cell">
                         {{ u.email|default:"—" }}
                     </td>
-                    <td class="px-5 py-4 {% if not u.is_active %}opacity-60{% endif %}">
+                    <td class="px-5 py-4">
                         {% if u.is_superuser %}
                         <span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
                             <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9.664 1.319a.75.75 0 0 1 .672 0 41.059 41.059 0 0 1 8.198 5.424.75.75 0 0 1-.254 1.285 31.372 31.372 0 0 0-7.86 3.83.75.75 0 0 1-.84 0 31.508 31.508 0 0 0-2.08-1.287V9.394c0-.244.116-.463.302-.592a35.504 35.504 0 0 1 3.305-2.033.75.75 0 0 0-.714-1.319 37 37 0 0 0-3.446 2.12A2.216 2.216 0 0 0 6 9.393v.38a31.293 31.293 0 0 0-4.28-1.746.75.75 0 0 1-.254-1.285 41.059 41.059 0 0 1 8.198-5.424ZM6 11.459a29.848 29.848 0 0 0-2.455-1.158 41.029 41.029 0 0 0-.39 3.114.75.75 0 0 0 .419.74c.528.255 1.046.52 1.554.794a.75.75 0 0 0 .861-.1c.12-.112.237-.226.351-.34.04-.04.082-.08.124-.122a.75.75 0 0 0-.027-1.052A29.82 29.82 0 0 0 6 13.5v-2.041Zm6.845 1.56a30.09 30.09 0 0 0-2.46 1.176.75.75 0 0 0-.027 1.052c.116.116.233.23.351.34a.75.75 0 0 0 .861.1 30.07 30.07 0 0 1 1.554-.794.75.75 0 0 0 .419-.74 41.048 41.048 0 0 0-.39-3.114A29.848 29.848 0 0 0 12.845 13.019Z" clip-rule="evenodd"/></svg>
@@ -60,21 +60,21 @@
                         {% elif u.is_staff %}
                         <span class="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">HR</span>
                         {% else %}
-                        <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Recruiter</span>
+                        <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Recruiter</span>
                         {% endif %}
                     </td>
-                    <td class="px-5 py-4 {% if not u.is_active %}opacity-60{% endif %}">
+                    <td class="px-5 py-4">
                         {% if u.is_active %}
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
                             <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active
                         </span>
                         {% else %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                             <span class="h-1.5 w-1.5 rounded-full bg-zinc-400"></span>Inactive
                         </span>
                         {% endif %}
                     </td>
-                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 md:table-cell {% if not u.is_active %}opacity-60{% endif %}">
+                    <td class="hidden px-5 py-4 text-zinc-500 dark:text-zinc-400 md:table-cell">
                         {% if u.last_login %}{{ u.last_login|timesince }} ago{% else %}Never{% endif %}
                     </td>
                     <td class="px-5 py-4 text-right">

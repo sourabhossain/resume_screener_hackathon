@@ -29,31 +29,53 @@ LABELS = {
 }
 # Recorded for the timeline but not counted as a flag.
 NOT_FLAGS = frozenset({'reopened'})
+# Only the server writes these; the page may not send them.
+SERVER_ONLY = frozenset({'reopened'})
 
 MAX_EVENTS = 300
+MAX_PER_TYPE = 40
 MAX_PER_REQUEST = 50
 
 
-def _when(value):
+def _when(value, floor=None):
     """An event time from the page (ms since epoch), kept within the sitting."""
     now = timezone.now()
     try:
         at = datetime.fromtimestamp(float(value) / 1000, tz=dt_timezone.utc)
     except (TypeError, ValueError, OverflowError, OSError):
         return now
-    return now if at > now else at
+    if at > now:
+        return now
+    return floor if floor and at < floor else at
 
 
-def record(sitting, events):
-    """Merge events sent by the page into the sitting's record (not saved here)."""
-    data = dict(sitting.integrity or {})
-    counts = dict(data.get('counts') or {})
-    timeline = list(data.get('events') or [])
+def _stored(sitting):
+    """The stored record, or an empty one if it was ever written in another shape."""
+    data = sitting.integrity if isinstance(sitting.integrity, dict) else {}
+    counts = data.get('counts') if isinstance(data.get('counts'), dict) else {}
+    events = data.get('events') if isinstance(data.get('events'), list) else []
+    counts = {k: v for k, v in counts.items() if isinstance(v, int) and not isinstance(v, bool)}
+    return data, counts, [e for e in events if isinstance(e, dict)]
+
+
+def record(sitting, events, *, from_page=True):
+    """Merge events into the sitting's record (not saved here).
+
+    The timeline keeps at most MAX_PER_TYPE of each kind, so a page flooding
+    one harmless kind cannot push the others off it; counts are always kept.
+    """
+    data, counts, timeline = _stored(sitting)
+    data = dict(data)
+    per_type = {}
+    for entry in timeline:
+        per_type[entry.get('type')] = per_type.get(entry.get('type'), 0) + 1
     for event in (events or [])[:MAX_PER_REQUEST]:
         if not isinstance(event, dict) or event.get('type') not in LABELS:
             continue
         kind = event['type']
-        entry = {'type': kind, 'at': _when(event.get('at')).isoformat()}
+        if from_page and kind in SERVER_ONLY:
+            continue
+        entry = {'type': kind, 'at': _when(event.get('at'), sitting.started_at).isoformat()}
         seconds = event.get('seconds')
         if isinstance(seconds, (int, float)) and 0 <= seconds < 86400:
             entry['seconds'] = round(seconds)
@@ -61,8 +83,9 @@ def record(sitting, events):
         if isinstance(detail, str) and detail:
             entry['detail'] = detail[:40]
         counts[kind] = counts.get(kind, 0) + 1
-        if len(timeline) < MAX_EVENTS:
+        if len(timeline) < MAX_EVENTS and per_type.get(kind, 0) < MAX_PER_TYPE:
             timeline.append(entry)
+            per_type[kind] = per_type.get(kind, 0) + 1
     data['counts'] = counts
     data['events'] = timeline
     sitting.integrity = data
@@ -71,12 +94,11 @@ def record(sitting, events):
 
 def summary(sitting):
     """(flag count, [(label, count)], [timeline rows]) for the report."""
-    data = sitting.integrity or {}
-    counts = data.get('counts') or {}
+    _, counts, events = _stored(sitting)
     rows = [(LABELS[kind], counts[kind]) for kind in LABELS if counts.get(kind)]
     flags = sum(n for kind, n in counts.items() if kind in LABELS and kind not in NOT_FLAGS)
     timeline = []
-    for entry in data.get('events') or []:
+    for entry in events:
         try:
             at = timezone.localtime(datetime.fromisoformat(entry['at']))
         except (KeyError, TypeError, ValueError):

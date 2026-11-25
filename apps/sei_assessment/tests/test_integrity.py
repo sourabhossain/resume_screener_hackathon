@@ -34,11 +34,28 @@ def test_unknown_or_malformed_events_are_dropped_and_the_rest_counted(sitting):
     assert data['events'][2]['seconds'] == 13 and len(data['events'][3]['detail']) == 40
 
 
-def test_a_flood_of_events_is_capped(sitting):
+def test_a_flood_of_one_kind_cannot_push_the_others_off_the_timeline(sitting):
     for _ in range(20):
         integrity.record(sitting, [{'type': 'copy'}] * 100)
+    integrity.record(sitting, [{'type': 'tab_hidden'}])
     assert sitting.integrity['counts']['copy'] == 20 * integrity.MAX_PER_REQUEST
-    assert len(sitting.integrity['events']) == integrity.MAX_EVENTS
+    kinds = [e['type'] for e in sitting.integrity['events']]
+    assert kinds.count('copy') == integrity.MAX_PER_TYPE and 'tab_hidden' in kinds
+
+
+def test_the_page_cannot_forge_server_only_events_or_backdate_them(sitting):
+    from django.utils import timezone
+    sitting.started_at = timezone.now()
+    integrity.record(sitting, [{'type': 'reopened'}, {'type': 'copy', 'at': 1}])
+    assert sitting.integrity['counts'] == {'copy': 1}
+    assert sitting.integrity['events'][0]['at'] >= sitting.started_at.isoformat()
+
+
+def test_malformed_stored_data_does_not_break_the_report(sitting):
+    for bad in ([1, 2], {'counts': [1], 'events': 'x'}, {'counts': {'copy': 'many', 'tab_hidden': 2}, 'events': [1, {'type': 'copy', 'at': 'nope'}]}):
+        sitting.integrity = bad
+        flags, rows, timeline = integrity.summary(sitting)
+        assert isinstance(flags, int) and isinstance(rows, list) and isinstance(timeline, list)
 
 
 @pytest.mark.django_db
@@ -46,7 +63,9 @@ def test_the_question_page_gives_each_window_an_id_and_the_watermark(running):
     client, sitting, cid = running
     page = client.get(_test(sitting)).content.decode()
     assert cid and _client_id(client.get(_test(sitting))) != cid
-    assert sitting.invitation.reference_id in page and 'class="ap-mark"' in page
+    watermark = page.split('class="ap-watermark"', 1)[1].split('</div>', 1)[0]
+    assert sitting.invitation.reference_id in watermark and sitting.resume.candidate_name in watermark
+    assert page.count('class="ap-mark"') == 1
     assert 'class="ap-gate"' in page
 
 
@@ -62,15 +81,14 @@ def test_events_arrive_with_the_autosave(running):
 
 
 @pytest.mark.django_db
-def test_a_window_replaced_by_a_newer_one_cannot_write_answers(running):
+def test_a_replaced_window_fills_gaps_but_never_overwrites_the_new_one(running):
     client, sitting, old = running
     new = _client_id(client.get(_test(sitting)))
-    stale = _post(client, sitting, {'answers': {'1': 3}, 'client': old, 'events': [{'type': 'second_tab'}]})
+    assert _post(client, sitting, {'answers': {'1': 1}, 'client': new}).json()['status'] == 'saved'
+    stale = _post(client, sitting, {'answers': {'1': 3, '5': 2}, 'client': old, 'events': [{'type': 'second_tab'}]})
     assert stale.status_code == 409 and stale.json()['status'] == 'superseded'
-    fresh = _post(client, sitting, {'answers': {'2': 1}, 'client': new})
-    assert fresh.json()['status'] == 'saved'
     sitting.refresh_from_db()
-    assert sitting.answers == {'2': 1}
+    assert sitting.answers == {'1': 1, '5': 2}
     assert sitting.integrity['counts'] == {'reopened': 1, 'second_tab': 1}
 
 
