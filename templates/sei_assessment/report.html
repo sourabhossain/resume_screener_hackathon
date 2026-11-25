@@ -203,6 +203,9 @@
             {{ assessment.submitted_at|date:"j F Y" }} at {{ assessment.submitted_at|date:"H:i" }}{% endif %}
         </em>
     </p>
+    {% if assessment.has_started %}
+    {% include 'sei_assessment/partials/integrity.html' %}
+    {% endif %}
 
     {% if not assessment.is_submitted %}
     <hr class="sei-rule">

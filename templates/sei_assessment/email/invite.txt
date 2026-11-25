@@ -32,6 +32,9 @@ Before you begin, please note:
   and whatever you have answered is submitted.
 - Please respond based on your first and most natural reaction. Do not
   overthink the statements. There are no right or wrong answers.
+- Stay on the assessment page until you submit and open it in one window
+  only. Leaving full screen, switching tabs or apps, copying and printing are
+  recorded and shown to the recruiter.
 {% for part in parts %}- {% if part_count > 1 %}Part {{ part.number }}: {% endif %}{% if part.all_required %}{% if part_count > 1 %}every{% else %}Every{% endif %} one of the {{ part.question_count }} {{ part.noun_plural }} has to be
   answered. A paper with any left blank cannot be scored and would have to be
   taken again.{% else %}{% if part_count > 1 %}try{% else %}Try{% endif %} to answer every statement. A paper with fewer than

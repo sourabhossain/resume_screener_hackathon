@@ -55,6 +55,9 @@
     <p style="margin:0 0 6px">Please respond based on your first and most natural
       reaction. Do not overthink the statements. There are no right or wrong
       answers.</p>
+    <p style="margin:0 0 6px">Stay on the assessment page until you submit and open it in
+      one window only. Leaving full screen, switching tabs or apps, copying and
+      printing are recorded and shown to the recruiter.</p>
     {% for part in parts %}
     <p style="margin:0 0 6px">{% if part_count > 1 %}<strong>Part {{ part.number }}:</strong> {% endif %}{% if part.all_required %}{% if part_count > 1 %}every{% else %}Every{% endif %} one of the {{ part.question_count }} {{ part.noun_plural }} has to be answered. A paper with any left blank cannot be scored and would have to be taken again.{% else %}{% if part_count > 1 %}try{% else %}Try{% endif %} to answer every statement. A paper with fewer than {{ part.minimum }} of {{ part.question_count }} answered cannot be scored and would have to be taken again.{% endif %}</p>
     {% endfor %}

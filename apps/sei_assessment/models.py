@@ -183,6 +183,9 @@ class SEIAssessment(models.Model):
     # Whether the clock ended the sitting rather than the candidate. Worth
     # recording: an unfinished paper reads very differently from a finished one.
     auto_submitted = models.BooleanField(default=False)
+    # What the page saw while the part ran: tab switches, leaving full screen,
+    # copy attempts, the window currently answering. See integrity.py.
+    integrity = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -278,6 +281,13 @@ class SEIAssessment(models.Model):
         """Whether the candidate may still answer."""
         return not self.is_submitted and not self.is_expired and not self.time_is_up
 
+    @property
+    def integrity_report(self):
+        """Flags, per-kind counts and the timeline, for the recruiter's report."""
+        from . import integrity
+        flags, rows, timeline = integrity.summary(self)
+        return {'flags': flags, 'rows': rows, 'timeline': timeline}
+
     def reset(self):
         """Clear a sitting back to unopened, for a retake. Caller saves."""
         self.answers = {}
@@ -286,8 +296,9 @@ class SEIAssessment(models.Model):
         self.is_submitted = False
         self.submitted_at = None
         self.auto_submitted = False
+        self.integrity = {}
 
-    RESET_FIELDS = ('answers', 'started_at', 'deadline_at', 'is_submitted',
+    RESET_FIELDS = ('answers', 'started_at', 'deadline_at', 'is_submitted', 'integrity',
                     'submitted_at', 'auto_submitted')
 
     # ── results ──────────────────────────────────────────────────────────

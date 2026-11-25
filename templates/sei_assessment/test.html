@@ -15,6 +15,41 @@
 {% block portal %}
 {{ state|json_script:"ap-state" }}
 
+<div class="ap-mark" aria-hidden="true">{% for _ in "123456789012" %}<span>{{ watermark }}</span>{% endfor %}</div>
+
+<div class="ap-gate" x-show="gate" x-cloak role="alertdialog" aria-modal="true" aria-labelledby="ap-gate-title" aria-describedby="ap-gate-text">
+    <div class="ap-gate-card">
+        <template x-if="gate === 'start'">
+            <div>
+                <h2 class="ap-h1" id="ap-gate-title">The questions open in full screen</h2>
+                <p id="ap-gate-text">Stay on this page until you submit. Leaving full screen, switching to another tab or app, copying and printing are recorded and shown to the recruiter. Your timer is already running.</p>
+                <button type="button" class="ap-btn" @click="enterFullscreen()">Continue in full screen</button>
+            </div>
+        </template>
+        <template x-if="gate === 'left'">
+            <div>
+                <h2 class="ap-h1" id="ap-gate-title">You left the assessment</h2>
+                <p id="ap-gate-text">Moving to another tab, window or app is recorded and shown to the recruiter. Your timer kept running while you were away.</p>
+                <button type="button" class="ap-btn" @click="resume()">Return to the questions</button>
+            </div>
+        </template>
+        <template x-if="gate === 'fs'">
+            <div>
+                <h2 class="ap-h1" id="ap-gate-title">You left full screen</h2>
+                <p id="ap-gate-text">Leaving full screen is recorded and shown to the recruiter. Your timer is still running.</p>
+                <button type="button" class="ap-btn" @click="enterFullscreen()">Return to full screen</button>
+            </div>
+        </template>
+        <template x-if="gate === 'locked'">
+            <div>
+                <h2 class="ap-h1" id="ap-gate-title">Open in another window</h2>
+                <p id="ap-gate-text">This part was opened in another tab or on another device, so this window has stopped. Continue there; your saved answers are kept.</p>
+                <button type="button" class="ap-btn g" @click="window.location.reload()">Continue in this window instead</button>
+            </div>
+        </template>
+    </div>
+</div>
+
 <div class="ap-body" tabindex="-1" x-ref="body">
     <h1 class="sr-only">{% if multi %}Part {{ part_number }} of {{ part_count }}{% else %}Assessment{% endif %}</h1>
     <p class="sr-only" aria-live="polite" x-text="announcement"></p>
@@ -122,11 +157,16 @@
             busy: false,
             done: false,
             announcement: '',
+            events: [],
+            gate: '',
+            fsWanted: !!document.fullscreenEnabled,
+            blurAt: 0,
+            locked: false,
 
             get answered() { return Object.keys(this.answers).length; },
 
             init() {
-                document.getElementById('ap').classList.add('is-live');
+                document.getElementById('ap').classList.add('is-live', 'is-guarded');
                 const firstGap = this.items.findIndex((no) => this.answers[no] === undefined);
                 if (firstGap > 0) { this.page = Math.floor(firstGap / this.perPage); }
                 if (firstGap === -1 && this.total) { this.view = 'review'; }
@@ -134,11 +174,111 @@
                 this.tick = setInterval(() => this.countDown(), 1000);
                 this.flusher = setInterval(() => this.flush(), 5000);
                 window.addEventListener('pagehide', () => this.flushOnLeave());
-                document.addEventListener('visibilitychange', () => {
-                    if (document.visibilityState === 'hidden') { this.flushOnLeave(); }
-                });
-                this.onKey = (event) => { this.keyedAt = Date.now(); this.hotkey(event); };
+                this.onKey = (event) => {
+                    if (this.blocked(event)) { return; }
+                    this.keyedAt = Date.now();
+                    this.hotkey(event);
+                };
                 window.addEventListener('keydown', this.onKey);
+                this.watch();
+                if (this.fsWanted && !document.fullscreenElement) { this.gate = 'start'; }
+            },
+
+            // What the page can see of the candidate leaving it or lifting the
+            // questions. None of it can be prevented outright -- a phone camera
+            // or a second device is beyond any page -- so each moment is
+            // recorded and shown to the recruiter (integrity.py).
+            watch() {
+                const stop = (type) => (event) => { event.preventDefault(); this.note(type); };
+                this.guards = [
+                    ['copy', stop('copy')], ['cut', stop('cut')], ['paste', stop('paste')],
+                    ['contextmenu', stop('contextmenu')],
+                    ['dragstart', (event) => event.preventDefault()],
+                    ['selectstart', (event) => event.preventDefault()],
+                ];
+                this.guards.forEach(([name, fn]) => document.addEventListener(name, fn));
+                this.onVisibility = () => {
+                    if (document.visibilityState === 'hidden') {
+                        this.blurAt = 0;
+                        this.note('tab_hidden');
+                        this.flushOnLeave();
+                    } else if (!this.done && !this.locked) {
+                        this.gate = 'left';
+                    }
+                };
+                document.addEventListener('visibilitychange', this.onVisibility);
+                this.onBlur = () => { if (!document.hidden && !this.done) { this.blurAt = Date.now(); } };
+                this.onFocus = () => {
+                    if (!this.blurAt) { return; }
+                    const seconds = (Date.now() - this.blurAt) / 1000;
+                    this.blurAt = 0;
+                    if (seconds >= 1 && !this.done && !this.locked) {
+                        this.note('window_blur', {seconds: seconds});
+                        this.gate = 'left';
+                    }
+                };
+                window.addEventListener('blur', this.onBlur);
+                window.addEventListener('focus', this.onFocus);
+                this.onFullscreen = () => {
+                    if (!document.fullscreenElement && this.fsWanted && !this.done && !this.locked) {
+                        this.note('fullscreen_exit');
+                        this.gate = 'fs';
+                    }
+                };
+                document.addEventListener('fullscreenchange', this.onFullscreen);
+                this.onPrint = () => this.note('print');
+                window.addEventListener('beforeprint', this.onPrint);
+                this.onKeyUp = (event) => { if (event.key === 'PrintScreen') { this.note('screenshot_key'); } };
+                window.addEventListener('keyup', this.onKeyUp);
+                // The newest window answers: an older tab of this part, told
+                // another has opened, stops and says where to continue.
+                if ('BroadcastChannel' in window) {
+                    this.channel = new BroadcastChannel(state.channel);
+                    this.channel.onmessage = (event) => {
+                        if (event.data && event.data.hello && event.data.hello !== state.client && !this.locked) {
+                            this.note('second_tab');
+                            this.flush();
+                            this.lock();
+                        }
+                    };
+                    this.channel.postMessage({hello: state.client});
+                }
+            },
+
+            blocked(event) {
+                const key = (event.key || '').toLowerCase();
+                const mod = event.ctrlKey || event.metaKey;
+                const hit = (mod && ['c', 'x', 'v', 'a', 'p', 's', 'u'].includes(key))
+                    || (mod && event.shiftKey && ['i', 'j', 'c'].includes(key))
+                    || event.key === 'F12';
+                if (!hit) { return false; }
+                event.preventDefault();
+                const combo = (event.ctrlKey ? 'Ctrl+' : '') + (event.metaKey ? 'Cmd+' : '') + (event.shiftKey ? 'Shift+' : '') + (event.key.length === 1 ? event.key.toUpperCase() : event.key);
+                this.note('shortcut', {detail: combo});
+                return true;
+            },
+
+            note(type, extra) {
+                if (this.done) { return; }
+                this.events.push(Object.assign({type: type, at: Date.now()}, extra || {}));
+            },
+
+            enterFullscreen() {
+                document.documentElement.requestFullscreen().then(() => { this.gate = ''; }).catch(() => {
+                    this.note('fullscreen_refused');
+                    this.fsWanted = false;
+                    this.gate = '';
+                });
+            },
+            resume() {
+                if (this.fsWanted && !document.fullscreenElement) { this.enterFullscreen(); return; }
+                this.gate = '';
+                this.$nextTick(() => { const body = document.querySelector('.ap-body'); if (body) { body.focus({preventScroll: true}); } });
+            },
+            lock() {
+                this.locked = true;
+                this.gate = 'locked';
+                clearInterval(this.flusher);
             },
 
             // Alpine calls this when the page is swapped away: no timer, save or
@@ -148,6 +288,14 @@
                 clearInterval(this.flusher);
                 clearTimeout(this.guideTimer);
                 window.removeEventListener('keydown', this.onKey);
+                (this.guards || []).forEach(([name, fn]) => document.removeEventListener(name, fn));
+                document.removeEventListener('visibilitychange', this.onVisibility);
+                document.removeEventListener('fullscreenchange', this.onFullscreen);
+                window.removeEventListener('blur', this.onBlur);
+                window.removeEventListener('focus', this.onFocus);
+                window.removeEventListener('beforeprint', this.onPrint);
+                window.removeEventListener('keyup', this.onKeyUp);
+                if (this.channel) { this.channel.close(); }
             },
 
             countDown() {
@@ -211,7 +359,7 @@
             // Number keys answer the statement in focus; on a one-question
             // screen they, and the option letters, answer the one on show.
             hotkey(event) {
-                if (this.view !== 'questions' || event.metaKey || event.ctrlKey || event.altKey) { return; }
+                if (this.gate || this.view !== 'questions' || event.metaKey || event.ctrlKey || event.altKey) { return; }
                 let card = event.target.closest && event.target.closest('fieldset[data-item]');
                 if (!card && this.perPage === 1) {
                     card = document.querySelector('fieldset[data-item="' + this.items[this.page] + '"]');
@@ -294,21 +442,28 @@
                 return fetch(state.saveUrl, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
-                    body: JSON.stringify(Object.assign({answers: answers}, extra || {})),
+                    body: JSON.stringify(Object.assign({answers: answers, client: state.client}, extra || {})),
                     keepalive: !!keepalive,
                 });
             },
 
             flush() {
-                if (this.inflight || this.done || !Object.keys(this.unsent).length) { return this.inflight; }
+                if (this.inflight || this.done || this.locked) { return this.inflight; }
+                if (!Object.keys(this.unsent).length && !this.events.length) { return this.inflight; }
                 const batch = this.unsent;
+                const events = this.events;
                 this.unsent = {};
+                this.events = [];
                 this.inflightBatch = batch;
                 this.saving = true;
                 this.inflight = (async () => {
                     try {
-                        const r = await this.post(batch);
+                        const r = await this.post(batch, {events: events});
                         if (r.status === 403) { this.close(); return; }
+                        if (r.status === 409) {
+                            const why = await r.json().catch(() => ({}));
+                            if (why.status === 'superseded') { this.lock(); return; }
+                        }
                         if (!r.ok) { throw new Error('save failed'); }
                         const reply = await r.json();
                         if (reply.status === 'closed') { this.close(); return; }
@@ -321,6 +476,7 @@
                         this.backup();
                     } catch (err) {
                         this.unsent = Object.assign({}, batch, this.unsent);
+                        this.events = events.concat(this.events);
                         this.inflightBatch = {};
                         if (!this.saveFailed) { this.announcement = 'Could not save. Check your connection.'; }
                         this.saveFailed = true;
@@ -333,9 +489,12 @@
             },
 
             flushOnLeave() {
+                if (this.done || this.locked) { return; }
                 const pending = Object.assign({}, this.inflightBatch, this.unsent);
-                if (Object.keys(pending).length && !this.done) {
-                    this.post(pending, {}, true).catch(() => {});
+                const events = this.events;
+                if (Object.keys(pending).length || events.length) {
+                    this.events = [];
+                    this.post(pending, {events: events}, true).catch(() => {});
                 }
             },
 
@@ -352,9 +511,12 @@
                 this.busy = true;
                 if (this.inflight) { await this.inflight; }
                 const batch = this.unsent;
+                const events = this.events;
+                this.events = [];
                 try {
-                    const r = await this.post(batch, {finish: true, timed_out: !!timedOut || this.secondsLeft === 0});
+                    const r = await this.post(batch, {finish: true, timed_out: !!timedOut || this.secondsLeft === 0, events: events});
                     if (r.status === 403) { this.close(); return; }
+                    if (r.status === 409) { this.done = false; this.busy = false; this.lock(); return; }
                     const reply = r.ok ? await r.json() : {};
                     if (reply.status === 'submitted' || reply.status === 'closed') {
                         this.unsent = {};

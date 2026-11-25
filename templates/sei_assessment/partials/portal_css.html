@@ -312,4 +312,15 @@
         .ap-bar div, .ap-o > span, .ap-row > span, .ap-btn, .ap-pill { transition: none; }
         .ap-btn:hover { transform: none; }
     }
+    .ap.is-guarded .ap-body, .ap.is-guarded .ap-body * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    .ap-mark { position: fixed; inset: 0; z-index: 30; pointer-events: none; overflow: hidden; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: space-around; opacity: .07; }
+    .ap-mark span { transform: rotate(-24deg); white-space: nowrap; font-size: .8125rem; font-weight: 600; color: var(--text); text-align: center; padding: 3rem 0; -webkit-user-select: none; user-select: none; }
+    .ap-gate { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(9, 9, 11, .74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .ap-gate-card { width: 100%; max-width: 28rem; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 1rem; padding: 1.5rem; box-shadow: var(--shadow); }
+    .ap-gate-card p { color: var(--sub); margin: .5rem 0 1.25rem; }
+    .ap-gate-card .ap-btn { width: 100%; justify-content: center; }
+    @media print {
+        .ap { display: none !important; }
+        body::after { content: 'Printing is not available for this assessment.'; display: block; padding: 2rem; font: 600 1rem system-ui, sans-serif; }
+    }
 </style>

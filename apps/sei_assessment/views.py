@@ -1,6 +1,7 @@
 """The candidate's timed sittings, taken in order on one link, and the HR-only report."""
 import json
 import logging
+import secrets
 from functools import wraps
 
 from django.contrib import messages
@@ -16,7 +17,7 @@ from django_ratelimit.decorators import ratelimit
 
 from apps.core.models import Resume
 
-from . import instruments, services
+from . import instruments, integrity, services
 from .models import AssessmentInvitation, SEIAssessment
 
 logger = logging.getLogger(__name__)
@@ -334,6 +335,17 @@ def test(request, token):
     if assessment is None:
         return redirect('sei_assessment:entry', token=invitation.token)
 
+    # This page load is the window answering now. One opened before it (another
+    # tab, another device) is told on its next save that it has been replaced.
+    client = secrets.token_urlsafe(9)
+    with transaction.atomic():
+        locked = SEIAssessment.objects.select_for_update().get(pk=assessment.pk)
+        previous = (locked.integrity or {}).get('client')
+        if previous:
+            integrity.record(locked, [{'type': 'reopened'}])
+        locked.integrity = {**(locked.integrity or {}), 'client': client}
+        locked.save(update_fields=['integrity', 'updated_at'])
+
     spec = assessment.spec
     number = sittings.index(assessment) + 1
     pages = spec.paginate(assessment.answers)
@@ -360,7 +372,10 @@ def test(request, token):
             'saveUrl': reverse('sei_assessment:save_part', kwargs={
                 'token': invitation.token, 'part': assessment.token}),
             'entryUrl': reverse('sei_assessment:entry', kwargs={'token': invitation.token}),
+            'client': client,
+            'channel': f'ap-{assessment.token}',
         },
+        'watermark': f'{invitation.resume.candidate_name} · {invitation.reference_id}',
     })
 
 
@@ -425,14 +440,27 @@ def save(request, token, instrument=None, part=None):
     # the copy they loaded and the later write would drop the earlier answers.
     # In a timed sitting there is no chance to enter them again. Re-checked
     # under the lock: a submit or the sweep may have closed it meanwhile.
+    events = incoming.get('events') if isinstance(incoming.get('events'), list) else []
+    client = incoming.get('client') if isinstance(incoming.get('client'), str) else ''
     with transaction.atomic():
         locked = SEIAssessment.objects.select_for_update().get(pk=assessment.pk)
+        active = (locked.integrity or {}).get('client')
+        if client and active and client != active and not locked.is_submitted:
+            # Opened again elsewhere since this page loaded: that window answers
+            # now. Its events still count; its answers are not written over.
+            if events:
+                integrity.record(locked, events)
+                locked.save(update_fields=['integrity', 'updated_at'])
+            return JsonResponse({'status': 'superseded'}, status=409)
         if locked.is_submitted or locked.past_grace:
             closed = locked
         else:
             closed = None
             locked.answers = {**(locked.answers or {}), **cleaned}
             fields = ['answers', 'updated_at']
+            if events:
+                integrity.record(locked, events)
+                fields.append('integrity')
             if finish:
                 locked.is_submitted = True
                 locked.submitted_at = timezone.now()
